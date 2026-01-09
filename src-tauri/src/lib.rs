@@ -136,6 +136,11 @@ pub fn run() {
             commands::get_user_playlists,
             commands::get_playlist,
             commands::search_playlists,
+            commands::create_playlist,
+            commands::delete_playlist,
+            commands::add_tracks_to_playlist,
+            commands::remove_tracks_from_playlist,
+            commands::update_playlist,
             // Favorites commands
             commands::get_favorites,
             commands::add_favorite,
