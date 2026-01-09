@@ -231,13 +231,30 @@ pub fn set_volume(volume: f32, state: State<'_, AppState>) -> Result<(), String>
 #[tauri::command]
 pub fn seek(position: u64, state: State<'_, AppState>) -> Result<(), String> {
     log::info!("Command: seek {}", position);
-    state.player.seek(position)
+    let result = state.player.seek(position);
+
+    // Update MPRIS with new position
+    let playback_state = state.player.get_state().unwrap_or_default();
+    state.media_controls.set_playback_with_progress(
+        playback_state.is_playing,
+        position,
+    );
+
+    result
 }
 
-/// Get current playback state
+/// Get current playback state (also updates MPRIS progress)
 #[tauri::command]
 pub fn get_playback_state(state: State<'_, AppState>) -> Result<PlaybackState, String> {
-    state.player.get_state()
+    let playback_state = state.player.get_state()?;
+
+    // Update MPRIS with current progress (called every ~500ms from frontend)
+    state.media_controls.set_playback_with_progress(
+        playback_state.is_playing,
+        playback_state.position,
+    );
+
+    Ok(playback_state)
 }
 
 /// Audio device information

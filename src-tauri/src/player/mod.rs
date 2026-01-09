@@ -442,7 +442,7 @@ impl Player {
 }
 
 /// Playback state snapshot
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct PlaybackState {
     pub is_playing: bool,
     pub position: u64,
