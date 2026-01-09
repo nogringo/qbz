@@ -179,11 +179,11 @@
       <button class="control-btn primary" onclick={onSkipBack}>
         <SkipBack size={24} />
       </button>
-      <button class="play-btn" onclick={onTogglePlay}>
+      <button class="control-btn primary play-pause" onclick={onTogglePlay}>
         {#if isPlaying}
-          <Pause size={24} color="white" fill="white" />
+          <Pause size={28} />
         {:else}
-          <Play size={24} color="white" fill="white" />
+          <Play size={28} />
         {/if}
       </button>
       <button class="control-btn primary" onclick={onSkipForward}>
@@ -427,22 +427,8 @@
     right: -4px;
   }
 
-  .play-btn {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border: none;
-    background-color: var(--accent-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: background-color 150ms ease;
-    color: white;
-  }
-
-  .play-btn:hover {
-    background-color: var(--accent-hover);
+  .control-btn.play-pause {
+    margin: 0 8px;
   }
 
   /* Progress Bar */

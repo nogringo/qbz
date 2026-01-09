@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { ArrowLeft, User, ChevronDown, ChevronUp } from 'lucide-svelte';
+  import { invoke } from '@tauri-apps/api/core';
+  import { onMount } from 'svelte';
+  import { ArrowLeft, User, ChevronDown, ChevronUp, Play, Plus, Music } from 'lucide-svelte';
   import AlbumCard from '../AlbumCard.svelte';
 
   interface Album {
@@ -16,6 +18,37 @@
     source?: string;
   }
 
+  interface Track {
+    id: number;
+    title: string;
+    duration: number;
+    album?: {
+      id: string;
+      title: string;
+      image?: { small?: string; thumbnail?: string; large?: string };
+    };
+    performer?: { name: string };
+    hires_streamable?: boolean;
+    maximum_bit_depth?: number;
+    maximum_sampling_rate?: number;
+  }
+
+  interface SearchResults {
+    items: Track[];
+    total: number;
+  }
+
+  interface DisplayTrack {
+    id: number;
+    title: string;
+    artist: string;
+    album: string;
+    albumArt: string;
+    duration: string;
+    durationSeconds: number;
+    hires?: boolean;
+  }
+
   interface Props {
     artist: {
       id: number;
@@ -30,12 +63,80 @@
     onAlbumClick?: (albumId: string) => void;
     onLoadMore?: () => void;
     isLoadingMore?: boolean;
+    onTrackPlay?: (track: DisplayTrack) => void;
   }
 
-  let { artist, onBack, onAlbumClick, onLoadMore, isLoadingMore = false }: Props = $props();
+  let { artist, onBack, onAlbumClick, onLoadMore, isLoadingMore = false, onTrackPlay }: Props = $props();
 
   let bioExpanded = $state(false);
   let imageError = $state(false);
+  let topTracks = $state<Track[]>([]);
+  let tracksLoading = $state(false);
+
+  onMount(() => {
+    loadTopTracks();
+  });
+
+  async function loadTopTracks() {
+    tracksLoading = true;
+    try {
+      // Search for tracks by artist name
+      const results = await invoke<SearchResults>('search_tracks', {
+        query: artist.name,
+        limit: 10,
+        offset: 0
+      });
+      // Filter to only include tracks by this artist
+      topTracks = results.items.filter(track =>
+        track.performer?.name?.toLowerCase() === artist.name.toLowerCase()
+      ).slice(0, 5);
+    } catch (err) {
+      console.error('Failed to load top tracks:', err);
+    } finally {
+      tracksLoading = false;
+    }
+  }
+
+  function formatDuration(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  function handleTrackPlay(track: Track) {
+    if (onTrackPlay) {
+      onTrackPlay({
+        id: track.id,
+        title: track.title,
+        artist: track.performer?.name || artist.name,
+        album: track.album?.title || '',
+        albumArt: track.album?.image?.large || track.album?.image?.thumbnail || '',
+        duration: formatDuration(track.duration),
+        durationSeconds: track.duration,
+        hires: track.hires_streamable
+      });
+    }
+  }
+
+  async function handlePlayAllTracks() {
+    if (topTracks.length === 0 || !onTrackPlay) return;
+
+    const queueTracks = topTracks.map(t => ({
+      id: t.id,
+      title: t.title,
+      artist: t.performer?.name || artist.name,
+      album: t.album?.title || '',
+      duration_secs: t.duration,
+      artwork_url: t.album?.image?.large || t.album?.image?.thumbnail || '',
+    }));
+
+    try {
+      await invoke('set_queue', { tracks: queueTracks, startIndex: 0 });
+      handleTrackPlay(topTracks[0]);
+    } catch (err) {
+      console.error('Failed to set queue:', err);
+    }
+  }
 
   function handleImageError() {
     imageError = true;
@@ -113,6 +214,49 @@
 
   <!-- Divider -->
   <div class="divider"></div>
+
+  <!-- Top Tracks Section -->
+  {#if topTracks.length > 0 || tracksLoading}
+    <div class="top-tracks-section">
+      <div class="section-header-row">
+        <h2 class="section-title">Popular Tracks</h2>
+        {#if topTracks.length > 0}
+          <button class="play-all-btn" onclick={handlePlayAllTracks}>
+            <Play size={14} fill="white" color="white" />
+            <span>Play All</span>
+          </button>
+        {/if}
+      </div>
+
+      {#if tracksLoading}
+        <div class="tracks-loading">Loading tracks...</div>
+      {:else}
+        <div class="tracks-list">
+          {#each topTracks as track, index}
+            <button class="track-row" onclick={() => handleTrackPlay(track)}>
+              <div class="track-number">{index + 1}</div>
+              <div class="track-artwork">
+                {#if track.album?.image?.thumbnail || track.album?.image?.small}
+                  <img src={track.album?.image?.thumbnail || track.album?.image?.small} alt={track.title} />
+                {:else}
+                  <div class="track-artwork-placeholder">
+                    <Music size={16} />
+                  </div>
+                {/if}
+              </div>
+              <div class="track-info">
+                <div class="track-title">{track.title}</div>
+                <div class="track-album">{track.album?.title || ''}</div>
+              </div>
+              <div class="track-duration">{formatDuration(track.duration)}</div>
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <div class="divider"></div>
+  {/if}
 
   <!-- Discography Section -->
   <div class="discography">
@@ -304,6 +448,129 @@
   .load-more-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  /* Top Tracks */
+  .top-tracks-section {
+    margin-bottom: 0;
+  }
+
+  .section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .section-header-row .section-title {
+    margin-bottom: 0;
+  }
+
+  .play-all-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background-color: var(--accent-primary);
+    border: none;
+    border-radius: 20px;
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+
+  .play-all-btn:hover {
+    background-color: var(--accent-hover);
+  }
+
+  .tracks-loading {
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 16px 0;
+  }
+
+  .tracks-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .track-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: background-color 150ms ease;
+  }
+
+  .track-row:hover {
+    background-color: var(--bg-tertiary);
+  }
+
+  .track-number {
+    width: 24px;
+    font-size: 14px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  .track-artwork {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .track-artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .track-artwork-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-tertiary);
+    color: var(--text-muted);
+  }
+
+  .track-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .track-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .track-album {
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .track-duration {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
   }
 
   /* Responsive */

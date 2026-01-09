@@ -1223,6 +1223,7 @@
           artist={selectedArtist}
           onBack={goBack}
           onAlbumClick={handleAlbumClick}
+          onTrackPlay={handlePlaylistTrackPlay}
         />
       {:else if activeView === 'library'}
         <LocalLibraryView
