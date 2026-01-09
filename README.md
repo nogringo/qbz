@@ -91,7 +91,9 @@ npm run tauri dev
 npm run tauri build
 ```
 
-### Environment Variables
+### Environment Variables (Building from Source Only)
+
+> **Note:** If you're using pre-built binaries from the [Releases](https://github.com/vicrodh/qbz/releases) page, Last.fm integration is already configured and ready to use. The following instructions are only for developers building from source.
 
 Copy the example environment file and configure it with your credentials:
 
@@ -99,9 +101,9 @@ Copy the example environment file and configure it with your credentials:
 cp .env.example .env
 ```
 
-#### Last.fm Integration (Optional)
+#### Last.fm Integration
 
-To enable Last.fm scrobbling, you need to create a Last.fm API application:
+To enable Last.fm scrobbling when building from source, you need to create a Last.fm API application:
 
 1. Go to [Last.fm API Account](https://www.last.fm/api/account/create)
 2. Create a new application (any name works)

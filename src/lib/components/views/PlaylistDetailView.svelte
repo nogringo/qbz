@@ -399,7 +399,7 @@
       <div class="sort-container">
         <button class="sort-btn" onclick={() => showSortMenu = !showSortMenu}>
           <span>Sort: {sortOptions.find(o => o.field === sortBy)?.label}</span>
-          <ChevronDown size={14} class:rotated={showSortMenu} />
+          <span class="chevron" class:rotated={showSortMenu}><ChevronDown size={14} /></span>
         </button>
         {#if showSortMenu}
           <div class="sort-menu">
@@ -819,7 +819,12 @@
     color: var(--text-primary);
   }
 
-  .sort-btn :global(.rotated) {
+  .sort-btn .chevron {
+    display: flex;
+    transition: transform 150ms ease;
+  }
+
+  .sort-btn .chevron.rotated {
     transform: rotate(180deg);
   }
 
