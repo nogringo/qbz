@@ -1,6 +1,5 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { Music } from 'lucide-svelte';
 
   interface UserInfo {
     userName: string;
@@ -93,7 +92,7 @@
   <div class="login-card">
     <!-- Logo -->
     <div class="logo">
-      <Music size={48} />
+      <img src="/logo.png" alt="QBZ Logo" class="logo-img" />
       <h1>QBZ</h1>
       <p class="subtitle">Native Qobuz Client for Linux</p>
     </div>
@@ -183,6 +182,12 @@
     text-align: center;
     margin-bottom: 32px;
     color: var(--accent-primary);
+  }
+
+  .logo-img {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
   }
 
   .logo h1 {
