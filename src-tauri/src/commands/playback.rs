@@ -1,23 +1,169 @@
 //! Playback-related Tauri commands
 
+use std::sync::Arc;
 use tauri::State;
+use tokio::sync::Mutex;
 
+use crate::api::client::QobuzClient;
 use crate::api::models::Quality;
+use crate::cache::AudioCache;
 use crate::player::PlaybackState;
+use crate::queue::QueueManager;
 use crate::AppState;
 
-/// Play a track by ID
+/// Play a track by ID (with caching support)
 #[tauri::command]
 pub async fn play_track(track_id: u64, state: State<'_, AppState>) -> Result<(), String> {
     log::info!("Command: play_track {}", track_id);
 
+    let cache = state.audio_cache.clone();
+
+    // Check if track is in cache
+    if let Some(cached) = cache.get(track_id) {
+        log::info!("Playing track {} from cache ({} bytes)", track_id, cached.size_bytes);
+        state.player.play_data(cached.data, track_id)?;
+
+        // Prefetch next track in background
+        spawn_prefetch(
+            state.client.clone(),
+            state.audio_cache.clone(),
+            &state.queue,
+        );
+
+        return Ok(());
+    }
+
+    // Not in cache - download and cache
+    log::info!("Track {} not in cache, downloading...", track_id);
+
     let client = state.client.lock().await;
 
-    // Default to Hi-Res quality, will fallback if not available
-    state
-        .player
-        .play_track(&client, track_id, Quality::HiRes)
+    // Get the stream URL
+    let stream_url = client
+        .get_stream_url_with_fallback(track_id, Quality::HiRes)
         .await
+        .map_err(|e| format!("Failed to get stream URL: {}", e))?;
+
+    log::info!("Got stream URL for track {}", track_id);
+
+    // Download the audio
+    let audio_data = download_audio(&stream_url.url).await?;
+    let data_size = audio_data.len();
+
+    // Cache it
+    cache.insert(track_id, audio_data.clone());
+
+    // Play it
+    state.player.play_data(audio_data, track_id)?;
+
+    log::info!("Playing track {} ({} bytes)", track_id, data_size);
+
+    // Release client lock before prefetching
+    drop(client);
+
+    // Prefetch next track in background
+    spawn_prefetch(
+        state.client.clone(),
+        state.audio_cache.clone(),
+        &state.queue,
+    );
+
+    Ok(())
+}
+
+/// Download audio from URL
+async fn download_audio(url: &str) -> Result<Vec<u8>, String> {
+    use std::time::Duration;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    log::info!("Downloading audio...");
+
+    let response = client
+        .get(url)
+        .header("User-Agent", "Mozilla/5.0")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch audio: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP error: {}", response.status()));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read audio bytes: {}", e))?;
+
+    log::info!("Downloaded {} bytes", bytes.len());
+    Ok(bytes.to_vec())
+}
+
+/// Spawn background task to prefetch next track
+fn spawn_prefetch(
+    client: Arc<Mutex<QobuzClient>>,
+    cache: Arc<AudioCache>,
+    queue: &QueueManager,
+) {
+    // Get next track from queue
+    let next_track = match queue.peek_next() {
+        Some(t) => t,
+        None => {
+            log::debug!("No next track to prefetch");
+            return;
+        }
+    };
+
+    let track_id = next_track.id;
+    let track_title = next_track.title.clone();
+
+    // Check if already cached or being fetched
+    if cache.contains(track_id) {
+        log::debug!("Next track {} already cached", track_id);
+        return;
+    }
+
+    if cache.is_fetching(track_id) {
+        log::debug!("Next track {} already being fetched", track_id);
+        return;
+    }
+
+    // Mark as fetching
+    cache.mark_fetching(track_id);
+
+    log::info!("Prefetching next track: {} - {}", track_id, track_title);
+
+    // Spawn background task
+    tokio::spawn(async move {
+        let result = async {
+            let client_guard = client.lock().await;
+            let stream_url = client_guard
+                .get_stream_url_with_fallback(track_id, Quality::HiRes)
+                .await
+                .map_err(|e| format!("Failed to get stream URL: {}", e))?;
+            drop(client_guard);
+
+            let data = download_audio(&stream_url.url).await?;
+            Ok::<Vec<u8>, String>(data)
+        }
+        .await;
+
+        match result {
+            Ok(data) => {
+                cache.insert(track_id, data);
+                log::info!("Prefetch complete for track {}", track_id);
+            }
+            Err(e) => {
+                log::warn!("Prefetch failed for track {}: {}", track_id, e);
+            }
+        }
+
+        cache.unmark_fetching(track_id);
+    });
 }
 
 /// Pause playback

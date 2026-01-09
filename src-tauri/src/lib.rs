@@ -4,6 +4,7 @@
 //! who need bit-perfect playback without browser sample rate limitations.
 
 pub mod api;
+pub mod cache;
 pub mod commands;
 pub mod config;
 pub mod media_controls;
@@ -14,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use api::QobuzClient;
+use cache::AudioCache;
 use media_controls::{MediaControlsManager, TrackInfo};
 use player::Player;
 use queue::QueueManager;
@@ -24,6 +26,7 @@ pub struct AppState {
     pub player: Player,
     pub queue: QueueManager,
     pub media_controls: MediaControlsManager,
+    pub audio_cache: Arc<AudioCache>,
 }
 
 impl AppState {
@@ -33,6 +36,7 @@ impl AppState {
             player: Player::new(),
             queue: QueueManager::new(),
             media_controls: MediaControlsManager::new(),
+            audio_cache: Arc::new(AudioCache::default()),
         }
     }
 }

@@ -295,7 +295,7 @@ impl Player {
         Self { tx, state }
     }
 
-    /// Play a track by ID
+    /// Play a track by ID (downloads audio)
     pub async fn play_track(
         &self,
         client: &QobuzClient,
@@ -325,10 +325,16 @@ impl Player {
         log::info!("Player: Downloaded {} bytes of audio data", audio_data.len());
 
         // Send to audio thread
-        log::info!("Player: Sending to audio thread...");
+        self.play_data(audio_data, track_id)
+    }
+
+    /// Play from raw audio data (for cached tracks)
+    pub fn play_data(&self, data: Vec<u8>, track_id: u64) -> Result<(), String> {
+        log::info!("Player: Playing {} bytes of audio data for track {}", data.len(), track_id);
+
         self.tx
             .send(AudioCommand::Play {
-                data: audio_data,
+                data,
                 track_id,
                 duration_secs: 0, // Will be determined by decoder
             })
