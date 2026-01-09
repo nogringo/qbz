@@ -1198,6 +1198,7 @@
         <SearchView
           onAlbumClick={handleAlbumClick}
           onTrackPlay={handleTrackPlay}
+          onArtistClick={handleArtistClick}
         />
       {:else if activeView === 'settings'}
         <SettingsView
@@ -1238,6 +1239,7 @@
         <FavoritesView
           onAlbumClick={handleAlbumClick}
           onTrackPlay={handlePlaylistTrackPlay}
+          onArtistClick={handleArtistClick}
         />
       {/if}
     </main>

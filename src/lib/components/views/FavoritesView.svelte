@@ -36,6 +36,7 @@
   interface Props {
     onAlbumClick?: (albumId: string) => void;
     onTrackPlay?: (track: DisplayTrack) => void;
+    onArtistClick?: (artistId: number) => void;
   }
 
   interface DisplayTrack {
@@ -52,7 +53,7 @@
     samplingRate?: number;
   }
 
-  let { onAlbumClick, onTrackPlay }: Props = $props();
+  let { onAlbumClick, onTrackPlay, onArtistClick }: Props = $props();
 
   type TabType = 'tracks' | 'albums' | 'artists';
   let activeTab = $state<TabType>('tracks');
@@ -280,7 +281,7 @@
       {:else}
         <div class="artist-grid">
           {#each favoriteArtists as artist (artist.id)}
-            <div class="artist-card">
+            <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
               <div class="artist-image">
                 {#if artist.image?.large || artist.image?.thumbnail}
                   <img src={artist.image?.large || artist.image?.thumbnail} alt={artist.name} />
@@ -294,7 +295,7 @@
               {#if artist.albums_count}
                 <div class="artist-albums">{artist.albums_count} albums</div>
               {/if}
-            </div>
+            </button>
           {/each}
         </div>
       {/if}
@@ -488,6 +489,7 @@
     align-items: center;
     padding: 16px;
     background-color: var(--bg-secondary);
+    border: none;
     border-radius: 12px;
     cursor: pointer;
     transition: background-color 150ms ease;

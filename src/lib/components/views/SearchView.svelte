@@ -23,9 +23,10 @@
   interface Props {
     onAlbumClick?: (albumId: string) => void;
     onTrackPlay?: (track: Track) => void;
+    onArtistClick?: (artistId: number) => void;
   }
 
-  let { onAlbumClick, onTrackPlay }: Props = $props();
+  let { onAlbumClick, onTrackPlay, onArtistClick }: Props = $props();
 
   interface Album {
     id: string;
@@ -350,7 +351,7 @@
       {:else}
         <div class="artists-grid">
           {#each artistResults.items as artist}
-            <div class="artist-card">
+            <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
               {#if failedArtistImages.has(artist.id) || !getArtistImage(artist)}
                 <div class="artist-image-placeholder">
                   <User size={40} />
@@ -362,7 +363,7 @@
               {#if artist.albums_count}
                 <div class="artist-albums">{artist.albums_count} albums</div>
               {/if}
-            </div>
+            </button>
           {/each}
         </div>
         {#if hasMoreArtists}
@@ -608,6 +609,7 @@
     text-align: center;
     padding: 16px;
     background-color: var(--bg-secondary);
+    border: none;
     border-radius: 12px;
     cursor: pointer;
     transition: background-color 150ms ease;
