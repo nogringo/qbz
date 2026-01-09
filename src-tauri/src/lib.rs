@@ -183,6 +183,15 @@ pub fn run() {
             library::commands::library_clear,
             library::commands::library_get_track,
             library::commands::library_play_track,
+            // Playlist local settings commands
+            library::commands::playlist_get_settings,
+            library::commands::playlist_save_settings,
+            library::commands::playlist_set_sort,
+            library::commands::playlist_set_artwork,
+            library::commands::playlist_add_local_track,
+            library::commands::playlist_remove_local_track,
+            library::commands::playlist_get_local_tracks,
+            library::commands::playlist_clear_local_tracks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

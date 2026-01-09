@@ -13,7 +13,7 @@ pub mod scanner;
 
 pub use commands::LibraryState;
 pub use cue_parser::{cue_to_tracks, CueParser, CueSheet, CueTrack};
-pub use database::{LibraryDatabase, LibraryStats};
+pub use database::{LibraryDatabase, LibraryStats, PlaylistSettings};
 pub use errors::LibraryError;
 pub use metadata::MetadataExtractor;
 pub use models::*;

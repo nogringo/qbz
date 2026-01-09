@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { ArrowLeft, Play, Shuffle, Plus, ListMusic } from 'lucide-svelte';
+  import { ArrowLeft, Play, Shuffle, Plus, ListMusic, Search, X, ChevronDown, ImagePlus } from 'lucide-svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { open } from '@tauri-apps/plugin-dialog';
   import { onMount } from 'svelte';
   import TrackRow from '../TrackRow.svelte';
 
@@ -42,6 +43,18 @@
     samplingRate?: number;
   }
 
+  interface PlaylistSettings {
+    qobuz_playlist_id: number;
+    custom_artwork_path?: string;
+    sort_by: string;
+    sort_order: string;
+    last_search_query?: string;
+    notes?: string;
+  }
+
+  type SortField = 'default' | 'title' | 'artist' | 'album' | 'duration';
+  type SortOrder = 'asc' | 'desc';
+
   interface Props {
     playlistId: number;
     onBack: () => void;
@@ -56,8 +69,16 @@
   let error = $state<string | null>(null);
   let playBtnHovered = $state(false);
 
+  // Local settings state
+  let searchQuery = $state('');
+  let sortBy = $state<SortField>('default');
+  let sortOrder = $state<SortOrder>('asc');
+  let customArtworkPath = $state<string | null>(null);
+  let showSortMenu = $state(false);
+
   onMount(() => {
     loadPlaylist();
+    loadSettings();
   });
 
   async function loadPlaylist() {
@@ -90,6 +111,102 @@
     }
   }
 
+  async function loadSettings() {
+    try {
+      const settings = await invoke<PlaylistSettings | null>('playlist_get_settings', { playlistId });
+      if (settings) {
+        sortBy = (settings.sort_by as SortField) || 'default';
+        sortOrder = (settings.sort_order as SortOrder) || 'asc';
+        customArtworkPath = settings.custom_artwork_path || null;
+        searchQuery = settings.last_search_query || '';
+      }
+    } catch (err) {
+      console.error('Failed to load playlist settings:', err);
+    }
+  }
+
+  async function saveSort(field: SortField, order: SortOrder) {
+    sortBy = field;
+    sortOrder = order;
+    showSortMenu = false;
+    try {
+      await invoke('playlist_set_sort', { playlistId, sortBy: field, sortOrder: order });
+    } catch (err) {
+      console.error('Failed to save sort settings:', err);
+    }
+  }
+
+  async function selectCustomArtwork() {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+      });
+      if (selected && typeof selected === 'string') {
+        customArtworkPath = selected;
+        await invoke('playlist_set_artwork', { playlistId, artworkPath: selected });
+      }
+    } catch (err) {
+      console.error('Failed to select artwork:', err);
+    }
+  }
+
+  async function clearCustomArtwork() {
+    customArtworkPath = null;
+    try {
+      await invoke('playlist_set_artwork', { playlistId, artworkPath: null });
+    } catch (err) {
+      console.error('Failed to clear artwork:', err);
+    }
+  }
+
+  // Filtered and sorted tracks
+  let displayTracks = $derived.by(() => {
+    let result = [...tracks];
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(t =>
+        t.title.toLowerCase().includes(query) ||
+        (t.artist?.toLowerCase().includes(query)) ||
+        (t.album?.toLowerCase().includes(query))
+      );
+    }
+
+    // Sort
+    if (sortBy !== 'default') {
+      result.sort((a, b) => {
+        let cmp = 0;
+        switch (sortBy) {
+          case 'title':
+            cmp = a.title.localeCompare(b.title);
+            break;
+          case 'artist':
+            cmp = (a.artist || '').localeCompare(b.artist || '');
+            break;
+          case 'album':
+            cmp = (a.album || '').localeCompare(b.album || '');
+            break;
+          case 'duration':
+            cmp = a.durationSeconds - b.durationSeconds;
+            break;
+        }
+        return sortOrder === 'desc' ? -cmp : cmp;
+      });
+    }
+
+    return result;
+  });
+
+  const sortOptions: { field: SortField; label: string }[] = [
+    { field: 'default', label: 'Default' },
+    { field: 'title', label: 'Title' },
+    { field: 'artist', label: 'Artist' },
+    { field: 'album', label: 'Album' },
+    { field: 'duration', label: 'Duration' },
+  ];
+
   function formatDuration(seconds: number): string {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -106,6 +223,10 @@
   }
 
   function getPlaylistImage(): string {
+    // Use custom artwork if set (convert to tauri asset URL)
+    if (customArtworkPath) {
+      return `asset://localhost/${encodeURIComponent(customArtworkPath)}`;
+    }
     if (playlist?.images && playlist.images.length > 0) {
       return playlist.images[0];
     }
@@ -195,15 +316,27 @@
   {:else if playlist}
     <!-- Playlist Header -->
     <div class="playlist-header">
-      <!-- Playlist Artwork -->
-      <div class="artwork">
-        {#if getPlaylistImage()}
-          <img src={getPlaylistImage()} alt={playlist.name} />
-        {:else}
-          <div class="artwork-placeholder">
-            <ListMusic size={64} />
+      <!-- Playlist Artwork with customization -->
+      <div class="artwork-container">
+        <div class="artwork">
+          {#if getPlaylistImage()}
+            <img src={getPlaylistImage()} alt={playlist.name} />
+          {:else}
+            <div class="artwork-placeholder">
+              <ListMusic size={64} />
+            </div>
+          {/if}
+          <div class="artwork-overlay">
+            <button class="artwork-btn" onclick={selectCustomArtwork} title="Set custom artwork">
+              <ImagePlus size={24} />
+            </button>
+            {#if customArtworkPath}
+              <button class="artwork-btn artwork-clear" onclick={clearCustomArtwork} title="Remove custom artwork">
+                <X size={20} />
+              </button>
+            {/if}
           </div>
-        {/if}
+        </div>
       </div>
 
       <!-- Playlist Metadata -->
@@ -244,6 +377,65 @@
       </div>
     </div>
 
+    <!-- Track List Controls -->
+    <div class="track-controls">
+      <!-- Search -->
+      <div class="search-container">
+        <Search size={16} class="search-icon" />
+        <input
+          type="text"
+          placeholder="Search in playlist..."
+          bind:value={searchQuery}
+          class="search-input"
+        />
+        {#if searchQuery}
+          <button class="search-clear" onclick={() => searchQuery = ''}>
+            <X size={14} />
+          </button>
+        {/if}
+      </div>
+
+      <!-- Sort dropdown -->
+      <div class="sort-container">
+        <button class="sort-btn" onclick={() => showSortMenu = !showSortMenu}>
+          <span>Sort: {sortOptions.find(o => o.field === sortBy)?.label}</span>
+          <ChevronDown size={14} class:rotated={showSortMenu} />
+        </button>
+        {#if showSortMenu}
+          <div class="sort-menu">
+            {#each sortOptions as option}
+              <button
+                class="sort-option"
+                class:active={sortBy === option.field}
+                onclick={() => saveSort(option.field, sortOrder)}
+              >
+                {option.label}
+              </button>
+            {/each}
+            <div class="sort-divider"></div>
+            <button
+              class="sort-option"
+              class:active={sortOrder === 'asc'}
+              onclick={() => saveSort(sortBy, 'asc')}
+            >
+              Ascending
+            </button>
+            <button
+              class="sort-option"
+              class:active={sortOrder === 'desc'}
+              onclick={() => saveSort(sortBy, 'desc')}
+            >
+              Descending
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      <span class="track-count">
+        {displayTracks.length}{searchQuery ? ` / ${tracks.length}` : ''} tracks
+      </span>
+    </div>
+
     <!-- Track List -->
     <div class="track-list">
       <div class="track-list-header">
@@ -253,9 +445,9 @@
         <span class="col-duration">Duration</span>
       </div>
 
-      {#each tracks as track (track.id)}
+      {#each displayTracks as track, idx (track.id)}
         <TrackRow
-          number={track.number}
+          number={idx + 1}
           title={track.title}
           artist={track.artist}
           duration={track.duration}
@@ -265,6 +457,12 @@
           onclick={() => handleTrackClick(track)}
         />
       {/each}
+
+      {#if displayTracks.length === 0 && searchQuery}
+        <div class="no-results">
+          <p>No tracks match "{searchQuery}"</p>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -339,10 +537,14 @@
     margin-bottom: 32px;
   }
 
+  .artwork-container {
+    flex-shrink: 0;
+  }
+
   .artwork {
     width: 232px;
     height: 232px;
-    flex-shrink: 0;
+    position: relative;
     border-radius: 8px;
     overflow: hidden;
     background-color: var(--bg-tertiary);
@@ -362,6 +564,52 @@
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
+  }
+
+  .artwork-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  .artwork:hover .artwork-overlay {
+    opacity: 1;
+  }
+
+  .artwork-btn {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .artwork-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .artwork-btn.artwork-clear {
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 0, 0, 0.3);
+    border-color: rgba(255, 100, 100, 0.5);
+  }
+
+  .artwork-btn.artwork-clear:hover {
+    background: rgba(255, 0, 0, 0.5);
   }
 
   .metadata {
@@ -494,5 +742,143 @@
 
   .col-duration {
     text-align: right;
+  }
+
+  /* Track Controls */
+  .track-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 24px;
+    margin-bottom: 16px;
+  }
+
+  .search-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 8px 12px;
+    flex: 1;
+    max-width: 300px;
+  }
+
+  .search-container :global(.search-icon) {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+  }
+
+  .search-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .search-clear {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .search-clear:hover {
+    color: var(--text-primary);
+  }
+
+  .sort-container {
+    position: relative;
+  }
+
+  .sort-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: var(--bg-tertiary);
+    border: none;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: color 150ms ease;
+  }
+
+  .sort-btn:hover {
+    color: var(--text-primary);
+  }
+
+  .sort-btn :global(.rotated) {
+    transform: rotate(180deg);
+  }
+
+  .sort-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 4px;
+    min-width: 140px;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .sort-option {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 150ms ease;
+  }
+
+  .sort-option:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .sort-option.active {
+    color: var(--accent-primary);
+  }
+
+  .sort-divider {
+    height: 1px;
+    background-color: var(--bg-tertiary);
+    margin: 4px 0;
+  }
+
+  .track-count {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .no-results {
+    padding: 48px;
+    text-align: center;
+    color: var(--text-muted);
+  }
+
+  .no-results p {
+    margin: 0;
   }
 </style>

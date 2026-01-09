@@ -91,6 +91,32 @@ npm run tauri dev
 npm run tauri build
 ```
 
+### Environment Variables
+
+Copy the example environment file and configure it with your credentials:
+
+```bash
+cp .env.example .env
+```
+
+#### Last.fm Integration (Optional)
+
+To enable Last.fm scrobbling, you need to create a Last.fm API application:
+
+1. Go to [Last.fm API Account](https://www.last.fm/api/account/create)
+2. Create a new application (any name works)
+3. Copy your API Key and Shared Secret
+4. Update your `.env` file:
+
+```env
+LAST_FM_API_KEY=your_api_key_here
+LAST_FM_API_SHARED_SECRET=your_shared_secret_here
+LAST_FM_APP_NAME=your_app_name
+LAST_FM_APP_REGISTER=your_lastfm_username
+```
+
+The application will work without Last.fm credentials, but scrobbling will be disabled.
+
 ## Project Structure
 
 ```

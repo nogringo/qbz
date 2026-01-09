@@ -367,3 +367,117 @@ pub async fn library_play_track(
 
     Ok(())
 }
+
+// === Playlist Local Settings ===
+
+use crate::library::PlaylistSettings;
+
+/// Get playlist settings by Qobuz playlist ID
+#[tauri::command]
+pub async fn playlist_get_settings(
+    playlist_id: u64,
+    state: State<'_, LibraryState>,
+) -> Result<Option<PlaylistSettings>, String> {
+    log::info!("Command: playlist_get_settings {}", playlist_id);
+
+    let db = state.db.lock().await;
+    db.get_playlist_settings(playlist_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Save or update playlist settings
+#[tauri::command]
+pub async fn playlist_save_settings(
+    settings: PlaylistSettings,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    log::info!("Command: playlist_save_settings {}", settings.qobuz_playlist_id);
+
+    let db = state.db.lock().await;
+    db.save_playlist_settings(&settings)
+        .map_err(|e| e.to_string())
+}
+
+/// Update playlist sort settings
+#[tauri::command]
+pub async fn playlist_set_sort(
+    playlist_id: u64,
+    sort_by: String,
+    sort_order: String,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    log::info!("Command: playlist_set_sort {} {} {}", playlist_id, sort_by, sort_order);
+
+    let db = state.db.lock().await;
+    db.update_playlist_sort(playlist_id, &sort_by, &sort_order)
+        .map_err(|e| e.to_string())
+}
+
+/// Update playlist custom artwork
+#[tauri::command]
+pub async fn playlist_set_artwork(
+    playlist_id: u64,
+    artwork_path: Option<String>,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    log::info!("Command: playlist_set_artwork {}", playlist_id);
+
+    let db = state.db.lock().await;
+    db.update_playlist_artwork(playlist_id, artwork_path.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+/// Add a local track to a playlist
+#[tauri::command]
+pub async fn playlist_add_local_track(
+    playlist_id: u64,
+    local_track_id: i64,
+    position: i32,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    log::info!("Command: playlist_add_local_track {} track {}", playlist_id, local_track_id);
+
+    let db = state.db.lock().await;
+    db.add_local_track_to_playlist(playlist_id, local_track_id, position)
+        .map_err(|e| e.to_string())
+}
+
+/// Remove a local track from a playlist
+#[tauri::command]
+pub async fn playlist_remove_local_track(
+    playlist_id: u64,
+    local_track_id: i64,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    log::info!("Command: playlist_remove_local_track {} track {}", playlist_id, local_track_id);
+
+    let db = state.db.lock().await;
+    db.remove_local_track_from_playlist(playlist_id, local_track_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Get all local tracks in a playlist
+#[tauri::command]
+pub async fn playlist_get_local_tracks(
+    playlist_id: u64,
+    state: State<'_, LibraryState>,
+) -> Result<Vec<LocalTrack>, String> {
+    log::info!("Command: playlist_get_local_tracks {}", playlist_id);
+
+    let db = state.db.lock().await;
+    db.get_playlist_local_tracks(playlist_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Clear all local tracks from a playlist
+#[tauri::command]
+pub async fn playlist_clear_local_tracks(
+    playlist_id: u64,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    log::info!("Command: playlist_clear_local_tracks {}", playlist_id);
+
+    let db = state.db.lock().await;
+    db.clear_playlist_local_tracks(playlist_id)
+        .map_err(|e| e.to_string())
+}
