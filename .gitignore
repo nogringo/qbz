@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+build/
+dist/
+/package
+
+# Rust
+target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Tauri
+src-tauri/target/
+
+# Svelte
+.svelte-kit/
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*

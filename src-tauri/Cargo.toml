@@ -1,0 +1,56 @@
+[package]
+name = "qbz-nix"
+version = "0.1.0"
+description = "Native Qobuz client for Linux with Hi-Fi audio support"
+authors = ["blitzkriegfc"]
+edition = "2021"
+
+[lib]
+name = "qbz_nix_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTTP Client
+reqwest = { version = "0.12", features = ["json", "cookies", "rustls-tls"], default-features = false }
+
+# Async Runtime
+tokio = { version = "1", features = ["full"] }
+
+# Crypto (for API signatures)
+md-5 = "0.10"
+base64 = "0.22"
+
+# Regex (for bundle parsing)
+regex = "1"
+
+# Time
+chrono = "0.4"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Audio playback (will expand later)
+# rodio = "0.19"
+# cpal = "0.15"
+
+# Storage
+# sled = "0.34"
+
+# Secure credential storage
+# keyring = "3"

@@ -1,0 +1,63 @@
+//! Search commands
+
+use tauri::State;
+
+use crate::api::{Album, Artist, Track, SearchResultsPage};
+use crate::AppState;
+
+#[tauri::command]
+pub async fn search_albums(
+    query: String,
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<SearchResultsPage<Album>, String> {
+    let client = state.client.lock().await;
+    client
+        .search_albums(&query, limit.unwrap_or(20))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn search_tracks(
+    query: String,
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<SearchResultsPage<Track>, String> {
+    let client = state.client.lock().await;
+    client
+        .search_tracks(&query, limit.unwrap_or(20))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn search_artists(
+    query: String,
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<SearchResultsPage<Artist>, String> {
+    let client = state.client.lock().await;
+    client
+        .search_artists(&query, limit.unwrap_or(20))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_album(
+    album_id: String,
+    state: State<'_, AppState>,
+) -> Result<Album, String> {
+    let client = state.client.lock().await;
+    client.get_album(&album_id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_track(
+    track_id: u64,
+    state: State<'_, AppState>,
+) -> Result<Track, String> {
+    let client = state.client.lock().await;
+    client.get_track(track_id).await.map_err(|e| e.to_string())
+}
