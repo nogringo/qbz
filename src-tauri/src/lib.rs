@@ -11,6 +11,7 @@ pub mod lastfm;
 pub mod media_controls;
 pub mod player;
 pub mod queue;
+pub mod share;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -21,6 +22,7 @@ use lastfm::LastFmClient;
 use media_controls::{MediaControlsManager, TrackInfo};
 use player::Player;
 use queue::QueueManager;
+use share::SongLinkClient;
 
 /// Application state shared across commands
 pub struct AppState {
@@ -30,6 +32,7 @@ pub struct AppState {
     pub media_controls: MediaControlsManager,
     pub audio_cache: Arc<AudioCache>,
     pub lastfm: Arc<Mutex<LastFmClient>>,
+    pub songlink: SongLinkClient,
 }
 
 impl AppState {
@@ -41,6 +44,7 @@ impl AppState {
             media_controls: MediaControlsManager::new(),
             audio_cache: Arc::new(AudioCache::default()),
             lastfm: Arc::new(Mutex::new(LastFmClient::default())),
+            songlink: SongLinkClient::new(),
         }
     }
 }
@@ -145,6 +149,12 @@ pub fn run() {
             commands::lastfm_disconnect,
             commands::lastfm_scrobble,
             commands::lastfm_now_playing,
+            // Share commands
+            commands::share_track_songlink,
+            commands::share_album_songlink,
+            commands::get_qobuz_track_url,
+            commands::get_qobuz_album_url,
+            commands::get_qobuz_artist_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
