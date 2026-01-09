@@ -13,6 +13,7 @@
   import SearchView from '$lib/components/views/SearchView.svelte';
   import SettingsView from '$lib/components/views/SettingsView.svelte';
   import AlbumDetailView from '$lib/components/views/AlbumDetailView.svelte';
+  import PlaylistDetailView from '$lib/components/views/PlaylistDetailView.svelte';
 
   // Overlays
   import QueuePanel from '$lib/components/QueuePanel.svelte';
@@ -604,6 +605,61 @@
     }
   }
 
+  // Handle playing a track from playlist view
+  interface PlaylistTrack {
+    id: number;
+    number: number;
+    title: string;
+    artist?: string;
+    album?: string;
+    albumArt?: string;
+    duration: string;
+    durationSeconds: number;
+    hires?: boolean;
+    bitDepth?: number;
+    samplingRate?: number;
+  }
+
+  async function handlePlaylistTrackPlay(track: PlaylistTrack) {
+    console.log('Playing playlist track:', track);
+
+    const quality = track.hires && track.bitDepth && track.samplingRate
+      ? `${track.bitDepth}bit/${track.samplingRate}kHz`
+      : 'CD Quality';
+
+    currentTrack = {
+      id: track.id,
+      title: track.title,
+      artist: track.artist || 'Unknown Artist',
+      album: track.album || 'Playlist',
+      artwork: track.albumArt || '',
+      duration: track.durationSeconds,
+      quality
+    };
+
+    duration = track.durationSeconds;
+    currentTime = 0;
+
+    try {
+      await invoke('play_track', { trackId: track.id });
+      isPlaying = true;
+
+      await invoke('set_media_metadata', {
+        title: track.title,
+        artist: track.artist || 'Unknown Artist',
+        album: track.album || 'Playlist',
+        durationSecs: track.durationSeconds,
+        coverUrl: track.albumArt
+      });
+
+      await syncQueueState();
+    } catch (err) {
+      console.error('Failed to play track:', err);
+      showToast(`Playback error: ${err}`, 'error');
+      isPlaying = false;
+    }
+  }
+
   // Toast Functions
   function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
     toast = { message, type };
@@ -806,11 +862,11 @@
           <p>Your library will appear here...</p>
         </div>
       {:else if activeView === 'playlist' && selectedPlaylistId}
-        <div class="placeholder-view">
-          <h1>Playlist</h1>
-          <p>Playlist view coming soon... (ID: {selectedPlaylistId})</p>
-          <button class="back-btn" onclick={goBack}>Go Back</button>
-        </div>
+        <PlaylistDetailView
+          playlistId={selectedPlaylistId}
+          onBack={goBack}
+          onTrackPlay={handlePlaylistTrackPlay}
+        />
       {:else if activeView === 'favorites'}
         <div class="placeholder-view">
           <h1>Favorites</h1>
