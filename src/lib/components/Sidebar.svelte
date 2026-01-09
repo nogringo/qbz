@@ -37,6 +37,7 @@
 
   let userPlaylists = $state<Playlist[]>([]);
   let playlistsLoading = $state(false);
+  let playlistsCollapsed = $state(false);
   let localLibraryCollapsed = $state(false);
 
   // Expose playlists to parent via binding
@@ -102,6 +103,17 @@
       </NavigationItem>
     </nav>
 
+    <!-- Favorites Section (standalone) -->
+    <nav class="nav-section">
+      <NavigationItem
+        label="Favorites"
+        active={activeView === 'favorites'}
+        onclick={() => handleViewChange('favorites')}
+      >
+        {#snippet icon()}<Heart size={14} />{/snippet}
+      </NavigationItem>
+    </nav>
+
     <!-- Playlists Section -->
     <div class="section playlists-section">
       <div class="playlists-header">
@@ -113,31 +125,32 @@
           <button class="icon-btn" onclick={loadUserPlaylists} title="Refresh playlists">
             <RefreshCw size={14} />
           </button>
+          <button class="icon-btn" onclick={() => playlistsCollapsed = !playlistsCollapsed} title={playlistsCollapsed ? "Expand" : "Collapse"}>
+            {#if playlistsCollapsed}
+              <ChevronDown size={14} />
+            {:else}
+              <ChevronUp size={14} />
+            {/if}
+          </button>
         </div>
       </div>
 
-      <NavigationItem
-        label="Favorites"
-        active={activeView === 'favorites'}
-        onclick={() => handleViewChange('favorites')}
-      >
-        {#snippet icon()}<Heart size={14} />{/snippet}
-      </NavigationItem>
-
-      {#if playlistsLoading}
-        <div class="playlists-loading">Loading...</div>
-      {:else if userPlaylists.length > 0}
-        {#each userPlaylists as playlist (playlist.id)}
-          <NavigationItem
-            label={playlist.name}
-            active={activeView === 'playlist' && selectedPlaylistId === playlist.id}
-            onclick={() => handlePlaylistClick(playlist)}
-          >
-            {#snippet icon()}<ListMusic size={14} />{/snippet}
-          </NavigationItem>
-        {/each}
-      {:else}
-        <div class="no-playlists">No playlists yet</div>
+      {#if !playlistsCollapsed}
+        {#if playlistsLoading}
+          <div class="playlists-loading">Loading...</div>
+        {:else if userPlaylists.length > 0}
+          {#each userPlaylists as playlist (playlist.id)}
+            <NavigationItem
+              label={playlist.name}
+              active={activeView === 'playlist' && selectedPlaylistId === playlist.id}
+              onclick={() => handlePlaylistClick(playlist)}
+            >
+              {#snippet icon()}<ListMusic size={14} />{/snippet}
+            </NavigationItem>
+          {/each}
+        {:else}
+          <div class="no-playlists">No playlists yet</div>
+        {/if}
       {/if}
     </div>
 
