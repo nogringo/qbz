@@ -109,6 +109,8 @@ pub struct LocalAlbum {
     pub track_count: u32,
     pub total_duration_secs: u64,
     pub format: AudioFormat,
+    pub bit_depth: Option<u32>,
+    pub sample_rate: u32,
     pub directory_path: String,
 }
 

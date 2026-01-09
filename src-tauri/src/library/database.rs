@@ -255,6 +255,8 @@ impl LibraryDatabase {
                 COUNT(*) as track_count,
                 SUM(duration_secs) as total_duration,
                 MAX(format) as format,
+                MAX(bit_depth) as bit_depth,
+                MAX(sample_rate) as sample_rate,
                 MIN(file_path) as directory_path
             FROM local_tracks
             GROUP BY album, COALESCE(album_artist, artist)
@@ -279,7 +281,9 @@ impl LibraryDatabase {
                     format: Self::parse_format(
                         &row.get::<_, Option<String>>(6)?.unwrap_or_default(),
                     ),
-                    directory_path: row.get::<_, String>(7).unwrap_or_default(),
+                    bit_depth: row.get(7)?,
+                    sample_rate: row.get::<_, Option<u32>>(8)?.unwrap_or(44100),
+                    directory_path: row.get::<_, String>(9).unwrap_or_default(),
                 })
             })
             .map_err(|e| LibraryError::Database(e.to_string()))?;

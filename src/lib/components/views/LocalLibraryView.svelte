@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
+  import { open } from '@tauri-apps/plugin-dialog';
   import { onMount } from 'svelte';
   import {
     HardDrive, Music, Disc3, Mic2, FolderPlus, Trash2, RefreshCw,
@@ -43,6 +44,8 @@
     track_count: number;
     total_duration_secs: number;
     format: string;
+    bit_depth?: number;
+    sample_rate: number;
     directory_path: string;
   }
 
@@ -165,16 +168,19 @@
   }
 
   async function handleAddFolder() {
-    // For now, prompt user to enter path (in future could use native file dialog)
-    const path = prompt('Enter folder path to add:');
-    if (!path) return;
-
     try {
-      await invoke('library_add_folder', { path });
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select Music Folder'
+      });
+
+      if (!selected || typeof selected !== 'string') return;
+
+      await invoke('library_add_folder', { path: selected });
       await loadFolders();
     } catch (err) {
       console.error('Failed to add folder:', err);
-      alert(`Failed to add folder: ${err}`);
     }
   }
 
@@ -320,12 +326,35 @@
   }
 
   function getQualityBadge(track: LocalTrack): string {
-    if (track.bit_depth && track.sample_rate) {
-      if (track.bit_depth >= 24 || track.sample_rate > 48000) {
-        return 'Hi-Res';
-      }
-    }
-    return track.format;
+    const format = track.format.toUpperCase();
+    const bitDepth = track.bit_depth ?? 16;
+    const sampleRate = track.sample_rate / 1000; // Convert to kHz
+
+    // Format: "FLAC 24/96" style that audiophiles love
+    return `${format} ${bitDepth}/${sampleRate}`;
+  }
+
+  function isHiRes(track: LocalTrack): boolean {
+    return (track.bit_depth ?? 16) >= 24 || track.sample_rate > 48000;
+  }
+
+  function formatSampleRate(hz: number): string {
+    return `${(hz / 1000).toFixed(1)} kHz`;
+  }
+
+  function formatBitDepth(bits?: number): string {
+    return bits ? `${bits}-bit` : '16-bit';
+  }
+
+  function getAlbumQualityBadge(album: LocalAlbum): string {
+    const format = album.format.toUpperCase();
+    const bitDepth = album.bit_depth ?? 16;
+    const sampleRate = album.sample_rate / 1000;
+    return `${format} ${bitDepth}/${sampleRate}`;
+  }
+
+  function isAlbumHiRes(album: LocalAlbum): boolean {
+    return (album.bit_depth ?? 16) >= 24 || album.sample_rate > 48000;
   }
 
   function getArtworkUrl(path?: string): string {
@@ -359,9 +388,19 @@
           <p class="meta">
             {#if selectedAlbum.year}{selectedAlbum.year} &bull; {/if}
             {selectedAlbum.track_count} tracks &bull;
-            {formatTotalDuration(selectedAlbum.total_duration_secs)} &bull;
-            {selectedAlbum.format}
+            {formatTotalDuration(selectedAlbum.total_duration_secs)}
           </p>
+          {#if albumTracks.length > 0}
+            {@const firstTrack = albumTracks[0]}
+            <div class="audio-specs">
+              <span class="spec-badge" class:hires={isHiRes(firstTrack)}>
+                {firstTrack.format.toUpperCase()}
+              </span>
+              <span class="spec-item">{formatBitDepth(firstTrack.bit_depth)}</span>
+              <span class="spec-item">{formatSampleRate(firstTrack.sample_rate)}</span>
+              <span class="spec-item">{firstTrack.channels === 2 ? 'Stereo' : firstTrack.channels === 1 ? 'Mono' : `${firstTrack.channels}ch`}</span>
+            </div>
+          {/if}
           <div class="album-actions">
             <button class="play-btn" onclick={handlePlayAllAlbum}>
               <Play size={16} fill="white" />
@@ -528,7 +567,7 @@
                 artwork={getArtworkUrl(album.artwork_path)}
                 title={album.title}
                 artist={album.artist}
-                quality={album.format}
+                quality={getAlbumQualityBadge(album)}
                 onclick={() => handleAlbumClick(album)}
               />
             {/each}
@@ -1024,7 +1063,36 @@
   .album-info .meta {
     font-size: 14px;
     color: var(--text-muted);
-    margin: 0 0 16px 0;
+    margin: 0 0 12px 0;
+  }
+
+  .audio-specs {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .spec-badge {
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .spec-badge.hires {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+  }
+
+  .spec-item {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
   }
 
   .album-actions {

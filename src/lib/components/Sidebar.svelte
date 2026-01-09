@@ -101,18 +101,6 @@
       </NavigationItem>
     </nav>
 
-    <!-- Local Library Section -->
-    <div class="section">
-      <div class="section-header">Local Library</div>
-      <NavigationItem
-        label="Browse Library"
-        active={activeView === 'library'}
-        onclick={() => handleViewChange('library')}
-      >
-        {#snippet icon()}<HardDrive size={18} />{/snippet}
-      </NavigationItem>
-    </div>
-
     <!-- Playlists Section -->
     <div class="section playlists-section">
       <div class="playlists-header">
@@ -150,6 +138,18 @@
       {:else}
         <div class="no-playlists">No playlists yet</div>
       {/if}
+    </div>
+
+    <!-- Local Library Section -->
+    <div class="section">
+      <div class="section-header">Local Library</div>
+      <NavigationItem
+        label="Browse Library"
+        active={activeView === 'library'}
+        onclick={() => handleViewChange('library')}
+      >
+        {#snippet icon()}<HardDrive size={18} />{/snippet}
+      </NavigationItem>
     </div>
   </div>
 
