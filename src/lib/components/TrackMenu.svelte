@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { ChevronRight, MoreHorizontal } from 'lucide-svelte';
 
   interface Props {
@@ -28,6 +29,12 @@
   let isOpen = $state(false);
   let shareOpen = $state(false);
   let menuRef: HTMLDivElement | null = null;
+  let triggerRef: HTMLButtonElement | null = null;
+  let menuEl: HTMLDivElement | null = null;
+  let shareTriggerRef: HTMLDivElement | null = null;
+  let submenuEl: HTMLDivElement | null = null;
+  let menuStyle = $state('');
+  let submenuStyle = $state('');
 
   const hasPlayback = $derived(!!(onPlayNow || onPlayNext || onPlayLater));
   const hasLibrary = $derived(!!(onAddFavorite || onAddToPlaylist));
@@ -46,6 +53,59 @@
     }
   }
 
+  async function setMenuPosition() {
+    await tick();
+    if (!triggerRef || !menuEl) return;
+
+    const triggerRect = triggerRef.getBoundingClientRect();
+    const menuRect = menuEl.getBoundingClientRect();
+    const padding = 8;
+
+    let left = triggerRect.right - menuRect.width;
+    let top = triggerRect.bottom + 6;
+
+    if (left < padding) left = padding;
+    if (left + menuRect.width > window.innerWidth - padding) {
+      left = Math.max(padding, window.innerWidth - menuRect.width - padding);
+    }
+
+    if (top + menuRect.height > window.innerHeight - padding) {
+      top = triggerRect.top - menuRect.height - 6;
+      if (top < padding) top = padding;
+    }
+
+    menuStyle = `left: ${left}px; top: ${top}px;`;
+  }
+
+  async function setSubmenuPosition() {
+    await tick();
+    if (!shareTriggerRef || !submenuEl) return;
+
+    const triggerRect = shareTriggerRef.getBoundingClientRect();
+    const submenuRect = submenuEl.getBoundingClientRect();
+    const padding = 8;
+
+    const spaceRight = window.innerWidth - triggerRect.right;
+    const openRight = spaceRight >= submenuRect.width + padding;
+
+    let left = openRight
+      ? triggerRect.right + 6
+      : triggerRect.left - submenuRect.width - 6;
+    let top = triggerRect.top - 6;
+
+    if (left < padding) left = padding;
+    if (left + submenuRect.width > window.innerWidth - padding) {
+      left = Math.max(padding, window.innerWidth - submenuRect.width - padding);
+    }
+
+    if (top + submenuRect.height > window.innerHeight - padding) {
+      top = window.innerHeight - submenuRect.height - padding;
+    }
+    if (top < padding) top = padding;
+
+    submenuStyle = `left: ${left}px; top: ${top}px;`;
+  }
+
   function handleAction(action?: () => void) {
     if (!action) return;
     action();
@@ -55,7 +115,19 @@
   $effect(() => {
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      const handleResize = () => setMenuPosition();
+      const handleScroll = () => {
+        setMenuPosition();
+        if (shareOpen) setSubmenuPosition();
+      };
+
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('scroll', handleScroll, true);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        window.removeEventListener('resize', handleResize);
+        window.removeEventListener('scroll', handleScroll, true);
+      };
     }
   });
 </script>
@@ -69,10 +141,12 @@
   >
     <button
       class="menu-trigger"
+      bind:this={triggerRef}
       onclick={(e) => {
         e.stopPropagation();
         isOpen = !isOpen;
         shareOpen = false;
+        if (isOpen) setMenuPosition();
       }}
       aria-label="Track actions"
     >
@@ -80,7 +154,7 @@
     </button>
 
     {#if isOpen}
-      <div class="menu">
+      <div class="menu" bind:this={menuEl} style={menuStyle}>
         {#if hasPlayback}
           {#if onPlayNow}
             <button class="menu-item" onclick={() => handleAction(onPlayNow)}>Play now</button>
@@ -113,14 +187,20 @@
         {#if hasShare}
           <div
             class="menu-item submenu-trigger"
-            onmouseenter={() => (shareOpen = true)}
-            onmouseleave={() => (shareOpen = false)}
-            onclick={() => (shareOpen = !shareOpen)}
+            bind:this={shareTriggerRef}
+            onmouseenter={() => {
+              shareOpen = true;
+              setSubmenuPosition();
+            }}
+            onclick={() => {
+              shareOpen = !shareOpen;
+              if (shareOpen) setSubmenuPosition();
+            }}
           >
             <span>Share</span>
             <ChevronRight size={14} />
             {#if shareOpen}
-              <div class="submenu">
+              <div class="submenu" bind:this={submenuEl} style={submenuStyle}>
                 {#if onShareQobuz}
                   <button class="menu-item" onclick={() => handleAction(onShareQobuz)}>Share Qobuz link</button>
                 {/if}
@@ -157,8 +237,8 @@
   }
 
   .menu-trigger {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -176,25 +256,23 @@
   }
 
   .menu {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    min-width: 200px;
+    position: fixed;
+    min-width: 176px;
     background-color: var(--bg-tertiary);
-    border-radius: 10px;
-    padding: 6px 0;
+    border-radius: 8px;
+    padding: 4px 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 60;
   }
 
   .menu-item {
     width: 100%;
-    padding: 10px 16px;
+    padding: 8px 12px;
     background: none;
     border: none;
     color: var(--text-secondary);
     text-align: left;
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -211,7 +289,7 @@
   .separator {
     height: 1px;
     background-color: var(--bg-hover);
-    margin: 6px 0;
+    margin: 4px 0;
   }
 
   .submenu-trigger {
@@ -219,14 +297,11 @@
   }
 
   .submenu {
-    position: absolute;
-    left: 100%;
-    top: -6px;
-    margin-left: 6px;
-    min-width: 200px;
+    position: fixed;
+    min-width: 176px;
     background-color: var(--bg-tertiary);
-    border-radius: 10px;
-    padding: 6px 0;
+    border-radius: 8px;
+    padding: 4px 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 70;
   }
