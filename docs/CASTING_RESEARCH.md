@@ -16,28 +16,33 @@ Google Cast protocol is proprietary and Google does not provide official SDKs fo
 
 ### FOSS Options
 
-#### rust-cast
-- **Repo**: https://github.com/nicoulaj/rust-cast (archived)
-- **Status**: Archived, last updated 2020
-- **Notes**: Basic implementation but unmaintained
+#### rust-cast (RECOMMENDED)
+- **Repo**: https://github.com/azasypkin/rust-cast
+- **Crate**: https://crates.io/crates/rust-cast
+- **Version**: 0.21.0 (as of Dec 2025)
+- **Status**: **Actively maintained** - last commit Dec 30, 2025
+- **Stars**: 150+ | **Contributors**: 11
+- **Documentation**: 79.66% coverage on docs.rs
+- **Features**:
+  - Device discovery via mDNS/DNS-SD
+  - Get device info, run/stop applications
+  - Media streaming (video, audio, images)
+  - Playback control (play, pause, seek, volume)
+  - TLS via rustls, Protobuf serialization
+- **Viability**: **Excellent** - Pure Rust, well-maintained, production-ready
 
-#### pychromecast (Python)
+#### pychromecast (Python) - Alternative
 - **Repo**: https://github.com/home-assistant/pychromecast
 - **Status**: Active (used by Home Assistant)
 - **Notes**: Python library, would require FFI bridge or separate process
-- **Viability**: Good reference implementation
-
-#### catt (CLI tool)
-- **Repo**: https://github.com/skorokithakis/catt
-- **Status**: Active
-- **Notes**: CLI tool wrapping pychromecast, could spawn as subprocess
-- **Viability**: Quick integration via CLI, but adds Python dependency
+- **Viability**: Good but adds Python dependency
 
 ### Recommendation
-**Medium difficulty**. Best approach would be to either:
-1. Port pychromecast logic to Rust (significant effort)
-2. Use catt as subprocess for MVP (adds Python dependency)
-3. Wait for a maintained Rust crate to emerge
+**Now feasible with `rust-cast`**. The crate provides everything we need:
+1. Add `rust-cast` to Cargo.toml
+2. Implement device discovery UI
+3. Stream audio via local HTTP server to Cast device
+4. Control playback from QBZ
 
 ---
 
@@ -152,15 +157,16 @@ Open source multi-room audio solution. Server-client architecture.
    - Effort: Low
    - Value: High (most users have Bluetooth speakers)
 
-### Phase 2: DLNA Support
-2. **DLNA/UPnP** - Use `rupnp` for device discovery and streaming
+### Phase 2: Chromecast (NOW RECOMMENDED)
+2. **Chromecast** - Use `rust-cast` crate (v0.21.0, actively maintained)
+   - Effort: Medium
+   - Value: High (very popular, great Rust support now available)
+   - Crate: https://crates.io/crates/rust-cast
+
+### Phase 3: DLNA Support
+3. **DLNA/UPnP** - Use `rupnp` for device discovery and streaming
    - Effort: Medium
    - Value: High (many receivers, smart TVs support DLNA)
-
-### Phase 3: Chromecast (if demand exists)
-3. **Chromecast** - Either subprocess approach or wait for better Rust support
-   - Effort: High
-   - Value: Medium-High (popular but complex)
 
 ### Phase 4: AirPlay (if demand exists)
 4. **AirPlay** - FFI bindings to `raop-player`
