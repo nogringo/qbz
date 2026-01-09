@@ -424,6 +424,68 @@ impl QobuzClient {
 
         Ok(serde_json::from_value(playlists.clone())?)
     }
+
+    /// Search playlists
+    pub async fn search_playlists(&self, query: &str, limit: u32) -> Result<SearchResultsPage<Playlist>> {
+        let url = endpoints::build_url(paths::PLAYLIST_SEARCH);
+        let response: Value = self
+            .http
+            .get(&url)
+            .header("X-App-Id", self.app_id().await?)
+            .query(&[("query", query), ("limit", &limit.to_string())])
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let playlists = response
+            .get("playlists")
+            .ok_or_else(|| ApiError::ApiResponse("No playlists in response".to_string()))?;
+
+        Ok(serde_json::from_value(playlists.clone())?)
+    }
+
+    /// Add item to favorites
+    pub async fn add_favorite(&self, fav_type: &str, item_id: &str) -> Result<()> {
+        let url = endpoints::build_url(paths::FAVORITE_CREATE);
+        let type_key = format!("{}_ids", fav_type); // album_ids, track_ids, artist_ids
+
+        let response = self
+            .http
+            .get(&url)
+            .header("X-App-Id", self.app_id().await?)
+            .header("X-User-Auth-Token", self.auth_token().await?)
+            .query(&[(&type_key, item_id)])
+            .send()
+            .await?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(ApiError::ApiResponse(format!("Failed to add favorite: {}", response.status())))
+        }
+    }
+
+    /// Remove item from favorites
+    pub async fn remove_favorite(&self, fav_type: &str, item_id: &str) -> Result<()> {
+        let url = endpoints::build_url(paths::FAVORITE_DELETE);
+        let type_key = format!("{}_ids", fav_type);
+
+        let response = self
+            .http
+            .get(&url)
+            .header("X-App-Id", self.app_id().await?)
+            .header("X-User-Auth-Token", self.auth_token().await?)
+            .query(&[(&type_key, item_id)])
+            .send()
+            .await?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(ApiError::ApiResponse(format!("Failed to remove favorite: {}", response.status())))
+        }
+    }
 }
 
 impl Default for QobuzClient {

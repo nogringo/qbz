@@ -1,24 +1,65 @@
 <script lang="ts">
-  import { Search, Home, Radio, Clock, Music, Disc3, Mic2, Plus, MoreVertical, ChevronDown, Heart } from 'lucide-svelte';
+  import { Search, Home, Clock, Music, Disc3, Mic2, Plus, MoreVertical, ChevronDown, Heart, ListMusic } from 'lucide-svelte';
+  import { invoke } from '@tauri-apps/api/core';
+  import { onMount } from 'svelte';
   import NavigationItem from './NavigationItem.svelte';
   import UserCard from './UserCard.svelte';
 
+  interface Playlist {
+    id: number;
+    name: string;
+    tracks_count: number;
+  }
+
   interface Props {
     activeView: string;
+    selectedPlaylistId?: number | null;
     onNavigate: (view: string) => void;
+    onPlaylistSelect?: (playlistId: number) => void;
     onSettingsClick?: () => void;
     onLogout?: () => void;
     userName?: string;
     subscription?: string;
   }
 
-  let { activeView, onNavigate, onSettingsClick, onLogout, userName = 'User', subscription = 'Qobuz' }: Props = $props();
+  let {
+    activeView,
+    selectedPlaylistId = null,
+    onNavigate,
+    onPlaylistSelect,
+    onSettingsClick,
+    onLogout,
+    userName = 'User',
+    subscription = 'Qobuz'
+  }: Props = $props();
+
+  let userPlaylists = $state<Playlist[]>([]);
+  let playlistsLoading = $state(false);
+
+  onMount(() => {
+    loadUserPlaylists();
+  });
+
+  async function loadUserPlaylists() {
+    playlistsLoading = true;
+    try {
+      const playlists = await invoke<Playlist[]>('get_user_playlists');
+      userPlaylists = playlists;
+    } catch (err) {
+      console.error('Failed to load playlists:', err);
+    } finally {
+      playlistsLoading = false;
+    }
+  }
 
   function handleViewChange(view: string) {
-    console.log('Sidebar: handleViewChange called with view:', view);
-    console.log('Sidebar: onNavigate function exists:', !!onNavigate);
     onNavigate(view);
-    console.log('Sidebar: onNavigate called');
+  }
+
+  function handlePlaylistClick(playlist: Playlist) {
+    if (onPlaylistSelect) {
+      onPlaylistSelect(playlist.id);
+    }
   }
 </script>
 
@@ -46,20 +87,6 @@
         onclick={() => handleViewChange('home')}
       >
         {#snippet icon()}<Home size={18} />{/snippet}
-      </NavigationItem>
-      <NavigationItem
-        label="New"
-        active={activeView === 'new'}
-        onclick={() => handleViewChange('new')}
-      >
-        {#snippet icon()}<Radio size={18} />{/snippet}
-      </NavigationItem>
-      <NavigationItem
-        label="Radio"
-        active={activeView === 'radio'}
-        onclick={() => handleViewChange('radio')}
-      >
-        {#snippet icon()}<Radio size={18} />{/snippet}
       </NavigationItem>
     </nav>
 
@@ -101,19 +128,11 @@
       <div class="playlists-header">
         <div class="section-header">Playlists</div>
         <div class="header-actions">
-          <button class="icon-btn">
+          <button class="icon-btn" onclick={loadUserPlaylists} title="Refresh playlists">
             <MoreVertical size={14} />
-          </button>
-          <button class="icon-btn">
-            <ChevronDown size={14} />
           </button>
         </div>
       </div>
-
-      <button class="create-btn">
-        <Plus size={18} />
-        <span>Create New...</span>
-      </button>
 
       <NavigationItem
         label="Favorites"
@@ -122,6 +141,22 @@
       >
         {#snippet icon()}<Heart size={18} />{/snippet}
       </NavigationItem>
+
+      {#if playlistsLoading}
+        <div class="playlists-loading">Loading...</div>
+      {:else if userPlaylists.length > 0}
+        {#each userPlaylists as playlist (playlist.id)}
+          <NavigationItem
+            label={playlist.name}
+            active={activeView === 'playlist' && selectedPlaylistId === playlist.id}
+            onclick={() => handlePlaylistClick(playlist)}
+          >
+            {#snippet icon()}<ListMusic size={18} />{/snippet}
+          </NavigationItem>
+        {/each}
+      {:else}
+        <div class="no-playlists">No playlists yet</div>
+      {/if}
     </div>
   </div>
 
@@ -246,28 +281,11 @@
     color: var(--text-primary);
   }
 
-  .create-btn {
-    width: 100%;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 12px;
-    border-radius: 8px;
-    border: none;
-    background: transparent;
+  .playlists-loading,
+  .no-playlists {
+    font-size: 13px;
     color: var(--text-muted);
-    cursor: pointer;
-    transition: background-color 150ms ease;
-  }
-
-  .create-btn:hover {
-    background-color: var(--bg-hover);
-  }
-
-  .create-btn span {
-    font-size: 14px;
-    font-weight: 400;
+    padding: 8px 12px;
   }
 
   .user-section {

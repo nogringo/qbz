@@ -116,6 +116,14 @@ pub fn run() {
             commands::set_repeat,
             commands::get_repeat,
             commands::get_queue_state,
+            // Playlist commands
+            commands::get_user_playlists,
+            commands::get_playlist,
+            commands::search_playlists,
+            // Favorites commands
+            commands::get_favorites,
+            commands::add_favorite,
+            commands::remove_favorite,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

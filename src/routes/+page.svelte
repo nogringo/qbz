@@ -119,10 +119,11 @@
   let userInfo = $state<{ userName: string; subscription: string } | null>(null);
 
   // View State
-  type ViewType = 'home' | 'search' | 'library' | 'settings' | 'album';
+  type ViewType = 'home' | 'search' | 'library' | 'settings' | 'album' | 'playlist' | 'favorites';
   let activeView = $state<ViewType>('home');
   let viewHistory = $state<ViewType[]>(['home']);
   let selectedAlbum = $state<AlbumDetail | null>(null);
+  let selectedPlaylistId = $state<number | null>(null);
 
   // Overlay States
   let isQueueOpen = $state(false);
@@ -166,7 +167,15 @@
       if (activeView !== 'album') {
         selectedAlbum = null;
       }
+      if (activeView !== 'playlist') {
+        selectedPlaylistId = null;
+      }
     }
+  }
+
+  function handlePlaylistSelect(playlistId: number) {
+    selectedPlaylistId = playlistId;
+    navigateTo('playlist');
   }
 
   async function handleAlbumClick(albumId: string) {
@@ -760,7 +769,9 @@
     <!-- Sidebar -->
     <Sidebar
       {activeView}
+      {selectedPlaylistId}
       onNavigate={navigateTo}
+      onPlaylistSelect={handlePlaylistSelect}
       onSettingsClick={() => navigateTo('settings')}
       onLogout={handleLogout}
       userName={userInfo?.userName || 'User'}
@@ -793,6 +804,18 @@
         <div class="placeholder-view">
           <h1>Library</h1>
           <p>Your library will appear here...</p>
+        </div>
+      {:else if activeView === 'playlist' && selectedPlaylistId}
+        <div class="placeholder-view">
+          <h1>Playlist</h1>
+          <p>Playlist view coming soon... (ID: {selectedPlaylistId})</p>
+          <button class="back-btn" onclick={goBack}>Go Back</button>
+        </div>
+      {:else if activeView === 'favorites'}
+        <div class="placeholder-view">
+          <h1>Favorites</h1>
+          <p>Your favorite tracks and albums will appear here...</p>
+          <button class="back-btn" onclick={goBack}>Go Back</button>
         </div>
       {/if}
     </main>
