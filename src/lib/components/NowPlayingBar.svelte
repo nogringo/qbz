@@ -181,9 +181,9 @@
       </button>
       <button class="play-btn" onclick={onTogglePlay}>
         {#if isPlaying}
-          <Pause size={24} fill="white" color="white" />
+          <Pause size={24} />
         {:else}
-          <Play size={24} fill="white" color="white" class="play-icon" />
+          <Play size={24} />
         {/if}
       </button>
       <button class="control-btn primary" onclick={onSkipForward}>
@@ -438,14 +438,16 @@
     justify-content: center;
     cursor: pointer;
     transition: background-color 150ms ease;
+    color: white;
   }
 
   .play-btn:hover {
     background-color: var(--accent-hover);
   }
 
-  .play-btn :global(.play-icon) {
-    margin-left: 2px;
+  .play-btn :global(svg) {
+    fill: white;
+    stroke: white;
   }
 
   /* Progress Bar */

@@ -80,16 +80,22 @@ pub struct StreamRestriction {
 /// Album model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Album {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub title: String,
+    #[serde(default)]
     pub artist: Artist,
+    #[serde(default)]
     pub image: ImageSet,
     pub release_date_original: Option<String>,
     pub label: Option<Label>,
     pub genre: Option<Genre>,
     pub tracks_count: Option<u32>,
     pub duration: Option<u32>,
+    #[serde(default)]
     pub hires: bool,
+    #[serde(default)]
     pub hires_streamable: bool,
     pub maximum_sampling_rate: Option<f64>,
     pub maximum_bit_depth: Option<u32>,
@@ -106,8 +112,11 @@ pub struct TracksContainer {
 /// Track model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
+    #[serde(default)]
     pub id: u64,
+    #[serde(default)]
     pub title: String,
+    #[serde(default)]
     pub duration: u32,
     #[serde(default)]
     pub track_number: u32,
@@ -130,15 +139,20 @@ pub struct Track {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlbumSummary {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub title: String,
+    #[serde(default)]
     pub image: ImageSet,
 }
 
 /// Artist model
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Artist {
+    #[serde(default)]
     pub id: u64,
+    #[serde(default)]
     pub name: String,
     pub image: Option<ImageSet>,
     #[serde(default)]
@@ -173,27 +187,34 @@ pub struct ArtistAlbums {
 /// Playlist model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Playlist {
+    #[serde(default)]
     pub id: u64,
+    #[serde(default)]
     pub name: String,
     pub description: Option<String>,
+    #[serde(default)]
     pub owner: PlaylistOwner,
     pub images: Option<Vec<String>>,
+    #[serde(default)]
     pub tracks_count: u32,
+    #[serde(default)]
     pub duration: u32,
+    #[serde(default)]
     pub is_public: bool,
     #[serde(default)]
     pub tracks: Option<TracksContainer>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlaylistOwner {
     #[serde(default)]
     pub id: u64,
+    #[serde(default)]
     pub name: String,
 }
 
 /// Image set with multiple resolutions
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ImageSet {
     pub small: Option<String>,
     pub thumbnail: Option<String>,
