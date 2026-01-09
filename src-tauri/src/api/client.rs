@@ -1,6 +1,6 @@
 //! Qobuz API client implementation
 
-use reqwest::{header, Client, StatusCode};
+use reqwest::{Client, StatusCode};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -106,10 +106,9 @@ impl QobuzClient {
         let url = endpoints::build_url(paths::USER_LOGIN);
         let response = self
             .http
-            .post(&url)
+            .get(&url)
             .header("X-App-Id", self.app_id().await?)
-            .header(header::CONTENT_TYPE, "application/json")
-            .form(&[("email", email), ("password", password)])
+            .query(&[("email", email), ("password", password)])
             .send()
             .await?;
 
@@ -131,6 +130,18 @@ impl QobuzClient {
     /// Check if logged in
     pub async fn is_logged_in(&self) -> bool {
         self.session.read().await.is_some()
+    }
+
+    /// Logout - clear the session
+    pub async fn logout(&self) {
+        *self.session.write().await = None;
+    }
+
+    /// Get current user info (display name and subscription)
+    pub async fn get_user_info(&self) -> Option<(String, String)> {
+        self.session.read().await.as_ref().map(|s| {
+            (s.display_name.clone(), s.subscription_label.clone())
+        })
     }
 
     /// Get user auth token header value
@@ -280,11 +291,15 @@ impl QobuzClient {
 
     /// Get stream URL for a track (requires auth + signature)
     pub async fn get_stream_url(&self, track_id: u64, quality: Quality) -> Result<StreamUrl> {
+        log::info!("Getting stream URL for track {} with quality {:?}", track_id, quality);
         let url = endpoints::build_url(paths::TRACK_GET_FILE_URL);
         let timestamp = get_timestamp();
+        log::debug!("Getting secret for signing...");
         let secret = self.secret().await?;
+        log::debug!("Secret obtained, signing request...");
         let signature = sign_get_file_url(track_id, quality.id(), timestamp, &secret);
 
+        log::debug!("Sending stream URL request...");
         let response = self
             .http
             .get(&url)
@@ -300,6 +315,7 @@ impl QobuzClient {
             .send()
             .await?;
 
+        log::info!("Stream URL response status: {}", response.status());
         match response.status() {
             StatusCode::OK => {
                 let json: Value = response.json().await?;
@@ -331,18 +347,33 @@ impl QobuzClient {
         track_id: u64,
         preferred: Quality,
     ) -> Result<StreamUrl> {
+        log::info!("Getting stream URL with fallback for track {}, preferred quality: {:?}", track_id, preferred);
         let qualities = Quality::fallback_order();
         let start_idx = qualities.iter().position(|q| *q == preferred).unwrap_or(0);
 
         for quality in &qualities[start_idx..] {
+            log::info!("Trying quality: {:?}", quality);
             match self.get_stream_url(track_id, *quality).await {
-                Ok(url) if !url.has_restrictions() => return Ok(url),
-                Ok(_) => continue, // Format restricted, try lower
-                Err(ApiError::InvalidAppSecret) => return Err(ApiError::InvalidAppSecret),
-                Err(_) => continue,
+                Ok(url) if !url.has_restrictions() => {
+                    log::info!("Got stream URL successfully: {} (format: {})", url.url, url.mime_type);
+                    return Ok(url);
+                },
+                Ok(_) => {
+                    log::info!("Quality {:?} has restrictions, trying next", quality);
+                    continue;
+                },
+                Err(ApiError::InvalidAppSecret) => {
+                    log::error!("Invalid app secret");
+                    return Err(ApiError::InvalidAppSecret);
+                },
+                Err(e) => {
+                    log::warn!("Quality {:?} failed: {}, trying next", quality, e);
+                    continue;
+                },
             }
         }
 
+        log::error!("No quality available for track {}", track_id);
         Err(ApiError::NoQualityAvailable)
     }
 

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "QBZ-NIX",
+  "productName": "QBZ",
   "version": "0.1.0",
-  "identifier": "com.blitzkriegfc.qbz-nix",
+  "identifier": "com.blitzkriegfc.qbz",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "QBZ-NIX",
+        "title": "QBZ",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
@@ -38,6 +38,6 @@
     ],
     "category": "Music",
     "shortDescription": "Native Qobuz client for Linux",
-    "longDescription": "QBZ-NIX is a native Qobuz streaming client for Linux, designed for audiophiles who need bit-perfect playback without browser sample rate limitations."
+    "longDescription": "QBZ is a native Qobuz streaming client for Linux, designed for audiophiles who need bit-perfect playback without browser sample rate limitations."
   }
 }

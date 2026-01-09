@@ -50,3 +50,25 @@ pub async fn init_client(state: State<'_, AppState>) -> Result<bool, String> {
         Err(e) => Err(e.to_string()),
     }
 }
+
+#[tauri::command]
+pub async fn logout(state: State<'_, AppState>) -> Result<(), String> {
+    let client = state.client.lock().await;
+    client.logout().await;
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct UserInfo {
+    pub user_name: String,
+    pub subscription: String,
+}
+
+#[tauri::command]
+pub async fn get_user_info(state: State<'_, AppState>) -> Result<Option<UserInfo>, String> {
+    let client = state.client.lock().await;
+    Ok(client.get_user_info().await.map(|(name, sub)| UserInfo {
+        user_name: name,
+        subscription: sub,
+    }))
+}

@@ -45,9 +45,9 @@ anyhow = "1"
 log = "0.4"
 env_logger = "0.11"
 
-# Audio playback (will expand later)
-# rodio = "0.19"
-# cpal = "0.15"
+# Audio playback
+rodio = { version = "0.19", features = ["symphonia-all"] }
+symphonia = { version = "0.5", features = ["all"] }
 
 # Storage
 # sled = "0.34"

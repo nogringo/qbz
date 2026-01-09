@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Music } from 'lucide-svelte';
   import HeroSection from '../HeroSection.svelte';
   import HorizontalScrollRow from '../HorizontalScrollRow.svelte';
   import AlbumCard from '../AlbumCard.svelte';
@@ -26,32 +27,32 @@
 
   let { featuredAlbum, recentAlbums = [], recommendedAlbums = [], newReleases = [], onAlbumClick }: Props = $props();
 
-  const defaultFeatured = {
-    artwork: 'https://picsum.photos/seed/featured/800/400',
-    title: 'Featured Album',
-    artist: 'Featured Artist',
-    year: '2024'
-  };
-
-  const featured = featuredAlbum ?? (recentAlbums[0] ? {
+  // Only show featured if we have actual data
+  const hasFeatured = $derived(featuredAlbum || recentAlbums.length > 0);
+  const featured = $derived(featuredAlbum ?? (recentAlbums[0] ? {
     artwork: recentAlbums[0].artwork,
     title: recentAlbums[0].title,
     artist: recentAlbums[0].artist,
     year: '2024'
-  } : defaultFeatured);
+  } : null));
+
+  const hasContent = $derived(recentAlbums.length > 0 || recommendedAlbums.length > 0 || newReleases.length > 0);
 </script>
 
 <div class="home-view">
-  <!-- Hero/Featured Section -->
-  <HeroSection
-    artwork={featured.artwork}
-    title={featured.title}
-    artist={featured.artist}
-    year={featured.year}
-  />
+  {#if hasContent}
+    <!-- Hero/Featured Section -->
+    {#if featured}
+      <HeroSection
+        artwork={featured.artwork}
+        title={featured.title}
+        artist={featured.artist}
+        year={featured.year}
+      />
+    {/if}
 
-  <!-- Recently Played -->
-  {#if recentAlbums.length > 0}
+    <!-- Recently Played -->
+    {#if recentAlbums.length > 0}
     <HorizontalScrollRow title="Escuchado recientemente">
       {#snippet children()}
         {#each recentAlbums as album}
@@ -104,15 +105,47 @@
       {/snippet}
     </HorizontalScrollRow>
   {/if}
+  {:else}
+    <!-- Welcome/Empty State -->
+    <div class="welcome-state">
+      <Music size={64} />
+      <h1>Welcome to QBZ</h1>
+      <p>Use the search to discover music on Qobuz</p>
+    </div>
+  {/if}
 </div>
 
 <style>
   .home-view {
     width: 100%;
+    min-height: calc(100vh - 160px);
   }
 
   .spacer {
     width: 60px;
     flex-shrink: 0;
+  }
+
+  .welcome-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 200px);
+    color: var(--text-muted);
+    text-align: center;
+    gap: 16px;
+  }
+
+  .welcome-state h1 {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .welcome-state p {
+    font-size: 16px;
+    margin: 0;
   }
 </style>

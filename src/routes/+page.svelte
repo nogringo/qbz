@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
 
   // Components
   import Sidebar from '$lib/components/Sidebar.svelte';
@@ -7,7 +8,9 @@
   import Toast from '$lib/components/Toast.svelte';
 
   // Views
+  import LoginView from '$lib/components/views/LoginView.svelte';
   import HomeView from '$lib/components/views/HomeView.svelte';
+  import SearchView from '$lib/components/views/SearchView.svelte';
   import SettingsView from '$lib/components/views/SettingsView.svelte';
   import AlbumDetailView from '$lib/components/views/AlbumDetailView.svelte';
 
@@ -17,11 +20,34 @@
   import FocusMode from '$lib/components/FocusMode.svelte';
 
   // Types
-  interface Album {
-    id: string;
-    artwork: string;
+  interface QobuzTrack {
+    id: number;
     title: string;
-    artist: string;
+    duration: number;
+    album?: {
+      title: string;
+      image?: { small?: string; thumbnail?: string; large?: string };
+    };
+    performer?: { name: string };
+    hires_streamable?: boolean;
+    maximum_bit_depth?: number;
+    maximum_sampling_rate?: number;
+  }
+
+  interface QobuzAlbum {
+    id: string;
+    title: string;
+    artist: { name: string };
+    image: { small?: string; thumbnail?: string; large?: string };
+    release_date_original?: string;
+    hires_streamable?: boolean;
+    tracks_count?: number;
+    duration?: number;
+    label?: { name: string };
+    genre?: { name: string };
+    maximum_bit_depth?: number;
+    maximum_sampling_rate?: number;
+    tracks?: { items: QobuzTrack[] };
   }
 
   interface Track {
@@ -53,9 +79,24 @@
     duration: string;
   }
 
+  interface PlayingTrack {
+    id: number;
+    title: string;
+    artist: string;
+    album: string;
+    artwork: string;
+    duration: number;
+    quality: string;
+  }
+
+  // Auth State
+  let isLoggedIn = $state(false);
+  let userInfo = $state<{ userName: string; subscription: string } | null>(null);
+
   // View State
-  let activeView = $state<'home' | 'search' | 'library' | 'settings' | 'album'>('home');
-  let viewHistory = $state<string[]>(['home']);
+  type ViewType = 'home' | 'search' | 'library' | 'settings' | 'album';
+  let activeView = $state<ViewType>('home');
+  let viewHistory = $state<ViewType[]>(['home']);
   let selectedAlbum = $state<AlbumDetail | null>(null);
 
   // Overlay States
@@ -64,107 +105,152 @@
   let isFocusModeOpen = $state(false);
 
   // Playback State
+  let currentTrack = $state<PlayingTrack | null>(null);
   let isPlaying = $state(false);
-  let currentTime = $state(73);
-  let duration = $state(245);
+  let currentTime = $state(0);
+  let duration = $state(0);
   let volume = $state(75);
   let isShuffle = $state(false);
   let repeatMode = $state<'off' | 'all' | 'one'>('off');
   let isFavorite = $state(false);
 
+  // Queue State
+  let queue = $state<QueueTrack[]>([]);
+
   // Toast State
   let toast = $state<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  // Mock Data
-  const mockAlbums: Album[] = [
-    { id: '1', artwork: 'https://picsum.photos/seed/album1/300/300', title: 'Midnight Dreams', artist: 'Luna Nova' },
-    { id: '2', artwork: 'https://picsum.photos/seed/album2/300/300', title: 'Electric Soul', artist: 'The Voltage' },
-    { id: '3', artwork: 'https://picsum.photos/seed/album3/300/300', title: 'Cosmic Journey', artist: 'Stellar Wind' },
-    { id: '4', artwork: 'https://picsum.photos/seed/album4/300/300', title: 'Urban Echoes', artist: 'City Lights' },
-    { id: '5', artwork: 'https://picsum.photos/seed/album5/300/300', title: 'Ocean Waves', artist: 'Deep Blue' },
-    { id: '6', artwork: 'https://picsum.photos/seed/album6/300/300', title: 'Mountain High', artist: 'Peak Sound' },
-    { id: '7', artwork: 'https://picsum.photos/seed/album7/300/300', title: 'Desert Storm', artist: 'Sand Dunes' },
-    { id: '8', artwork: 'https://picsum.photos/seed/album8/300/300', title: 'Forest Tales', artist: 'Green Echo' },
-  ];
-
-  const mockAlbumDetail: AlbumDetail = {
-    artwork: 'https://picsum.photos/seed/album1/500/500',
-    title: 'Midnight Dreams',
-    artist: 'Luna Nova',
-    year: '2024',
-    label: 'Stellar Records',
-    genre: 'Electronic',
-    quality: '24-Bit / 96 kHz',
-    trackCount: 12,
-    duration: '48:32',
-    tracks: [
-      { number: 1, title: 'Moonrise', duration: '4:23', quality: 'Hi-Res' },
-      { number: 2, title: 'Starlight Serenade', duration: '3:45', quality: 'Hi-Res' },
-      { number: 3, title: 'Night Sky', duration: '5:12', quality: 'Hi-Res' },
-      { number: 4, title: 'Celestial Dance', duration: '4:01', quality: 'Hi-Res' },
-      { number: 5, title: 'Lunar Eclipse', duration: '3:56', quality: 'Hi-Res' },
-      { number: 6, title: 'Cosmic Dust', duration: '4:33', quality: 'Hi-Res' },
-      { number: 7, title: 'Nebula Dreams', duration: '5:08', quality: 'Hi-Res' },
-      { number: 8, title: 'Aurora', duration: '3:42', quality: 'Hi-Res' },
-      { number: 9, title: 'Twilight Zone', duration: '4:15', quality: 'Hi-Res' },
-      { number: 10, title: 'Midnight Hour', duration: '3:58', quality: 'Hi-Res' },
-      { number: 11, title: 'Dream Sequence', duration: '4:47', quality: 'Hi-Res' },
-      { number: 12, title: 'Dawn Breaking', duration: '4:12', quality: 'Hi-Res' },
-    ],
-  };
-
-  const currentTrack: QueueTrack = {
-    id: 'current',
-    artwork: 'https://picsum.photos/seed/album1/300/300',
-    title: 'Moonrise',
-    artist: 'Luna Nova',
-    duration: '4:23',
-  };
-
-  const upcomingTracks: QueueTrack[] = [
-    { id: '2', artwork: 'https://picsum.photos/seed/album1/300/300', title: 'Starlight Serenade', artist: 'Luna Nova', duration: '3:45' },
-    { id: '3', artwork: 'https://picsum.photos/seed/album1/300/300', title: 'Night Sky', artist: 'Luna Nova', duration: '5:12' },
-    { id: '4', artwork: 'https://picsum.photos/seed/album1/300/300', title: 'Celestial Dance', artist: 'Luna Nova', duration: '4:01' },
-  ];
-
-  // View Types
-  type ViewType = 'home' | 'search' | 'library' | 'settings' | 'album';
-
   // Navigation Functions
   function navigateTo(view: string) {
+    console.log('navigateTo called with:', view, 'current activeView:', activeView);
     const typedView = view as ViewType;
     if (typedView !== activeView) {
       viewHistory = [...viewHistory, typedView];
       activeView = typedView;
+      console.log('View changed to:', activeView);
+    } else {
+      console.log('View unchanged (already on this view)');
     }
   }
 
   function goBack() {
     if (viewHistory.length > 1) {
       viewHistory = viewHistory.slice(0, -1);
-      activeView = viewHistory[viewHistory.length - 1] as typeof activeView;
+      activeView = viewHistory[viewHistory.length - 1];
       if (activeView !== 'album') {
         selectedAlbum = null;
       }
     }
   }
 
-  function handleAlbumClick(albumId: string) {
-    selectedAlbum = mockAlbumDetail;
-    navigateTo('album');
+  async function handleAlbumClick(albumId: string) {
+    try {
+      showToast('Loading album...', 'info');
+      const album = await invoke<QobuzAlbum>('get_album', { albumId });
+      console.log('Album details:', album);
+
+      selectedAlbum = convertQobuzAlbum(album);
+      navigateTo('album');
+      hideToast();
+    } catch (err) {
+      console.error('Failed to load album:', err);
+      showToast('Failed to load album', 'error');
+    }
+  }
+
+  function convertQobuzAlbum(album: QobuzAlbum): AlbumDetail {
+    const artwork = album.image?.large || album.image?.thumbnail || album.image?.small || '';
+    const quality = album.hires_streamable && album.maximum_bit_depth && album.maximum_sampling_rate
+      ? `${album.maximum_bit_depth}-Bit / ${album.maximum_sampling_rate} kHz`
+      : 'CD Quality';
+
+    return {
+      artwork,
+      title: album.title,
+      artist: album.artist?.name || 'Unknown Artist',
+      year: album.release_date_original?.split('-')[0] || '',
+      label: album.label?.name || '',
+      genre: album.genre?.name || '',
+      quality,
+      trackCount: album.tracks_count || album.tracks?.items?.length || 0,
+      duration: formatDurationMinutes(album.duration || 0),
+      tracks: album.tracks?.items?.map((track, index) => ({
+        number: index + 1,
+        title: track.title,
+        artist: track.performer?.name,
+        duration: formatDuration(track.duration),
+        quality: track.hires_streamable ? 'Hi-Res' : 'CD'
+      })) || []
+    };
+  }
+
+  function formatDuration(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  function formatDurationMinutes(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
   // Playback Functions
+  async function handleTrackPlay(track: QobuzTrack) {
+    console.log('Playing track:', track);
+
+    const artwork = track.album?.image?.large || track.album?.image?.thumbnail || track.album?.image?.small || '';
+    const quality = track.hires_streamable && track.maximum_bit_depth && track.maximum_sampling_rate
+      ? `${track.maximum_bit_depth}bit/${track.maximum_sampling_rate}kHz`
+      : 'CD Quality';
+
+    currentTrack = {
+      id: track.id,
+      title: track.title,
+      artist: track.performer?.name || 'Unknown Artist',
+      album: track.album?.title || '',
+      artwork,
+      duration: track.duration,
+      quality
+    };
+
+    duration = track.duration;
+    currentTime = 0;
+
+    // Try to play the track
+    try {
+      showToast(`Playing: ${track.title}`, 'info');
+      await invoke('play_track', { trackId: track.id });
+      isPlaying = true;
+    } catch (err) {
+      console.error('Failed to play track:', err);
+      showToast(`Playback error: ${err}`, 'error');
+      // For now, just set isPlaying anyway for UI demo
+      isPlaying = true;
+    }
+  }
+
   function togglePlay() {
+    if (!currentTrack) return;
     isPlaying = !isPlaying;
+
+    // TODO: invoke pause/resume commands
+    if (isPlaying) {
+      invoke('resume_playback').catch(console.error);
+    } else {
+      invoke('pause_playback').catch(console.error);
+    }
   }
 
   function handleSeek(time: number) {
     currentTime = Math.max(0, Math.min(duration, time));
+    invoke('seek', { position: time }).catch(console.error);
   }
 
   function handleVolumeChange(newVolume: number) {
     volume = Math.max(0, Math.min(100, newVolume));
+    invoke('set_volume', { volume: newVolume / 100 }).catch(console.error);
   }
 
   function toggleShuffle() {
@@ -186,7 +272,7 @@
     showToast(isFavorite ? 'Added to favorites' : 'Removed from favorites', 'success');
   }
 
-  // Toast Function
+  // Toast Functions
   function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
     toast = { message, type };
   }
@@ -195,9 +281,30 @@
     toast = null;
   }
 
+  // Auth Handlers
+  function handleLoginSuccess(info: { userName: string; subscription: string }) {
+    isLoggedIn = true;
+    userInfo = info;
+    showToast(`Welcome, ${info.userName}!`, 'success');
+  }
+
+  async function handleLogout() {
+    try {
+      await invoke('logout');
+      isLoggedIn = false;
+      userInfo = null;
+      currentTrack = null;
+      isPlaying = false;
+      showToast('Logged out successfully', 'info');
+    } catch (err) {
+      console.error('Logout error:', err);
+      showToast('Failed to logout', 'error');
+    }
+  }
+
   // Keyboard Shortcuts
   function handleKeydown(e: KeyboardEvent) {
-    // Don't trigger shortcuts when typing in inputs
+    if (!isLoggedIn) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
       return;
     }
@@ -223,137 +330,187 @@
     }
   }
 
+  // Playback progress timer
+  let progressInterval: ReturnType<typeof setInterval> | null = null;
+
+  $effect(() => {
+    if (isPlaying && currentTrack) {
+      progressInterval = setInterval(() => {
+        if (currentTime < duration) {
+          currentTime += 1;
+        } else {
+          isPlaying = false;
+        }
+      }, 1000);
+    } else if (progressInterval) {
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
+
+    return () => {
+      if (progressInterval) clearInterval(progressInterval);
+    };
+  });
+
   onMount(() => {
     document.addEventListener('keydown', handleKeydown);
     return () => document.removeEventListener('keydown', handleKeydown);
   });
+
+  // Derived values for NowPlayingBar
+  const currentQueueTrack = $derived<QueueTrack | null>(currentTrack ? {
+    id: String(currentTrack.id),
+    artwork: currentTrack.artwork,
+    title: currentTrack.title,
+    artist: currentTrack.artist,
+    duration: formatDuration(currentTrack.duration)
+  } : null);
 </script>
 
-<div class="app">
-  <!-- Sidebar -->
-  <Sidebar
-    {activeView}
-    onNavigate={navigateTo}
-    onSettingsClick={() => navigateTo('settings')}
-  />
-
-  <!-- Main Content -->
-  <main class="main-content">
-    {#if activeView === 'home'}
-      <HomeView
-        recentAlbums={mockAlbums}
-        recommendedAlbums={mockAlbums.slice().reverse()}
-        newReleases={mockAlbums.slice(2, 6)}
-        onAlbumClick={handleAlbumClick}
-      />
-    {:else if activeView === 'settings'}
-      <SettingsView />
-    {:else if activeView === 'album' && selectedAlbum}
-      <AlbumDetailView
-        album={selectedAlbum}
-        onBack={goBack}
-      />
-    {:else if activeView === 'search'}
-      <div class="placeholder-view">
-        <h1>Search</h1>
-        <p>Search functionality coming soon...</p>
-      </div>
-    {:else if activeView === 'library'}
-      <div class="placeholder-view">
-        <h1>Library</h1>
-        <p>Your library will appear here...</p>
-      </div>
-    {/if}
-  </main>
-
-  <!-- Now Playing Bar -->
-  <NowPlayingBar
-    artwork={currentTrack.artwork}
-    trackTitle={currentTrack.title}
-    artist={currentTrack.artist}
-    {isPlaying}
-    onTogglePlay={togglePlay}
-    {currentTime}
-    {duration}
-    onSeek={handleSeek}
-    {volume}
-    onVolumeChange={handleVolumeChange}
-    {isShuffle}
-    onToggleShuffle={toggleShuffle}
-    {repeatMode}
-    onToggleRepeat={toggleRepeat}
-    {isFavorite}
-    onToggleFavorite={toggleFavorite}
-    onOpenQueue={() => (isQueueOpen = true)}
-    onOpenFullScreen={() => (isFullScreenOpen = true)}
-  />
-
-  <!-- Queue Panel -->
-  <QueuePanel
-    isOpen={isQueueOpen}
-    onClose={() => (isQueueOpen = false)}
-    {currentTrack}
-    {upcomingTracks}
-    onClearQueue={() => showToast('Queue cleared', 'info')}
-    onSaveAsPlaylist={() => showToast('Saved as playlist', 'success')}
-  />
-
-  <!-- Full Screen Now Playing -->
-  <FullScreenNowPlaying
-    isOpen={isFullScreenOpen}
-    onClose={() => (isFullScreenOpen = false)}
-    artwork={currentTrack.artwork}
-    trackTitle={currentTrack.title}
-    artist={currentTrack.artist}
-    album="Midnight Dreams"
-    quality="24-Bit / 96 kHz"
-    qualityLevel={4}
-    {isPlaying}
-    onTogglePlay={togglePlay}
-    {currentTime}
-    {duration}
-    onSeek={handleSeek}
-    {volume}
-    onVolumeChange={handleVolumeChange}
-    {isShuffle}
-    onToggleShuffle={toggleShuffle}
-    {repeatMode}
-    onToggleRepeat={toggleRepeat}
-    {isFavorite}
-    onToggleFavorite={toggleFavorite}
-    onOpenQueue={() => {
-      isFullScreenOpen = false;
-      isQueueOpen = true;
-    }}
-    onOpenFocusMode={() => {
-      isFullScreenOpen = false;
-      isFocusModeOpen = true;
-    }}
-  />
-
-  <!-- Focus Mode -->
-  <FocusMode
-    isOpen={isFocusModeOpen}
-    onClose={() => (isFocusModeOpen = false)}
-    artwork={currentTrack.artwork}
-    trackTitle={currentTrack.title}
-    artist={currentTrack.artist}
-    {isPlaying}
-    onTogglePlay={togglePlay}
-    {currentTime}
-    {duration}
-    onSeek={handleSeek}
-  />
-
-  <!-- Toast -->
-  {#if toast}
-    <Toast
-      message={toast.message}
-      type={toast.type}
-      onClose={hideToast}
+{#if !isLoggedIn}
+  <LoginView onLoginSuccess={handleLoginSuccess} />
+{:else}
+  <div class="app">
+    <!-- Sidebar -->
+    <Sidebar
+      {activeView}
+      onNavigate={navigateTo}
+      onSettingsClick={() => navigateTo('settings')}
+      onLogout={handleLogout}
+      userName={userInfo?.userName || 'User'}
+      subscription={userInfo?.subscription || 'Qobuz'}
     />
-  {/if}
-</div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      {#if activeView === 'home'}
+        <HomeView
+          onAlbumClick={handleAlbumClick}
+        />
+      {:else if activeView === 'search'}
+        <SearchView
+          onAlbumClick={handleAlbumClick}
+          onTrackPlay={handleTrackPlay}
+        />
+      {:else if activeView === 'settings'}
+        <SettingsView onBack={goBack} />
+      {:else if activeView === 'album' && selectedAlbum}
+        <AlbumDetailView
+          album={selectedAlbum}
+          onBack={goBack}
+        />
+      {:else if activeView === 'library'}
+        <div class="placeholder-view">
+          <h1>Library</h1>
+          <p>Your library will appear here...</p>
+        </div>
+      {/if}
+    </main>
+
+    <!-- Now Playing Bar -->
+    {#if currentTrack}
+      <NowPlayingBar
+        artwork={currentTrack.artwork}
+        trackTitle={currentTrack.title}
+        artist={currentTrack.artist}
+        quality={currentTrack.quality}
+        {isPlaying}
+        onTogglePlay={togglePlay}
+        {currentTime}
+        {duration}
+        onSeek={handleSeek}
+        {volume}
+        onVolumeChange={handleVolumeChange}
+        {isShuffle}
+        onToggleShuffle={toggleShuffle}
+        {repeatMode}
+        onToggleRepeat={toggleRepeat}
+        {isFavorite}
+        onToggleFavorite={toggleFavorite}
+        onOpenQueue={() => (isQueueOpen = true)}
+        onOpenFullScreen={() => (isFullScreenOpen = true)}
+      />
+    {:else}
+      <NowPlayingBar
+        onOpenQueue={() => (isQueueOpen = true)}
+        onOpenFullScreen={() => (isFullScreenOpen = true)}
+      />
+    {/if}
+
+    <!-- Queue Panel -->
+    <QueuePanel
+      isOpen={isQueueOpen}
+      onClose={() => (isQueueOpen = false)}
+      currentTrack={currentQueueTrack ?? undefined}
+      upcomingTracks={queue}
+      onClearQueue={() => {
+        queue = [];
+        showToast('Queue cleared', 'info');
+      }}
+      onSaveAsPlaylist={() => showToast('Saved as playlist', 'success')}
+    />
+
+    <!-- Full Screen Now Playing -->
+    {#if currentTrack}
+      <FullScreenNowPlaying
+        isOpen={isFullScreenOpen}
+        onClose={() => (isFullScreenOpen = false)}
+        artwork={currentTrack.artwork}
+        trackTitle={currentTrack.title}
+        artist={currentTrack.artist}
+        album={currentTrack.album}
+        quality={currentTrack.quality}
+        qualityLevel={currentTrack.quality.includes('24') ? 5 : 3}
+        {isPlaying}
+        onTogglePlay={togglePlay}
+        {currentTime}
+        {duration}
+        onSeek={handleSeek}
+        {volume}
+        onVolumeChange={handleVolumeChange}
+        {isShuffle}
+        onToggleShuffle={toggleShuffle}
+        {repeatMode}
+        onToggleRepeat={toggleRepeat}
+        {isFavorite}
+        onToggleFavorite={toggleFavorite}
+        onOpenQueue={() => {
+          isFullScreenOpen = false;
+          isQueueOpen = true;
+        }}
+        onOpenFocusMode={() => {
+          isFullScreenOpen = false;
+          isFocusModeOpen = true;
+        }}
+      />
+    {/if}
+
+    <!-- Focus Mode -->
+    {#if currentTrack}
+      <FocusMode
+        isOpen={isFocusModeOpen}
+        onClose={() => (isFocusModeOpen = false)}
+        artwork={currentTrack.artwork}
+        trackTitle={currentTrack.title}
+        artist={currentTrack.artist}
+        {isPlaying}
+        onTogglePlay={togglePlay}
+        {currentTime}
+        {duration}
+        onSeek={handleSeek}
+      />
+    {/if}
+
+    <!-- Toast -->
+    {#if toast}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        onClose={hideToast}
+      />
+    {/if}
+  </div>
+{/if}
 
 <style>
   .app {
@@ -365,7 +522,7 @@
 
   .main-content {
     flex: 1;
-    margin-left: 240px;
+    min-width: 0;
     margin-bottom: 80px;
     overflow-y: auto;
     padding: 24px 32px;

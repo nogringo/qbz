@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Play } from 'lucide-svelte';
+  import { Play, Disc3 } from 'lucide-svelte';
 
   interface Props {
     artwork: string;
@@ -13,7 +13,12 @@
   let { artwork, title, artist, quality, size = 'standard', onclick }: Props = $props();
 
   let isHovered = $state(false);
+  let imageError = $state(false);
   const cardSize = $derived(size === 'large' ? 200 : 180);
+
+  function handleImageError() {
+    imageError = true;
+  }
 </script>
 
 <div
@@ -31,7 +36,13 @@
     class="artwork-container"
     style="width: {cardSize}px; height: {cardSize}px; transform: scale({isHovered ? 1.02 : 1})"
   >
-    <img src={artwork} alt={title} />
+    {#if imageError || !artwork}
+      <div class="artwork-placeholder">
+        <Disc3 size={48} />
+      </div>
+    {:else}
+      <img src={artwork} alt={title} onerror={handleImageError} />
+    {/if}
 
     <!-- Quality Indicator -->
     {#if quality}
@@ -74,6 +85,16 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  .artwork-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+    color: var(--text-muted);
   }
 
   .quality-badge {

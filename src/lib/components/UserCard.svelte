@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { Settings } from 'lucide-svelte';
+  import { Settings, LogOut } from 'lucide-svelte';
 
   interface Props {
     username: string;
     subscription: string;
     avatarUrl?: string;
     onSettingsClick: () => void;
+    onLogout?: () => void;
   }
 
-  let { username, subscription, avatarUrl, onSettingsClick }: Props = $props();
+  let { username, subscription, avatarUrl, onSettingsClick, onLogout }: Props = $props();
 </script>
 
 <div class="user-card">
@@ -27,16 +28,31 @@
     <div class="subscription">{subscription}</div>
   </div>
 
-  <!-- Settings Button -->
-  <button
-    class="settings-btn"
-    onclick={(e) => {
-      e.stopPropagation();
-      onSettingsClick();
-    }}
-  >
-    <Settings size={20} />
-  </button>
+  <!-- Action Buttons -->
+  <div class="action-buttons">
+    <button
+      class="action-btn"
+      onclick={(e) => {
+        e.stopPropagation();
+        onSettingsClick();
+      }}
+      title="Settings"
+    >
+      <Settings size={18} />
+    </button>
+    {#if onLogout}
+      <button
+        class="action-btn logout-btn"
+        onclick={(e) => {
+          e.stopPropagation();
+          onLogout();
+        }}
+        title="Logout"
+      >
+        <LogOut size={18} />
+      </button>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -97,21 +113,33 @@
     white-space: nowrap;
   }
 
-  .settings-btn {
-    width: 20px;
-    height: 20px;
+  .action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .action-btn {
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: none;
     border: none;
-    color: #666666;
+    color: var(--text-muted);
     cursor: pointer;
     flex-shrink: 0;
-    transition: color 150ms ease;
+    border-radius: 6px;
+    transition: all 150ms ease;
   }
 
-  .settings-btn:hover {
-    color: var(--text-muted);
+  .action-btn:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-tertiary);
+  }
+
+  .logout-btn:hover {
+    color: #ff6b6b;
   }
 </style>

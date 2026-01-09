@@ -84,7 +84,7 @@
     <div class="setting-row">
       <div class="label-with-tooltip">
         <span class="setting-label">Exclusive Mode</span>
-        <Tooltip text="Locks the audio device for exclusive use by QBZ-NIX for better quality" />
+        <Tooltip text="Locks the audio device for exclusive use by QBZ for better quality" />
       </div>
       <Toggle enabled={exclusiveMode} onchange={(v) => (exclusiveMode = v)} />
     </div>

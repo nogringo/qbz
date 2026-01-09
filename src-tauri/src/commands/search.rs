@@ -2,7 +2,7 @@
 
 use tauri::State;
 
-use crate::api::{Album, Artist, Track, SearchResultsPage};
+use crate::api::{Album, Artist, SearchResultsPage, Track};
 use crate::AppState;
 
 #[tauri::command]
@@ -45,19 +45,13 @@ pub async fn search_artists(
 }
 
 #[tauri::command]
-pub async fn get_album(
-    album_id: String,
-    state: State<'_, AppState>,
-) -> Result<Album, String> {
+pub async fn get_album(album_id: String, state: State<'_, AppState>) -> Result<Album, String> {
     let client = state.client.lock().await;
     client.get_album(&album_id).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn get_track(
-    track_id: u64,
-    state: State<'_, AppState>,
-) -> Result<Track, String> {
+pub async fn get_track(track_id: u64, state: State<'_, AppState>) -> Result<Track, String> {
     let client = state.client.lock().await;
     client.get_track(track_id).await.map_err(|e| e.to_string())
 }

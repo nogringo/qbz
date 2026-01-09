@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '../app.css';
   import type { Snippet } from 'svelte';
   import { initI18n } from '$lib/i18n';
   import { isLoading } from 'svelte-i18n';

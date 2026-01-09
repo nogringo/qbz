@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Search, Home, Radio, Clock, Music, Disc3, Mic2, Plus, MoreVertical, ChevronDown } from 'lucide-svelte';
+  import { Search, Home, Radio, Clock, Music, Disc3, Mic2, Plus, MoreVertical, ChevronDown, Heart } from 'lucide-svelte';
   import NavigationItem from './NavigationItem.svelte';
   import UserCard from './UserCard.svelte';
 
@@ -7,11 +7,15 @@
     activeView: string;
     onNavigate: (view: string) => void;
     onSettingsClick?: () => void;
+    onLogout?: () => void;
+    userName?: string;
+    subscription?: string;
   }
 
-  let { activeView, onNavigate, onSettingsClick }: Props = $props();
+  let { activeView, onNavigate, onSettingsClick, onLogout, userName = 'User', subscription = 'Qobuz' }: Props = $props();
 
   function handleViewChange(view: string) {
+    console.log('Sidebar: navigating to', view);
     onNavigate(view);
   }
 </script>
@@ -20,14 +24,10 @@
   <!-- Scrollable Content Area -->
   <div class="content">
     <!-- Search Bar -->
-    <div class="search-container">
+    <button class="search-container" onclick={() => handleViewChange('search')}>
       <Search class="search-icon" size={16} />
-      <input
-        type="text"
-        placeholder="Search"
-        class="search-input"
-      />
-    </div>
+      <span class="search-placeholder">Search</span>
+    </button>
 
     <!-- Navigation Section -->
     <nav class="nav-section">
@@ -140,9 +140,10 @@
   <!-- Fixed User Profile at Bottom -->
   <div class="user-section">
     <UserCard
-      username="Username"
-      subscription="Studio Premier"
+      username={userName}
+      {subscription}
       onSettingsClick={onSettingsClick ?? (() => handleViewChange('settings'))}
+      {onLogout}
     />
   </div>
 </aside>
@@ -150,6 +151,8 @@
 <style>
   .sidebar {
     width: 240px;
+    min-width: 240px;
+    flex-shrink: 0;
     background-color: var(--bg-secondary);
     display: flex;
     flex-direction: column;
@@ -167,31 +170,30 @@
   }
 
   .search-container {
-    position: relative;
-  }
-
-  .search-container :global(.search-icon) {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--text-muted);
-  }
-
-  .search-input {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     width: 100%;
     height: 36px;
     background-color: var(--bg-tertiary);
     border-radius: 8px;
-    padding-left: 40px;
-    padding-right: 12px;
-    font-size: 14px;
-    color: var(--text-primary);
+    padding: 0 12px;
     border: none;
-    outline: none;
+    cursor: pointer;
+    transition: background-color 150ms ease;
   }
 
-  .search-input::placeholder {
+  .search-container:hover {
+    background-color: var(--bg-hover);
+  }
+
+  .search-container :global(.search-icon) {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .search-placeholder {
+    font-size: 14px;
     color: var(--text-muted);
   }
 
