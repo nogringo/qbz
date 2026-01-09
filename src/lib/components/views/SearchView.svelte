@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { Search, Disc3, Music, Mic2, User } from 'lucide-svelte';
   import AlbumCard from '../AlbumCard.svelte';
+  import { getSearchState, setSearchState, type SearchResults, type SearchTab } from '$lib/stores/searchState';
 
   onMount(() => {
     console.log('SearchView mounted!');
@@ -60,21 +61,16 @@
     albums_count?: number;
   }
 
-  interface SearchResults<T> {
-    items: T[];
-    total: number;
-    offset: number;
-    limit: number;
-  }
+  const cachedState = getSearchState<Album, Track, Artist>();
 
-  let query = $state('');
-  let activeTab = $state<'albums' | 'tracks' | 'artists'>('albums');
+  let query = $state(cachedState.query ?? '');
+  let activeTab = $state<SearchTab>(cachedState.activeTab ?? 'albums');
   let isSearching = $state(false);
   let searchError = $state<string | null>(null);
 
-  let albumResults = $state<SearchResults<Album> | null>(null);
-  let trackResults = $state<SearchResults<Track> | null>(null);
-  let artistResults = $state<SearchResults<Artist> | null>(null);
+  let albumResults = $state<SearchResults<Album> | null>(cachedState.albumResults ?? null);
+  let trackResults = $state<SearchResults<Track> | null>(cachedState.trackResults ?? null);
+  let artistResults = $state<SearchResults<Artist> | null>(cachedState.artistResults ?? null);
 
   let searchTimeout: ReturnType<typeof setTimeout> | null = null;
   let isLoadingMore = $state(false);
@@ -95,6 +91,16 @@
     }
     searchTimeout = setTimeout(() => performSearch(), 300);
   }
+
+  $effect(() => {
+    setSearchState<Album, Track, Artist>({
+      query,
+      activeTab,
+      albumResults,
+      trackResults,
+      artistResults
+    });
+  });
 
   async function performSearch() {
     if (!query.trim()) return;

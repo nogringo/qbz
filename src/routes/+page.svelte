@@ -167,6 +167,7 @@
   type ViewType = 'home' | 'search' | 'library' | 'settings' | 'album' | 'artist' | 'playlist' | 'favorites';
   let activeView = $state<ViewType>('home');
   let viewHistory = $state<ViewType[]>(['home']);
+  let forwardHistory = $state<ViewType[]>([]);
   let selectedAlbum = $state<AlbumDetail | null>(null);
   let selectedArtist = $state<ArtistDetail | null>(null);
   let selectedPlaylistId = $state<number | null>(null);
@@ -211,6 +212,7 @@
     const typedView = view as ViewType;
     if (typedView !== activeView) {
       viewHistory = [...viewHistory, typedView];
+      forwardHistory = [];
       activeView = typedView;
       console.log('View changed to:', activeView);
     } else {
@@ -220,17 +222,19 @@
 
   function goBack() {
     if (viewHistory.length > 1) {
+      const lastView = viewHistory[viewHistory.length - 1];
       viewHistory = viewHistory.slice(0, -1);
+      forwardHistory = [...forwardHistory, lastView];
       activeView = viewHistory[viewHistory.length - 1];
-      if (activeView !== 'album') {
-        selectedAlbum = null;
-      }
-      if (activeView !== 'artist') {
-        selectedArtist = null;
-      }
-      if (activeView !== 'playlist') {
-        selectedPlaylistId = null;
-      }
+    }
+  }
+
+  function goForward() {
+    if (forwardHistory.length > 0) {
+      const nextView = forwardHistory[forwardHistory.length - 1];
+      forwardHistory = forwardHistory.slice(0, -1);
+      viewHistory = [...viewHistory, nextView];
+      activeView = nextView;
     }
   }
 
@@ -1149,8 +1153,23 @@
       document.documentElement.setAttribute('data-theme', savedTheme);
     }
 
+    const handleMouseNavigation = (event: MouseEvent) => {
+      if (event.button === 3) {
+        event.preventDefault();
+        goBack();
+      } else if (event.button === 4) {
+        event.preventDefault();
+        goForward();
+      }
+    };
+
     document.addEventListener('keydown', handleKeydown);
-    return () => document.removeEventListener('keydown', handleKeydown);
+    window.addEventListener('mouseup', handleMouseNavigation);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('mouseup', handleMouseNavigation);
+    };
   });
 
   // Sync queue state when opening queue panel
