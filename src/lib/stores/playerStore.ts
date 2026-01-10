@@ -2,11 +2,11 @@
  * Player State Store
  *
  * Manages playback state including current track, play/pause, position, volume.
- * Currently uses polling to sync with backend - designed to be replaced with
- * Tauri events in the future.
+ * Uses Tauri events for real-time updates from the backend.
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 // ============ Types ============
 
@@ -31,6 +31,15 @@ interface BackendPlaybackState {
   volume: number;
 }
 
+// Event payload from backend
+interface PlaybackEvent {
+  is_playing: boolean;
+  position: number;
+  duration: number;
+  track_id: number;
+  volume: number;
+}
+
 // ============ State ============
 
 let currentTrack: PlayingTrack | null = null;
@@ -40,8 +49,8 @@ let duration = 0;
 let volume = 75;
 let isFavorite = false;
 
-// Polling state
-let pollInterval: ReturnType<typeof setInterval> | null = null;
+// Event listener state (replaces polling)
+let eventUnlisten: UnlistenFn | null = null;
 let isAdvancingTrack = false;
 let isSkipping = false;
 let queueEnded = false;
@@ -242,7 +251,7 @@ export async function stop(): Promise<void> {
   }
 }
 
-// ============ Polling ============
+// ============ Event-Based Updates ============
 
 /**
  * Set callback for when track ends (for auto-advance)
@@ -252,71 +261,72 @@ export function setOnTrackEnded(callback: () => Promise<void>): void {
 }
 
 /**
- * Poll playback state from backend
+ * Handle playback event from backend
  */
-async function pollPlaybackState(): Promise<void> {
+async function handlePlaybackEvent(event: PlaybackEvent): Promise<void> {
   if (!currentTrack) return;
 
-  try {
-    const state = await invoke<BackendPlaybackState>('get_playback_state');
+  // Only update if we have a matching track
+  if (event.track_id === currentTrack.id) {
+    currentTime = event.position;
+    isPlaying = event.is_playing;
+    notifyListeners();
 
-    // Only update if we have a matching track
-    if (state.track_id === currentTrack.id) {
-      currentTime = state.position;
-      isPlaying = state.is_playing;
-      notifyListeners();
+    // Check if track ended - auto-advance to next
+    if (
+      event.duration > 0 &&
+      event.position >= event.duration - 1 &&
+      !event.is_playing &&
+      !isAdvancingTrack &&
+      !queueEnded &&
+      onTrackEnded
+    ) {
+      console.log('Track finished, advancing to next...');
+      isAdvancingTrack = true;
 
-      // Check if track ended - auto-advance to next
-      if (
-        state.duration > 0 &&
-        state.position >= state.duration - 1 &&
-        !state.is_playing &&
-        !isAdvancingTrack &&
-        !queueEnded &&
-        onTrackEnded
-      ) {
-        console.log('Track finished, advancing to next...');
-        isAdvancingTrack = true;
-
-        try {
-          await onTrackEnded();
-        } catch (err) {
-          console.error('Failed to auto-advance:', err);
-        } finally {
-          isAdvancingTrack = false;
-        }
+      try {
+        await onTrackEnded();
+      } catch (err) {
+        console.error('Failed to auto-advance:', err);
+      } finally {
+        isAdvancingTrack = false;
       }
     }
-  } catch (err) {
-    console.error('Failed to poll playback state:', err);
   }
 }
 
 /**
- * Start polling for playback state
+ * Start listening for playback events from backend
  */
-export function startPolling(): void {
-  if (pollInterval) return;
+export async function startPolling(): Promise<void> {
+  if (eventUnlisten) return;
 
-  pollInterval = setInterval(pollPlaybackState, 500);
-  pollPlaybackState(); // Poll immediately
+  try {
+    eventUnlisten = await listen<PlaybackEvent>('playback:state', (event) => {
+      handlePlaybackEvent(event.payload);
+    });
+    console.log('Started listening for playback events');
+  } catch (err) {
+    console.error('Failed to start playback event listener:', err);
+  }
 }
 
 /**
- * Stop polling
+ * Stop listening for playback events
  */
 export function stopPolling(): void {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
+  if (eventUnlisten) {
+    eventUnlisten();
+    eventUnlisten = null;
+    console.log('Stopped listening for playback events');
   }
 }
 
 /**
- * Check if polling is active
+ * Check if event listener is active
  */
 export function isPollingActive(): boolean {
-  return pollInterval !== null;
+  return eventUnlisten !== null;
 }
 
 // ============ Cleanup ============

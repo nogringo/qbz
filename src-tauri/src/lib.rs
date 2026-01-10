@@ -19,6 +19,7 @@ pub mod queue;
 pub mod share;
 
 use std::sync::Arc;
+use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
 use api::QobuzClient;
@@ -113,6 +114,51 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState::new())
+        .setup(|app| {
+            // Start background task to emit playback events
+            let app_handle = app.handle().clone();
+            let player_state = app.state::<AppState>().player.state.clone();
+
+            std::thread::spawn(move || {
+                let mut last_position: u64 = 0;
+                let mut last_is_playing: bool = false;
+                let mut last_track_id: u64 = 0;
+
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+
+                    let is_playing = player_state.is_playing();
+                    let position = player_state.current_position();
+                    let duration = player_state.duration();
+                    let track_id = player_state.current_track_id();
+                    let volume = player_state.volume();
+
+                    // Only emit if state changed or position advanced
+                    let should_emit = track_id != 0 && (
+                        is_playing != last_is_playing
+                        || track_id != last_track_id
+                        || (is_playing && position != last_position)
+                    );
+
+                    if should_emit {
+                        let event = player::PlaybackEvent {
+                            is_playing,
+                            position,
+                            duration,
+                            track_id,
+                            volume,
+                        };
+                        let _ = app_handle.emit("playback:state", &event);
+
+                        last_position = position;
+                        last_is_playing = is_playing;
+                        last_track_id = track_id;
+                    }
+                }
+            });
+
+            Ok(())
+        })
         .manage(library_state)
         .manage(cast_state)
         .manage(dlna_state)
