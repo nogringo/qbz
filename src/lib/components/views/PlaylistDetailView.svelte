@@ -4,6 +4,7 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import { onMount } from 'svelte';
   import TrackRow from '../TrackRow.svelte';
+  import { type DownloadStatus } from '$lib/stores/downloadState';
 
   interface PlaylistTrack {
     id: number;
@@ -71,6 +72,9 @@
     onTrackShareSonglink?: (track: DisplayTrack) => void;
     onTrackGoToAlbum?: (albumId: string) => void;
     onTrackGoToArtist?: (artistId: number) => void;
+    onTrackDownload?: (track: DisplayTrack) => void;
+    onTrackRemoveDownload?: (trackId: number) => void;
+    getTrackDownloadStatus?: (trackId: number) => { status: DownloadStatus; progress: number };
   }
 
   let {
@@ -84,7 +88,10 @@
     onTrackShareQobuz,
     onTrackShareSonglink,
     onTrackGoToAlbum,
-    onTrackGoToArtist
+    onTrackGoToArtist,
+    onTrackDownload,
+    onTrackRemoveDownload,
+    getTrackDownloadStatus
   }: Props = $props();
 
   let playlist = $state<Playlist | null>(null);
@@ -494,6 +501,7 @@
       </div>
 
       {#each displayTracks as track, idx (track.id)}
+        {@const downloadInfo = getTrackDownloadStatus?.(track.id) ?? { status: 'none' as const, progress: 0 }}
         <TrackRow
           number={idx + 1}
           title={track.title}
@@ -501,7 +509,11 @@
           duration={track.duration}
           quality={track.hires ? 'Hi-Res' : undefined}
           isFavorite={favoriteTrackIds.has(track.id)}
+          downloadStatus={downloadInfo.status}
+          downloadProgress={downloadInfo.progress}
           onPlay={() => handleTrackClick(track)}
+          onDownload={onTrackDownload ? () => onTrackDownload(track) : undefined}
+          onRemoveDownload={onTrackRemoveDownload ? () => onTrackRemoveDownload(track.id) : undefined}
           menuActions={{
             onPlayNow: () => handleTrackClick(track),
             onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(track) : undefined,

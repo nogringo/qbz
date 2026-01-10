@@ -1004,10 +1004,67 @@
     }
   }
 
+  async function handleDownloadAlbum() {
+    if (!selectedAlbum) return;
+
+    const tracksToDownload = selectedAlbum.tracks.filter(track => {
+      const status = getDownloadState(track.id).status;
+      return status === 'none' || status === 'failed';
+    });
+
+    if (tracksToDownload.length === 0) {
+      showToast('All tracks already downloaded', 'info');
+      return;
+    }
+
+    showToast(`Downloading ${tracksToDownload.length} tracks from "${selectedAlbum.title}"`, 'info');
+
+    for (const track of tracksToDownload) {
+      try {
+        await downloadTrack({
+          id: track.id,
+          title: track.title,
+          artist: track.artist || selectedAlbum.artist || 'Unknown',
+          album: selectedAlbum.title,
+          albumId: selectedAlbum.id,
+          durationSecs: track.durationSeconds,
+          quality: track.quality || 'CD Quality',
+          bitDepth: track.bitDepth,
+          sampleRate: track.samplingRate,
+        });
+      } catch (err) {
+        console.error(`Failed to queue download for "${track.title}":`, err);
+      }
+    }
+  }
+
   function getTrackDownloadStatus(trackId: number) {
     // Access downloadStateVersion to trigger reactivity
     void downloadStateVersion;
     return getDownloadState(trackId);
+  }
+
+  async function handleDisplayTrackDownload(track: PlaylistTrack) {
+    try {
+      const quality = track.hires && track.bitDepth && track.samplingRate
+        ? `${track.bitDepth}bit/${track.samplingRate}kHz`
+        : 'CD Quality';
+      await downloadTrack({
+        id: track.id,
+        title: track.title,
+        artist: track.artist || 'Unknown',
+        album: track.album,
+        albumId: track.albumId,
+        durationSecs: track.durationSeconds,
+        quality,
+        bitDepth: track.bitDepth,
+        sampleRate: track.samplingRate,
+      });
+      showToast(`Downloading "${track.title}"`, 'info');
+    } catch (err) {
+      console.error('Failed to start download:', err);
+      showToast('Failed to start download', 'error');
+    }
   }
 
   function handleDisplayTrackPlayNext(track: PlaylistTrack) {
@@ -1532,6 +1589,7 @@
           onTrackDownload={handleTrackDownload}
           onTrackRemoveDownload={handleTrackRemoveDownload}
           getTrackDownloadStatus={getTrackDownloadStatus}
+          onDownloadAlbum={handleDownloadAlbum}
         />
       {:else if activeView === 'artist' && selectedArtist}
         <ArtistDetailView
@@ -1568,6 +1626,9 @@
           onTrackShareSonglink={(track) => shareSonglinkTrack(track.id, track.isrc)}
           onTrackGoToAlbum={handleAlbumClick}
           onTrackGoToArtist={handleArtistClick}
+          onTrackDownload={handleDisplayTrackDownload}
+          onTrackRemoveDownload={handleTrackRemoveDownload}
+          getTrackDownloadStatus={getTrackDownloadStatus}
         />
       {:else if activeView === 'favorites'}
         <FavoritesView

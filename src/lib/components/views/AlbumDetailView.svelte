@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { ArrowLeft, Play, Shuffle, Heart, Plus, MoreHorizontal } from 'lucide-svelte';
+  import { ArrowLeft, Play, Shuffle, Heart, Plus, MoreHorizontal, Download } from 'lucide-svelte';
   import TrackRow from '../TrackRow.svelte';
   import { getDownloadState, type DownloadStatus } from '$lib/stores/downloadState';
 
@@ -51,6 +51,7 @@
     onTrackDownload?: (track: Track) => void;
     onTrackRemoveDownload?: (trackId: number) => void;
     getTrackDownloadStatus?: (trackId: number) => { status: DownloadStatus; progress: number };
+    onDownloadAlbum?: () => void;
   }
 
   let {
@@ -71,7 +72,8 @@
     onAddTrackToPlaylist,
     onTrackDownload,
     onTrackRemoveDownload,
-    getTrackDownloadStatus
+    getTrackDownloadStatus,
+    onDownloadAlbum
   }: Props = $props();
 
   let currentTrack = $state<number | null>(null);
@@ -186,6 +188,11 @@
         <button class="icon-btn" onclick={onAddToQueue}>
           <Plus size={20} color="white" />
         </button>
+        {#if onDownloadAlbum}
+          <button class="icon-btn" onclick={onDownloadAlbum} title="Download album">
+            <Download size={20} color="white" />
+          </button>
+        {/if}
         <button class="icon-btn">
           <MoreHorizontal size={20} color="white" />
         </button>
