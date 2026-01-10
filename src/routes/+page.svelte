@@ -1075,7 +1075,7 @@
       ? `${track.bitDepth}bit/${track.samplingRate}kHz`
       : 'CD Quality';
 
-    currentTrack = {
+    const newTrack: PlayingTrack = {
       id: track.id,
       title: track.title,
       artist: track.artist || 'Unknown Artist',
@@ -1084,13 +1084,11 @@
       duration: track.durationSeconds,
       quality
     };
-
-    duration = track.durationSeconds;
-    currentTime = 0;
+    setCurrentTrack(newTrack);
 
     try {
       await invoke('play_track', { trackId: track.id });
-      isPlaying = true;
+      setIsPlaying(true);
 
       await invoke('set_media_metadata', {
         title: track.title,
@@ -1117,11 +1115,14 @@
         track.id
       );
 
+      // Check if track is favorite
+      setIsFavorite(await checkTrackFavorite(track.id));
+
       await syncQueueState();
     } catch (err) {
       console.error('Failed to play track:', err);
       showToast(`Playback error: ${err}`, 'error');
-      isPlaying = false;
+      setIsPlaying(false);
     }
   }
 
@@ -1149,41 +1150,51 @@
         : track.format)
       : track.format;
 
-    currentTrack = {
+    const newTrack: PlayingTrack = {
       id: track.id,
       title: track.title,
       artist: track.artist,
       album: track.album,
       artwork,
       duration: track.duration_secs,
-      quality
+      quality,
+      isLocal: true
     };
+    setCurrentTrack(newTrack);
 
-    duration = track.duration_secs;
-    currentTime = 0;
-    isPlaying = true;
-    showToast(`Playing: ${track.title}`, 'success');
+    try {
+      await invoke('library_play_track', { trackId: track.id });
+      setIsPlaying(true);
+      showToast(`Playing: ${track.title}`, 'success');
 
-    // Update MPRIS metadata
-    await invoke('set_media_metadata', {
-      title: track.title,
-      artist: track.artist,
-      album: track.album,
-      durationSecs: track.duration_secs,
-      coverUrl: artwork || null
-    });
+      // Update MPRIS metadata
+      await invoke('set_media_metadata', {
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        durationSecs: track.duration_secs,
+        coverUrl: artwork || null
+      });
 
-    // Show system notification
-    showTrackNotification(track.title, track.artist, track.album, artwork || undefined);
+      // Show system notification
+      showTrackNotification(track.title, track.artist, track.album, artwork || undefined);
 
-    // Update Last.fm
-    updateLastfmNowPlaying(
-      track.title,
-      track.artist,
-      track.album,
-      track.duration_secs,
-      track.id
-    );
+      // Update Last.fm
+      updateLastfmNowPlaying(
+        track.title,
+        track.artist,
+        track.album,
+        track.duration_secs,
+        track.id
+      );
+
+      // Local tracks don't have Qobuz favorites
+      setIsFavorite(false);
+    } catch (err) {
+      console.error('Failed to play local track:', err);
+      showToast(`Playback error: ${err}`, 'error');
+      setIsPlaying(false);
+    }
   }
 
   // Handle setting queue from local library (tracks need different playback command)
