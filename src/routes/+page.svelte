@@ -1645,6 +1645,10 @@
           onTrackShareSonglink={(track) => shareSonglinkTrack(track.id, track.isrc)}
           onTrackGoToAlbum={handleAlbumClick}
           onTrackGoToArtist={handleArtistClick}
+          onTrackDownload={handleDisplayTrackDownload}
+          onTrackRemoveDownload={handleTrackRemoveDownload}
+          getTrackDownloadStatus={getTrackDownloadStatus}
+          {downloadStateVersion}
         />
       {/if}
     </main>

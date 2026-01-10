@@ -1,9 +1,10 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
-  import { Heart, Play, Plus, Disc3, Mic2, Music } from 'lucide-svelte';
+  import { Heart, Play, Plus, Disc3, Mic2, Music, Search, X } from 'lucide-svelte';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackRow from '../TrackRow.svelte';
+  import { type DownloadStatus } from '$lib/stores/downloadState';
 
   interface FavoriteAlbum {
     id: string;
@@ -46,6 +47,10 @@
     onTrackShareSonglink?: (track: DisplayTrack) => void;
     onTrackGoToAlbum?: (albumId: string) => void;
     onTrackGoToArtist?: (artistId: number) => void;
+    onTrackDownload?: (track: DisplayTrack) => void;
+    onTrackRemoveDownload?: (trackId: number) => void;
+    getTrackDownloadStatus?: (trackId: number) => { status: DownloadStatus; progress: number };
+    downloadStateVersion?: number;
   }
 
   interface DisplayTrack {
@@ -76,7 +81,11 @@
     onTrackShareQobuz,
     onTrackShareSonglink,
     onTrackGoToAlbum,
-    onTrackGoToArtist
+    onTrackGoToArtist,
+    onTrackDownload,
+    onTrackRemoveDownload,
+    getTrackDownloadStatus,
+    downloadStateVersion
   }: Props = $props();
 
   type TabType = 'tracks' | 'albums' | 'artists';
@@ -88,6 +97,39 @@
 
   let loading = $state(false);
   let error = $state<string | null>(null);
+
+  // Search state for each tab
+  let trackSearch = $state('');
+  let albumSearch = $state('');
+  let artistSearch = $state('');
+
+  // Filtered lists based on search
+  let filteredTracks = $derived.by(() => {
+    if (!trackSearch.trim()) return favoriteTracks;
+    const query = trackSearch.toLowerCase();
+    return favoriteTracks.filter(t =>
+      t.title.toLowerCase().includes(query) ||
+      t.performer?.name?.toLowerCase().includes(query) ||
+      t.album?.title?.toLowerCase().includes(query)
+    );
+  });
+
+  let filteredAlbums = $derived.by(() => {
+    if (!albumSearch.trim()) return favoriteAlbums;
+    const query = albumSearch.toLowerCase();
+    return favoriteAlbums.filter(a =>
+      a.title.toLowerCase().includes(query) ||
+      a.artist.name.toLowerCase().includes(query)
+    );
+  });
+
+  let filteredArtists = $derived.by(() => {
+    if (!artistSearch.trim()) return favoriteArtists;
+    const query = artistSearch.toLowerCase();
+    return favoriteArtists.filter(a =>
+      a.name.toLowerCase().includes(query)
+    );
+  });
 
   onMount(() => {
     loadFavorites('tracks');
@@ -129,31 +171,35 @@
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
+  function buildDisplayTrack(track: FavoriteTrack, index: number): DisplayTrack {
+    return {
+      id: track.id,
+      number: index + 1,
+      title: track.title,
+      artist: track.performer?.name,
+      album: track.album?.title,
+      albumArt: track.album?.image?.thumbnail || track.album?.image?.small,
+      albumId: track.album?.id,
+      artistId: track.performer?.id,
+      duration: formatDuration(track.duration),
+      durationSeconds: track.duration,
+      hires: track.hires,
+      bitDepth: track.maximum_bit_depth,
+      samplingRate: track.maximum_sampling_rate,
+      isrc: track.isrc,
+    };
+  }
+
   function handleTrackClick(track: FavoriteTrack, index: number) {
     if (onTrackPlay) {
-      onTrackPlay({
-        id: track.id,
-        number: index + 1,
-        title: track.title,
-        artist: track.performer?.name,
-        album: track.album?.title,
-        albumArt: track.album?.image?.thumbnail || track.album?.image?.small,
-        albumId: track.album?.id,
-        artistId: track.performer?.id,
-        duration: formatDuration(track.duration),
-        durationSeconds: track.duration,
-        hires: track.hires,
-        bitDepth: track.maximum_bit_depth,
-        samplingRate: track.maximum_sampling_rate,
-        isrc: track.isrc,
-      });
+      onTrackPlay(buildDisplayTrack(track, index));
     }
   }
 
   async function handlePlayAllTracks() {
-    if (favoriteTracks.length === 0 || !onTrackPlay) return;
+    if (filteredTracks.length === 0 || !onTrackPlay) return;
 
-    const queueTracks = favoriteTracks.map(t => ({
+    const queueTracks = filteredTracks.map(t => ({
       id: t.id,
       title: t.title,
       artist: t.performer?.name || 'Unknown Artist',
@@ -164,16 +210,16 @@
 
     try {
       await invoke('set_queue', { tracks: queueTracks, startIndex: 0 });
-      handleTrackClick(favoriteTracks[0], 0);
+      handleTrackClick(filteredTracks[0], 0);
     } catch (err) {
       console.error('Failed to set queue:', err);
     }
   }
 
   async function handleAddAllToQueue() {
-    if (favoriteTracks.length === 0) return;
+    if (filteredTracks.length === 0) return;
 
-    const queueTracks = favoriteTracks.map(t => ({
+    const queueTracks = filteredTracks.map(t => ({
       id: t.id,
       title: t.title,
       artist: t.performer?.name || 'Unknown Artist',
@@ -230,19 +276,75 @@
     </button>
   </div>
 
-  <!-- Actions (for tracks tab) -->
-  {#if activeTab === 'tracks' && favoriteTracks.length > 0}
-    <div class="actions">
-      <button class="play-btn" onclick={handlePlayAllTracks}>
-        <Play size={16} fill="white" />
-        <span>Play All</span>
-      </button>
-      <button class="add-btn" onclick={handleAddAllToQueue}>
-        <Plus size={16} />
-        <span>Add to Queue</span>
-      </button>
+  <!-- Toolbar with search and actions -->
+  <div class="toolbar">
+    <!-- Search input -->
+    <div class="search-container">
+      <Search size={16} class="search-icon" />
+      {#if activeTab === 'tracks'}
+        <input
+          type="text"
+          placeholder="Search tracks..."
+          bind:value={trackSearch}
+          class="search-input"
+        />
+        {#if trackSearch}
+          <button class="search-clear" onclick={() => trackSearch = ''}>
+            <X size={14} />
+          </button>
+        {/if}
+      {:else if activeTab === 'albums'}
+        <input
+          type="text"
+          placeholder="Search albums..."
+          bind:value={albumSearch}
+          class="search-input"
+        />
+        {#if albumSearch}
+          <button class="search-clear" onclick={() => albumSearch = ''}>
+            <X size={14} />
+          </button>
+        {/if}
+      {:else}
+        <input
+          type="text"
+          placeholder="Search artists..."
+          bind:value={artistSearch}
+          class="search-input"
+        />
+        {#if artistSearch}
+          <button class="search-clear" onclick={() => artistSearch = ''}>
+            <X size={14} />
+          </button>
+        {/if}
+      {/if}
     </div>
-  {/if}
+
+    <!-- Actions (for tracks tab) -->
+    {#if activeTab === 'tracks' && filteredTracks.length > 0}
+      <div class="actions">
+        <button class="play-btn" onclick={handlePlayAllTracks}>
+          <Play size={16} fill="white" />
+          <span>Play All</span>
+        </button>
+        <button class="add-btn" onclick={handleAddAllToQueue}>
+          <Plus size={16} />
+          <span>Add to Queue</span>
+        </button>
+      </div>
+    {/if}
+
+    <!-- Results count -->
+    <span class="results-count">
+      {#if activeTab === 'tracks'}
+        {filteredTracks.length}{trackSearch ? ` / ${favoriteTracks.length}` : ''} tracks
+      {:else if activeTab === 'albums'}
+        {filteredAlbums.length}{albumSearch ? ` / ${favoriteAlbums.length}` : ''} albums
+      {:else}
+        {filteredArtists.length}{artistSearch ? ` / ${favoriteArtists.length}` : ''} artists
+      {/if}
+    </span>
+  </div>
 
   <!-- Content -->
   <div class="content">
@@ -264,9 +366,16 @@
           <p>No favorite tracks yet</p>
           <p class="empty-hint">Like tracks to see them here</p>
         </div>
+      {:else if filteredTracks.length === 0}
+        <div class="empty">
+          <Search size={48} />
+          <p>No tracks match "{trackSearch}"</p>
+        </div>
       {:else}
         <div class="track-list">
-          {#each favoriteTracks as track, index (track.id)}
+          {#each filteredTracks as track, index (`${track.id}-${downloadStateVersion}`)}
+            {@const displayTrack = buildDisplayTrack(track, index)}
+            {@const downloadInfo = getTrackDownloadStatus?.(track.id) ?? { status: 'none' as const, progress: 0 }}
             <TrackRow
               number={index + 1}
               title={track.title}
@@ -274,62 +383,21 @@
               duration={formatDuration(track.duration)}
               quality={track.hires ? 'Hi-Res' : undefined}
               isFavorite={true}
+              downloadStatus={downloadInfo.status}
+              downloadProgress={downloadInfo.progress}
               onPlay={() => handleTrackClick(track, index)}
+              onDownload={onTrackDownload ? () => onTrackDownload(displayTrack) : undefined}
+              onRemoveDownload={onTrackRemoveDownload ? () => onTrackRemoveDownload(track.id) : undefined}
               menuActions={{
                 onPlayNow: () => handleTrackClick(track, index),
-                onPlayNext: onTrackPlayNext ? () => onTrackPlayNext({
-                  id: track.id,
-                  number: index + 1,
-                  title: track.title,
-                  artist: track.performer?.name,
-                  album: track.album?.title,
-                  albumArt: track.album?.image?.thumbnail || track.album?.image?.small,
-                  albumId: track.album?.id,
-                  artistId: track.performer?.id,
-                  duration: formatDuration(track.duration),
-                  durationSeconds: track.duration,
-                  hires: track.hires,
-                  bitDepth: track.maximum_bit_depth,
-                  samplingRate: track.maximum_sampling_rate,
-                  isrc: track.isrc
-                }) : undefined,
-                onPlayLater: onTrackPlayLater ? () => onTrackPlayLater({
-                  id: track.id,
-                  number: index + 1,
-                  title: track.title,
-                  artist: track.performer?.name,
-                  album: track.album?.title,
-                  albumArt: track.album?.image?.thumbnail || track.album?.image?.small,
-                  albumId: track.album?.id,
-                  artistId: track.performer?.id,
-                  duration: formatDuration(track.duration),
-                  durationSeconds: track.duration,
-                  hires: track.hires,
-                  bitDepth: track.maximum_bit_depth,
-                  samplingRate: track.maximum_sampling_rate,
-                  isrc: track.isrc
-                }) : undefined,
+                onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(displayTrack) : undefined,
+                onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(displayTrack) : undefined,
                 onAddFavorite: onTrackAddFavorite ? () => onTrackAddFavorite(track.id) : undefined,
                 onAddToPlaylist: onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined,
                 onShareQobuz: onTrackShareQobuz ? () => onTrackShareQobuz(track.id) : undefined,
-                onShareSonglink: onTrackShareSonglink ? () => onTrackShareSonglink({
-                  id: track.id,
-                  number: index + 1,
-                  title: track.title,
-                  artist: track.performer?.name,
-                  album: track.album?.title,
-                  albumArt: track.album?.image?.thumbnail || track.album?.image?.small,
-                  albumId: track.album?.id,
-                  artistId: track.performer?.id,
-                  duration: formatDuration(track.duration),
-                  durationSeconds: track.duration,
-                  hires: track.hires,
-                  bitDepth: track.maximum_bit_depth,
-                  samplingRate: track.maximum_sampling_rate,
-                  isrc: track.isrc
-                }) : undefined,
-                onGoToAlbum: track.album?.id && onTrackGoToAlbum ? () => onTrackGoToAlbum(track.album.id) : undefined,
-                onGoToArtist: track.performer?.id && onTrackGoToArtist ? () => onTrackGoToArtist(track.performer.id) : undefined
+                onShareSonglink: onTrackShareSonglink ? () => onTrackShareSonglink(displayTrack) : undefined,
+                onGoToAlbum: track.album?.id && onTrackGoToAlbum ? () => onTrackGoToAlbum(track.album!.id) : undefined,
+                onGoToArtist: track.performer?.id && onTrackGoToArtist ? () => onTrackGoToArtist(track.performer!.id!) : undefined
               }}
             />
           {/each}
@@ -342,9 +410,14 @@
           <p>No favorite albums yet</p>
           <p class="empty-hint">Like albums to see them here</p>
         </div>
+      {:else if filteredAlbums.length === 0}
+        <div class="empty">
+          <Search size={48} />
+          <p>No albums match "{albumSearch}"</p>
+        </div>
       {:else}
         <div class="album-grid">
-          {#each favoriteAlbums as album (album.id)}
+          {#each filteredAlbums as album (album.id)}
             <AlbumCard
               artwork={album.image?.large || album.image?.thumbnail || ''}
               title={album.title}
@@ -362,9 +435,14 @@
           <p>No favorite artists yet</p>
           <p class="empty-hint">Like artists to see them here</p>
         </div>
+      {:else if filteredArtists.length === 0}
+        <div class="empty">
+          <Search size={48} />
+          <p>No artists match "{artistSearch}"</p>
+        </div>
       {:else}
         <div class="artist-grid">
-          {#each favoriteArtists as artist (artist.id)}
+          {#each filteredArtists as artist (artist.id)}
             <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
               <div class="artist-image">
                 {#if artist.image?.large || artist.image?.thumbnail}
@@ -458,10 +536,66 @@
     background-color: var(--bg-tertiary);
   }
 
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .search-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 8px 12px;
+    flex: 1;
+    max-width: 300px;
+  }
+
+  .search-container :global(.search-icon) {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+  }
+
+  .search-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .search-clear {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .search-clear:hover {
+    color: var(--text-primary);
+  }
+
+  .results-count {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
   .actions {
     display: flex;
     gap: 12px;
-    margin-bottom: 24px;
   }
 
   .play-btn {
