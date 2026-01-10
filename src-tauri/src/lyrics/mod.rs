@@ -7,7 +7,6 @@ pub mod commands;
 pub mod providers;
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

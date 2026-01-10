@@ -26,4 +26,4 @@ const localStorageMock = {
   length: 0,
   key: vi.fn()
 };
-Object.defineProperty(global, 'localStorage', { value: localStorageMock });
+Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock });

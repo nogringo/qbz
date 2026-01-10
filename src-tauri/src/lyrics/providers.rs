@@ -13,7 +13,7 @@ pub struct LyricsData {
     pub provider: LyricsProvider,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LrclibItem {
     #[serde(default)]

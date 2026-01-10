@@ -12,7 +12,8 @@
     Volume2,
     VolumeX,
     Volume1,
-    Cast
+    Cast,
+    Mic2
   } from 'lucide-svelte';
   import QualityBadge from './QualityBadge.svelte';
 
@@ -42,6 +43,8 @@
     onOpenQueue?: () => void;
     onOpenFullScreen?: () => void;
     onCast?: () => void;
+    onToggleLyrics?: () => void;
+    lyricsActive?: boolean;
   }
 
   let {
@@ -69,7 +72,9 @@
     onToggleFavorite,
     onOpenQueue,
     onOpenFullScreen,
-    onCast
+    onCast,
+    onToggleLyrics,
+    lyricsActive = false
   }: Props = $props();
 
   let progressRef: HTMLDivElement;
@@ -241,6 +246,14 @@
     </button>
     <button class="action-btn" onclick={onCast} title="Cast to device">
       <Cast size={20} />
+    </button>
+    <button
+      class="action-btn"
+      class:active={lyricsActive}
+      onclick={onToggleLyrics}
+      title="Lyrics"
+    >
+      <Mic2 size={20} />
     </button>
 
     <!-- Volume Control -->
@@ -498,6 +511,10 @@
 
   .action-btn:hover {
     color: var(--text-primary);
+  }
+
+  .action-btn.active {
+    color: var(--accent-primary);
   }
 
   /* Volume */

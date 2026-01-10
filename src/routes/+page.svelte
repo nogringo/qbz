@@ -164,6 +164,18 @@
   // App bootstrap
   import { bootstrapApp } from '$lib/app/bootstrap';
 
+  // Lyrics state management
+  import {
+    subscribe as subscribeLyrics,
+    toggleSidebar as toggleLyricsSidebar,
+    startWatching as startLyricsWatching,
+    stopWatching as stopLyricsWatching,
+    startActiveLineUpdates,
+    stopActiveLineUpdates,
+    getLyricsState,
+    type LyricsLine
+  } from '$lib/stores/lyricsStore';
+
   // Components
   import Sidebar from '$lib/components/Sidebar.svelte';
   import NowPlayingBar from '$lib/components/NowPlayingBar.svelte';
@@ -186,6 +198,7 @@
   import FocusMode from '$lib/components/FocusMode.svelte';
   import PlaylistModal from '$lib/components/PlaylistModal.svelte';
   import CastPicker from '$lib/components/CastPicker.svelte';
+  import LyricsSidebar from '$lib/components/lyrics/LyricsSidebar.svelte';
 
   // Auth State (from authStore subscription)
   let isLoggedIn = $state(false);
@@ -229,6 +242,16 @@
 
   // Toast State (from store subscription)
   let toast = $state<ToastData | null>(null);
+
+  // Lyrics State (from lyricsStore subscription)
+  let lyricsStatus = $state<'idle' | 'loading' | 'loaded' | 'error' | 'not_found'>('idle');
+  let lyricsError = $state<string | null>(null);
+  let lyricsLines = $state<LyricsLine[]>([]);
+  let lyricsIsSynced = $state(false);
+  let lyricsActiveIndex = $state(-1);
+  let lyricsActiveProgress = $state(0);
+  let lyricsSidebarVisible = $state(false);
+  let lyricsProvider = $state<string | undefined>(undefined);
 
   // Navigation wrapper (keeps debug logging)
   function navigateTo(view: string) {
@@ -867,6 +890,22 @@
       repeatMode = queueState.repeatMode;
     });
 
+    // Subscribe to lyrics state changes
+    const unsubscribeLyrics = subscribeLyrics(() => {
+      const state = getLyricsState();
+      lyricsStatus = state.status;
+      lyricsError = state.error;
+      lyricsLines = state.lines;
+      lyricsIsSynced = state.isSynced;
+      lyricsActiveIndex = state.activeIndex;
+      lyricsActiveProgress = state.activeProgress;
+      lyricsSidebarVisible = state.sidebarVisible;
+      lyricsProvider = state.payload?.provider;
+    });
+
+    // Start lyrics watcher for track changes
+    startLyricsWatching();
+
     // Set up track ended callback for auto-advance
     setOnTrackEnded(async () => {
       const nextTrackResult = await nextTrack();
@@ -888,6 +927,9 @@
       unsubscribeNav();
       unsubscribePlayer();
       unsubscribeQueue();
+      unsubscribeLyrics();
+      stopLyricsWatching();
+      stopActiveLineUpdates();
       stopPolling();
       cleanupPlayback();
     };
@@ -897,6 +939,15 @@
   $effect(() => {
     if (isQueueOpen) {
       syncQueueState();
+    }
+  });
+
+  // Start/stop lyrics active line updates based on playback state
+  $effect(() => {
+    if (isPlaying && lyricsIsSynced && lyricsSidebarVisible) {
+      startActiveLineUpdates();
+    } else {
+      stopActiveLineUpdates();
     }
   });
 
@@ -928,6 +979,8 @@
       subscription={userInfo?.subscription || 'Qobuz'}
     />
 
+    <!-- Content Area (main + lyrics sidebar) -->
+    <div class="content-area">
     <!-- Main Content -->
     <main class="main-content">
       {#if activeView === 'home'}
@@ -1042,6 +1095,21 @@
       {/if}
     </main>
 
+    <!-- Lyrics Sidebar -->
+    {#if lyricsSidebarVisible}
+      <LyricsSidebar
+        title={currentTrack?.title}
+        artist={currentTrack?.artist}
+        provider={lyricsProvider}
+        lines={lyricsLines.map(l => ({ text: l.text }))}
+        activeIndex={lyricsActiveIndex}
+        activeProgress={lyricsActiveProgress}
+        isLoading={lyricsStatus === 'loading'}
+        error={lyricsStatus === 'error' ? lyricsError : (lyricsStatus === 'not_found' ? 'No lyrics found' : null)}
+      />
+    {/if}
+    </div>
+
     <!-- Now Playing Bar -->
     {#if currentTrack}
       <NowPlayingBar
@@ -1069,6 +1137,8 @@
         onOpenQueue={openQueue}
         onOpenFullScreen={openFullScreen}
         onCast={openCastPicker}
+        onToggleLyrics={toggleLyricsSidebar}
+        lyricsActive={lyricsSidebarVisible}
       />
     {:else}
       <NowPlayingBar
@@ -1183,10 +1253,18 @@
     background-color: var(--bg-primary);
   }
 
-  .main-content {
+  .content-area {
+    display: flex;
     flex: 1;
     min-width: 0;
     height: calc(100vh - 80px);
+    overflow: hidden;
+  }
+
+  .main-content {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
     overflow-y: auto;
     padding: 24px 32px;
   }
