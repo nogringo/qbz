@@ -1499,6 +1499,31 @@
       downloadStateVersion++;
     });
 
+    // Restore Last.fm session on app startup
+    (async () => {
+      try {
+        const savedApiKey = localStorage.getItem('qbz-lastfm-api-key');
+        const savedApiSecret = localStorage.getItem('qbz-lastfm-api-secret');
+        const savedSessionKey = localStorage.getItem('qbz-lastfm-session-key');
+
+        // Restore credentials if user-provided
+        if (savedApiKey && savedApiSecret) {
+          await invoke('lastfm_set_credentials', {
+            apiKey: savedApiKey,
+            apiSecret: savedApiSecret
+          });
+        }
+
+        // Restore session if available
+        if (savedSessionKey) {
+          await invoke('lastfm_set_session', { sessionKey: savedSessionKey });
+          console.log('Last.fm session restored on startup');
+        }
+      } catch (err) {
+        console.error('Failed to restore Last.fm session:', err);
+      }
+    })();
+
     return () => {
       document.removeEventListener('keydown', handleKeydown);
       window.removeEventListener('mouseup', handleMouseNavigation);

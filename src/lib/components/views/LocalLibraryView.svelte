@@ -401,7 +401,8 @@
 
   function getArtworkUrl(path?: string): string {
     if (!path) return '';
-    return `file://${path}`;
+    // Use asset:// protocol for Tauri 2.0 to load local files in WebView
+    return `asset://localhost/${encodeURIComponent(path)}`;
   }
 </script>
 
