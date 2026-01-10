@@ -4,8 +4,21 @@
 
 use md5::{Digest, Md5};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
+
+/// Deserialize integer (0/1) as boolean - Last.fm API returns subscriber as number
+fn deserialize_int_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value: serde_json::Value = Deserialize::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Bool(b) => Ok(b),
+        serde_json::Value::Number(n) => Ok(n.as_i64().unwrap_or(0) != 0),
+        _ => Ok(false),
+    }
+}
 
 const LASTFM_API_URL: &str = "https://ws.audioscrobbler.com/2.0/";
 
@@ -37,6 +50,7 @@ fn get_api_secret() -> Option<String> {
 pub struct LastFmSession {
     pub name: String,
     pub key: String,
+    #[serde(deserialize_with = "deserialize_int_bool")]
     pub subscriber: bool,
 }
 
