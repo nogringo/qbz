@@ -164,6 +164,9 @@
   // App bootstrap
   import { bootstrapApp } from '$lib/app/bootstrap';
 
+  // Recommendation scoring
+  import { trainScores } from '$lib/services/recoService';
+
   // Lyrics state management
   import {
     subscribe as subscribeLyrics,
@@ -740,6 +743,13 @@
   function handleLoginSuccess(info: UserInfo) {
     setLoggedIn(info);
     showToast(`Welcome, ${info.userName}!`, 'success');
+
+    // Train recommendation scores in background (fire-and-forget)
+    trainScores().then(() => {
+      console.log('[Reco] Scores trained after login');
+    }).catch(err => {
+      console.debug('[Reco] Score training failed:', err);
+    });
   }
 
   async function handleLogout() {
