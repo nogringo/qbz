@@ -396,9 +396,16 @@
 
   /* Main Content */
   .main-content {
-    flex: 1;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 1400px;
+    height: 100%;
     display: flex;
-    position: relative;
+    align-items: center;
+    justify-content: center;
     z-index: 1;
     padding: 60px;
     gap: 60px;

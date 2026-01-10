@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { Music, User } from 'lucide-svelte';
+  import { Music, User, Loader2 } from 'lucide-svelte';
   import HorizontalScrollRow from '../HorizontalScrollRow.svelte';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackRow from '../TrackRow.svelte';
@@ -229,8 +229,8 @@
 <div class="home-view">
   {#if isLoading}
     <div class="home-state">
-      <div class="state-icon">
-        <Music size={36} />
+      <div class="state-icon loading">
+        <Loader2 size={36} class="spinner" />
       </div>
       <h1>Loading your home</h1>
       <p>Building recommendations from your listening history.</p>
@@ -455,5 +455,19 @@
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
+  }
+
+  .state-icon.loading {
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary, #6366f1) 100%);
+    color: white;
+  }
+
+  .state-icon :global(.spinner) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 </style>
