@@ -31,6 +31,8 @@ enum AudioCommand {
     Stop,
     /// Set volume (0.0 - 1.0)
     SetVolume(f32),
+    /// Seek to position in seconds
+    Seek(u64),
 }
 
 /// Event payload for playback state updates
@@ -195,6 +197,8 @@ impl Player {
             };
 
             let mut current_sink: Option<Sink> = None;
+            // Store audio data for seeking (we need to re-decode from the beginning)
+            let mut current_audio_data: Option<Vec<u8>> = None;
 
             log::info!("Audio thread ready and waiting for commands");
 
@@ -208,6 +212,9 @@ impl Player {
                         if let Some(sink) = current_sink.take() {
                             sink.stop();
                         }
+
+                        // Store audio data for potential seeking
+                        current_audio_data = Some(data.clone());
 
                         // Create new sink
                         let sink = match Sink::try_new(&stream_handle) {
@@ -270,6 +277,7 @@ impl Player {
                         if let Some(sink) = current_sink.take() {
                             sink.stop();
                         }
+                        current_audio_data = None;
                         thread_state.is_playing.store(false, Ordering::SeqCst);
                         thread_state.position.store(0, Ordering::SeqCst);
                         thread_state.playback_start_millis.store(0, Ordering::SeqCst);
@@ -284,6 +292,63 @@ impl Player {
                             sink.set_volume(volume);
                         }
                         log::info!("Audio thread: volume set to {}", volume);
+                    }
+                    Ok(AudioCommand::Seek(position_secs)) => {
+                        let Some(ref audio_data) = current_audio_data else {
+                            log::warn!("Audio thread: cannot seek - no audio data available");
+                            continue;
+                        };
+
+                        log::info!("Audio thread: seeking to {}s", position_secs);
+
+                        // Stop current sink
+                        if let Some(sink) = current_sink.take() {
+                            sink.stop();
+                        }
+
+                        // Create new sink
+                        let sink = match Sink::try_new(&stream_handle) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                log::error!("Failed to create sink for seek: {}", e);
+                                continue;
+                            }
+                        };
+
+                        // Set volume
+                        let volume = thread_state.volume.load(Ordering::SeqCst) as f32 / 100.0;
+                        sink.set_volume(volume);
+
+                        // Re-decode audio
+                        let cursor = Cursor::new(audio_data.clone());
+                        let source = match Decoder::new(BufReader::new(cursor)) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                log::error!("Failed to decode audio for seek: {}", e);
+                                continue;
+                            }
+                        };
+
+                        // Skip to the desired position
+                        let skip_duration = Duration::from_secs(position_secs);
+                        let skipped_source = source.skip_duration(skip_duration);
+
+                        sink.append(skipped_source);
+
+                        // Check if we were playing before seek
+                        let was_playing = thread_state.is_playing.load(Ordering::SeqCst);
+                        if !was_playing {
+                            sink.pause();
+                        }
+
+                        // Update state
+                        thread_state.position.store(position_secs, Ordering::SeqCst);
+                        if was_playing {
+                            thread_state.start_playback_timer(position_secs);
+                        }
+
+                        current_sink = Some(sink);
+                        log::info!("Audio thread: seeked to {}s (was_playing: {})", position_secs, was_playing);
                     }
                     Err(RecvTimeoutError::Timeout) => {
                         // Check if sink is empty (playback finished)
@@ -426,12 +491,19 @@ impl Player {
             .map_err(|e| format!("Failed to send volume command: {}", e))
     }
 
-    /// Seek to position (not supported for streaming, but we track position)
-    pub fn seek(&self, _position: u64) -> Result<(), String> {
-        // Seeking in streaming audio is complex - for now just update the position tracker
-        // Real seeking would require re-downloading from a specific byte offset
-        log::warn!("Seek not fully implemented for streaming audio");
-        Ok(())
+    /// Seek to position in seconds
+    pub fn seek(&self, position: u64) -> Result<(), String> {
+        // Clamp to duration if known
+        let duration = self.state.duration();
+        let clamped_position = if duration > 0 {
+            position.min(duration)
+        } else {
+            position
+        };
+
+        self.tx
+            .send(AudioCommand::Seek(clamped_position))
+            .map_err(|e| format!("Failed to send seek command: {}", e))
     }
 
     /// Get current playback state with real-time position
