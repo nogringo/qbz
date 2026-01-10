@@ -11,7 +11,8 @@
     List,
     Volume2,
     VolumeX,
-    Volume1
+    Volume1,
+    Cast
   } from 'lucide-svelte';
   import QualityBadge from './QualityBadge.svelte';
 
@@ -40,6 +41,7 @@
     onToggleFavorite?: () => void;
     onOpenQueue?: () => void;
     onOpenFullScreen?: () => void;
+    onCast?: () => void;
   }
 
   let {
@@ -66,7 +68,8 @@
     isFavorite = false,
     onToggleFavorite,
     onOpenQueue,
-    onOpenFullScreen
+    onOpenFullScreen,
+    onCast
   }: Props = $props();
 
   let progressRef: HTMLDivElement;
@@ -235,6 +238,9 @@
     </button>
     <button class="action-btn" onclick={onOpenQueue}>
       <List size={20} />
+    </button>
+    <button class="action-btn" onclick={onCast} title="Cast to device">
+      <Cast size={20} />
     </button>
 
     <!-- Volume Control -->

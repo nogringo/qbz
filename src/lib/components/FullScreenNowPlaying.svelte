@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Shuffle, SkipBack, Play, Pause, SkipForward, Repeat, Heart, List, Mic2, Maximize2, MoreHorizontal } from 'lucide-svelte';
+  import { X, Shuffle, SkipBack, Play, Pause, SkipForward, Repeat, Heart, List, Mic2, Maximize2, MoreHorizontal, Cast } from 'lucide-svelte';
   import QualityBadge from './QualityBadge.svelte';
 
   interface Props {
@@ -30,6 +30,7 @@
     onToggleFavorite: () => void;
     onOpenQueue?: () => void;
     onOpenFocusMode?: () => void;
+    onCast?: () => void;
   }
 
   let {
@@ -59,7 +60,8 @@
     isFavorite,
     onToggleFavorite,
     onOpenQueue,
-    onOpenFocusMode
+    onOpenFocusMode,
+    onCast
   }: Props = $props();
 
   let progressRef: HTMLDivElement;
@@ -219,6 +221,9 @@
       </button>
       <button class="action-btn" onclick={onOpenFocusMode}>
         <Maximize2 size={24} />
+      </button>
+      <button class="action-btn" onclick={onCast} title="Cast to device">
+        <Cast size={24} />
       </button>
       <button class="action-btn">
         <Mic2 size={24} />

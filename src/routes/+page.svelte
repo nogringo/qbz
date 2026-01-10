@@ -1529,11 +1529,13 @@
         onToggleFavorite={toggleFavorite}
         onOpenQueue={() => (isQueueOpen = true)}
         onOpenFullScreen={() => (isFullScreenOpen = true)}
+        onCast={() => showToast('Casting coming soon', 'info')}
       />
     {:else}
       <NowPlayingBar
         onOpenQueue={() => (isQueueOpen = true)}
         onOpenFullScreen={() => (isFullScreenOpen = true)}
+        onCast={() => showToast('Casting coming soon', 'info')}
       />
     {/if}
 
@@ -1584,6 +1586,7 @@
           isFullScreenOpen = false;
           isFocusModeOpen = true;
         }}
+        onCast={() => showToast('Casting coming soon', 'info')}
       />
     {/if}
 
