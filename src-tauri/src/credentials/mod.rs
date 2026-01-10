@@ -123,8 +123,19 @@ pub fn save_qobuz_credentials(email: &str, password: &str) -> Result<(), String>
 
             match entry.set_password(&json) {
                 Ok(()) => {
-                    log::info!("Qobuz credentials saved to system keyring successfully");
-                    return Ok(());
+                    log::info!("Qobuz credentials saved to system keyring");
+
+                    // Verify the save worked by reading it back
+                    match entry.get_password() {
+                        Ok(_) => {
+                            log::info!("Verified: credentials readable from keyring");
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            log::error!("Keyring save appeared to succeed but verification failed: {}", e);
+                            log::warn!("Falling back to file storage...");
+                        }
+                    }
                 }
                 Err(e) => {
                     log::warn!("Keyring save failed ({}), trying fallback...", e);
