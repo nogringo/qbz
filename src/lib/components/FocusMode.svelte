@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, SkipBack, Play, Pause, SkipForward } from 'lucide-svelte';
+  import { X, SkipBack, Play, Pause, SkipForward, ChevronDown } from 'lucide-svelte';
   import LyricsLines from './lyrics/LyricsLines.svelte';
 
   interface LyricsLine {
@@ -72,6 +72,15 @@
     }
   }
 
+  function handleProgressKeydown(e: KeyboardEvent) {
+    const step = e.shiftKey ? 10 : 5;
+    if (e.key === 'ArrowRight') {
+      onSeek(Math.min(duration, currentTime + step));
+    } else if (e.key === 'ArrowLeft') {
+      onSeek(Math.max(0, currentTime - step));
+    }
+  }
+
   function showControlsTemporarily() {
     showControls = true;
     if (hideTimeout) clearTimeout(hideTimeout);
@@ -115,85 +124,90 @@
     </div>
 
     <!-- Close Button -->
-    <button class="close-btn" class:visible={showControls} onclick={onClose}>
-      <X size={28} />
+    <button class="close-btn" class:visible={showControls} onclick={onClose} title="Close (Esc)">
+      <ChevronDown size={28} />
     </button>
 
-    <!-- Main Content Grid -->
-    <div class="content" class:has-lyrics={showLyricsPane}>
-      <!-- Left Side: Artwork -->
-      <div class="artwork-side">
-        <div class="artwork-container">
-          <img src={artwork} alt={trackTitle} />
+    <!-- Main Layout Container -->
+    <div class="main-layout">
+      <!-- Left: Large Artwork -->
+      <div class="artwork-section">
+        <div class="artwork-wrapper">
+          <img src={artwork} alt={trackTitle} class="artwork-image" />
         </div>
       </div>
 
-      <!-- Right Side: Lyrics -->
+      <!-- Right: Lyrics Panel (overlays when present) -->
       {#if showLyricsPane}
-        <div class="lyrics-side">
+        <div class="lyrics-section">
           {#if lyricsLoading}
-            <div class="lyrics-loading">
+            <div class="lyrics-state">
               <div class="spinner"></div>
               <span>Loading lyrics...</span>
             </div>
           {:else if lyricsError}
-            <div class="lyrics-error">{lyricsError}</div>
+            <div class="lyrics-state">
+              <span class="error-text">{lyricsError}</span>
+            </div>
           {:else}
-            <LyricsLines
-              lines={lyricsLines}
-              activeIndex={lyricsActiveIndex}
-              activeProgress={lyricsActiveProgress}
-              isSynced={lyricsSynced}
-              center={false}
-              compact={false}
-              immersive={true}
-            />
+            <div class="lyrics-container">
+              <LyricsLines
+                lines={lyricsLines}
+                activeIndex={lyricsActiveIndex}
+                activeProgress={lyricsActiveProgress}
+                isSynced={lyricsSynced}
+                center={false}
+                compact={false}
+                immersive={true}
+              />
+            </div>
           {/if}
         </div>
       {/if}
     </div>
 
-    <!-- Bottom Bar: Track Info + Controls + Progress -->
+    <!-- Bottom Controls Bar -->
     <div class="bottom-bar" class:visible={showControls}>
+      <!-- Left: Track Info -->
       <div class="track-info">
-        <div class="track-artwork">
-          <img src={artwork} alt="" />
-        </div>
+        <img src={artwork} alt="" class="mini-artwork" />
         <div class="track-meta">
           <div class="track-title">{trackTitle}</div>
           <div class="track-artist">{artist}</div>
         </div>
       </div>
 
-      <div class="center-controls">
-        <div class="playback-controls">
+      <!-- Center: Playback Controls + Progress -->
+      <div class="playback-section">
+        <div class="controls">
           <button class="control-btn" onclick={onSkipBack} disabled={!onSkipBack}>
-            <SkipBack size={24} />
+            <SkipBack size={22} />
           </button>
           <button
-            class="control-btn play"
+            class="control-btn play-btn"
             onclick={(e) => {
               e.stopPropagation();
               onTogglePlay();
             }}
           >
             {#if isPlaying}
-              <Pause size={28} />
+              <Pause size={26} />
             {:else}
-              <Play size={28} class="play-icon" />
+              <Play size={26} class="play-icon" />
             {/if}
           </button>
           <button class="control-btn" onclick={onSkipForward} disabled={!onSkipForward}>
-            <SkipForward size={24} />
+            <SkipForward size={22} />
           </button>
         </div>
 
-        <div class="progress-section">
+        <div class="progress-row">
           <span class="time">{formatTime(currentTime)}</span>
           <div
             class="progress-bar"
             bind:this={progressRef}
             onclick={handleProgressClick}
+            onkeydown={handleProgressKeydown}
             role="slider"
             tabindex="0"
             aria-valuenow={currentTime}
@@ -207,7 +221,8 @@
         </div>
       </div>
 
-      <div class="spacer"></div>
+      <!-- Right: Spacer for balance -->
+      <div class="right-spacer"></div>
     </div>
   </div>
 {/if}
@@ -217,11 +232,10 @@
     position: fixed;
     inset: 0;
     z-index: 110;
-    display: flex;
-    flex-direction: column;
     background-color: #000;
     cursor: default;
     animation: fadeIn 300ms ease-out;
+    overflow: hidden;
   }
 
   @keyframes fadeIn {
@@ -240,41 +254,40 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    filter: blur(60px) saturate(1.2);
-    transform: scale(1.2);
-    opacity: 0.6;
+    filter: blur(80px) saturate(1.3) brightness(0.6);
+    transform: scale(1.3);
   }
 
   .background-overlay {
     position: absolute;
     inset: 0;
     background: linear-gradient(
-      to bottom,
-      rgba(0, 0, 0, 0.3) 0%,
-      rgba(0, 0, 0, 0.5) 50%,
-      rgba(0, 0, 0, 0.8) 100%
+      135deg,
+      rgba(0, 0, 0, 0.4) 0%,
+      rgba(0, 0, 0, 0.3) 50%,
+      rgba(0, 0, 0, 0.5) 100%
     );
   }
 
   /* Close Button */
   .close-btn {
     position: absolute;
-    top: 20px;
-    right: 20px;
-    z-index: 10;
-    width: 44px;
-    height: 44px;
+    top: 16px;
+    left: 16px;
+    z-index: 20;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.3);
     backdrop-filter: blur(8px);
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 50%;
     color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
     opacity: 0;
-    transition: all 300ms ease;
+    transition: all 200ms ease;
   }
 
   .close-btn.visible {
@@ -283,74 +296,84 @@
 
   .close-btn:hover {
     color: white;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.5);
   }
 
-  /* Main Content Grid */
-  .content {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 48px;
-    padding: 60px 60px 120px;
-    position: relative;
-    z-index: 1;
+  /* Main Layout */
+  .main-layout {
+    position: absolute;
+    inset: 0;
+    display: flex;
     align-items: center;
-    justify-items: center;
+    padding: 80px 48px 140px;
+    gap: 40px;
+    z-index: 1;
   }
 
-  .content.has-lyrics {
-    grid-template-columns: 1fr 1fr;
-    justify-items: start;
-  }
-
-  /* Artwork Side */
-  .artwork-side {
+  /* Artwork Section */
+  .artwork-section {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
+    height: 100%;
   }
 
-  .content.has-lyrics .artwork-side {
-    justify-content: flex-end;
-    padding-right: 24px;
-  }
-
-  .artwork-container {
-    width: min(55vh, 500px);
+  .artwork-wrapper {
+    width: min(65vh, 520px);
     aspect-ratio: 1;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    box-shadow:
+      0 32px 80px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(255, 255, 255, 0.05);
   }
 
-  .artwork-container img {
+  .artwork-image {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
 
-  /* Lyrics Side */
-  .lyrics-side {
-    width: 100%;
+  /* Lyrics Section */
+  .lyrics-section {
+    flex: 1;
+    min-width: 0;
     height: 100%;
-    max-height: calc(100vh - 200px);
     display: flex;
     flex-direction: column;
-    padding-left: 24px;
+    max-width: 560px;
   }
 
-  .lyrics-side :global(.lyrics-lines) {
+  .lyrics-container {
+    flex: 1;
+    overflow: hidden;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      black 8%,
+      black 85%,
+      transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      black 8%,
+      black 85%,
+      transparent 100%
+    );
+  }
+
+  .lyrics-container :global(.lyrics-lines) {
     --text-primary: rgba(255, 255, 255, 0.95);
     --text-secondary: rgba(255, 255, 255, 0.5);
-    --text-muted: rgba(255, 255, 255, 0.3);
-    --bg-tertiary: rgba(255, 255, 255, 0.1);
+    --text-muted: rgba(255, 255, 255, 0.25);
+    --bg-tertiary: rgba(255, 255, 255, 0.08);
     padding: 0;
+    height: 100%;
   }
 
-  .lyrics-loading,
-  .lyrics-error {
+  .lyrics-state {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -359,6 +382,10 @@
     height: 100%;
     color: rgba(255, 255, 255, 0.5);
     font-size: 14px;
+  }
+
+  .error-text {
+    color: rgba(255, 255, 255, 0.4);
   }
 
   .spinner {
@@ -384,12 +411,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 24px;
-    padding: 16px 24px 20px;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+    gap: 32px;
+    padding: 20px 32px 24px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
     opacity: 0;
-    transform: translateY(10px);
-    transition: all 300ms ease;
+    transform: translateY(8px);
+    transition: all 250ms ease;
   }
 
   .bottom-bar.visible {
@@ -397,29 +424,26 @@
     transform: translateY(0);
   }
 
+  /* Track Info */
   .track-info {
     display: flex;
     align-items: center;
     gap: 12px;
     min-width: 200px;
+    max-width: 280px;
   }
 
-  .track-artwork {
+  .mini-artwork {
     width: 48px;
     height: 48px;
     border-radius: 6px;
-    overflow: hidden;
-    flex-shrink: 0;
-  }
-
-  .track-artwork img {
-    width: 100%;
-    height: 100%;
     object-fit: cover;
+    flex-shrink: 0;
   }
 
   .track-meta {
     min-width: 0;
+    flex: 1;
   }
 
   .track-title {
@@ -437,21 +461,23 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin-top: 2px;
   }
 
-  .center-controls {
+  /* Playback Section */
+  .playback-section {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    max-width: 600px;
+    max-width: 560px;
   }
 
-  .playback-controls {
+  .controls {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 20px;
   }
 
   .control-btn {
@@ -463,7 +489,7 @@
     background: none;
     border: none;
     border-radius: 50%;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(255, 255, 255, 0.85);
     cursor: pointer;
     transition: all 150ms ease;
   }
@@ -478,22 +504,25 @@
     background: rgba(255, 255, 255, 0.1);
   }
 
-  .control-btn.play {
-    width: 48px;
-    height: 48px;
+  .play-btn {
+    width: 52px;
+    height: 52px;
     background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
     color: white;
   }
 
-  .control-btn.play:hover {
+  .play-btn:hover {
     background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
   }
 
-  .control-btn.play :global(.play-icon) {
-    margin-left: 2px;
+  .play-btn :global(.play-icon) {
+    margin-left: 3px;
   }
 
-  .progress-section {
+  /* Progress Row */
+  .progress-row {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -538,14 +567,89 @@
     transform: translate(-50%, -50%);
     opacity: 0;
     transition: opacity 150ms ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   }
 
   .progress-bar:hover .progress-thumb {
     opacity: 1;
   }
 
-  .spacer {
+  .right-spacer {
     min-width: 200px;
+  }
+
+  /* Responsive Breakpoints */
+  @media (max-width: 1200px) {
+    .main-layout {
+      padding: 60px 32px 130px;
+      gap: 32px;
+    }
+
+    .artwork-wrapper {
+      width: min(55vh, 440px);
+    }
+
+    .lyrics-section {
+      max-width: 480px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .main-layout {
+      flex-direction: column;
+      padding: 60px 24px 140px;
+      gap: 24px;
+      justify-content: flex-start;
+    }
+
+    .artwork-section {
+      height: auto;
+      flex: 0 0 auto;
+    }
+
+    .artwork-wrapper {
+      width: min(45vh, 320px);
+    }
+
+    .lyrics-section {
+      flex: 1;
+      max-width: 100%;
+      width: 100%;
+    }
+
+    .track-info {
+      display: none;
+    }
+
+    .right-spacer {
+      display: none;
+    }
+
+    .playback-section {
+      max-width: 100%;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .main-layout {
+      padding: 48px 16px 130px;
+    }
+
+    .artwork-wrapper {
+      width: min(40vh, 280px);
+    }
+
+    .bottom-bar {
+      padding: 16px 16px 20px;
+    }
+
+    .controls {
+      gap: 16px;
+    }
+
+    .play-btn {
+      width: 48px;
+      height: 48px;
+    }
   }
 </style>
