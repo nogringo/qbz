@@ -13,13 +13,15 @@ const LASTFM_API_URL: &str = "https://ws.audioscrobbler.com/2.0/";
 // Checked in order:
 // 1. Compile-time environment variables (for release builds)
 // 2. Runtime environment variables (for development with .env)
-const DEFAULT_API_KEY: Option<&str> = option_env!("LASTFM_API_KEY");
-const DEFAULT_API_SECRET: Option<&str> = option_env!("LASTFM_API_SECRET");
+// Note: Supports both LAST_FM_* and LASTFM_* naming conventions
+const DEFAULT_API_KEY: Option<&str> = option_env!("LAST_FM_API_KEY");
+const DEFAULT_API_SECRET: Option<&str> = option_env!("LAST_FM_API_SHARED_SECRET");
 
 /// Get API key from compile-time or runtime environment
 fn get_api_key() -> Option<String> {
     DEFAULT_API_KEY
         .map(String::from)
+        .or_else(|| std::env::var("LAST_FM_API_KEY").ok())
         .or_else(|| std::env::var("LASTFM_API_KEY").ok())
 }
 
@@ -27,6 +29,7 @@ fn get_api_key() -> Option<String> {
 fn get_api_secret() -> Option<String> {
     DEFAULT_API_SECRET
         .map(String::from)
+        .or_else(|| std::env::var("LAST_FM_API_SHARED_SECRET").ok())
         .or_else(|| std::env::var("LASTFM_API_SECRET").ok())
 }
 
@@ -169,12 +172,15 @@ impl LastFmClient {
             return Err("Last.fm API credentials not configured".to_string());
         }
 
+        log::info!("Getting Last.fm session with token: {}...", &token[..token.len().min(8)]);
+
         let mut params = BTreeMap::new();
         params.insert("method", "auth.getSession");
         params.insert("api_key", &self.api_key);
         params.insert("token", token);
 
         let sig = self.generate_signature(&params);
+        log::debug!("Generated signature for auth.getSession");
 
         let response = self
             .client
@@ -190,17 +196,26 @@ impl LastFmClient {
             .await
             .map_err(|e| format!("Failed to get session: {}", e))?;
 
-        let data: LastFmResponse<AuthGetSessionResponse> = response
-            .json()
+        let response_text = response
+            .text()
             .await
-            .map_err(|e| format!("Failed to parse response: {}", e))?;
+            .map_err(|e| format!("Failed to read response: {}", e))?;
+
+        log::debug!("Last.fm auth.getSession response: {}", response_text);
+
+        let data: LastFmResponse<AuthGetSessionResponse> = serde_json::from_str(&response_text)
+            .map_err(|e| format!("Failed to parse response: {} - Raw: {}", e, response_text))?;
 
         match data {
             LastFmResponse::Success(r) => {
+                log::info!("Last.fm session obtained for user: {}", r.session.name);
                 self.session_key = Some(r.session.key.clone());
                 Ok(r.session)
             }
-            LastFmResponse::Error { message, .. } => Err(message),
+            LastFmResponse::Error { error, message } => {
+                log::error!("Last.fm auth error {}: {}", error, message);
+                Err(message)
+            }
         }
     }
 
