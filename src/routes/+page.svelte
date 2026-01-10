@@ -65,6 +65,26 @@
     type NavigationState
   } from '$lib/stores/navigationStore';
 
+  // Player state management
+  import {
+    subscribe as subscribePlayer,
+    setCurrentTrack,
+    setIsPlaying,
+    setIsFavorite,
+    setIsSkipping,
+    setQueueEnded,
+    setOnTrackEnded,
+    togglePlay,
+    seek as playerSeek,
+    setVolume as playerSetVolume,
+    startPolling,
+    stopPolling,
+    reset as resetPlayer,
+    getPlayerState,
+    type PlayingTrack,
+    type PlayerState
+  } from '$lib/stores/playerStore';
+
   // Components
   import Sidebar from '$lib/components/Sidebar.svelte';
   import NowPlayingBar from '$lib/components/NowPlayingBar.svelte';
@@ -228,18 +248,6 @@
     total_tracks: number;
   }
 
-  interface PlayingTrack {
-    id: number;
-    title: string;
-    artist: string;
-    album: string;
-    artwork: string;
-    duration: number;
-    quality: string;
-    bitDepth?: number;
-    samplingRate?: number;
-  }
-
   // Auth State (from authStore subscription)
   let isLoggedIn = $state(false);
   let userInfo = $state<UserInfo | null>(null);
@@ -266,15 +274,17 @@
   // Sidebar reference for refreshing playlists
   let sidebarRef: { getPlaylists: () => { id: number; name: string; tracks_count: number }[], refreshPlaylists: () => void } | undefined;
 
-  // Playback State
+  // Playback State (from playerStore subscription)
   let currentTrack = $state<PlayingTrack | null>(null);
   let isPlaying = $state(false);
   let currentTime = $state(0);
   let duration = $state(0);
   let volume = $state(75);
+  let isFavorite = $state(false);
+
+  // Queue/Shuffle State (will move to queueStore)
   let isShuffle = $state(false);
   let repeatMode = $state<'off' | 'all' | 'one'>('off');
-  let isFavorite = $state(false);
 
   // Queue State (synced from backend)
   let queue = $state<QueueTrack[]>([]);
@@ -539,7 +549,7 @@
       ? `${track.maximum_bit_depth}bit/${track.maximum_sampling_rate}kHz`
       : 'CD Quality';
 
-    currentTrack = {
+    const newTrack: PlayingTrack = {
       id: track.id,
       title: track.title,
       artist: track.performer?.name || 'Unknown Artist',
@@ -550,9 +560,7 @@
       bitDepth: track.maximum_bit_depth,
       samplingRate: track.maximum_sampling_rate
     };
-
-    duration = track.duration;
-    currentTime = 0;
+    setCurrentTrack(newTrack);
 
     // Try to play the track
     try {
@@ -560,7 +568,7 @@
       showToast(`Loading: ${track.title}`, 'info');
       await invoke('play_track', { trackId: track.id });
       console.log('play_track invoke succeeded');
-      isPlaying = true;
+      setIsPlaying(true);
       showToast(`Playing: ${track.title}`, 'success');
 
       // Update MPRIS metadata for system media controls
@@ -581,11 +589,11 @@
       );
 
       // Check if track is favorite
-      isFavorite = await checkTrackFavorite(track.id);
+      setIsFavorite(await checkTrackFavorite(track.id));
     } catch (err) {
       console.error('Failed to play track:', err);
       showToast(`Playback error: ${err}`, 'error');
-      isPlaying = false;
+      setIsPlaying(false);
     }
   }
 
@@ -599,7 +607,7 @@
       ? `${track.bitDepth}bit/${track.samplingRate}kHz`
       : 'CD Quality';
 
-    currentTrack = {
+    const newTrack: PlayingTrack = {
       id: track.id,
       title: track.title,
       artist: track.artist || selectedAlbum?.artist || 'Unknown Artist',
@@ -608,9 +616,7 @@
       duration: track.durationSeconds,
       quality
     };
-
-    duration = track.durationSeconds;
-    currentTime = 0;
+    setCurrentTrack(newTrack);
 
     // Build queue from album tracks
     if (selectedAlbum?.tracks) {
@@ -646,7 +652,7 @@
       showToast(`Loading: ${track.title}`, 'info');
       await invoke('play_track', { trackId: track.id });
       console.log('play_track invoke succeeded');
-      isPlaying = true;
+      setIsPlaying(true);
       showToast(`Playing: ${track.title}`, 'success');
 
       // Update MPRIS metadata for system media controls
@@ -677,30 +683,17 @@
     } catch (err) {
       console.error('Failed to play track:', err);
       showToast(`Playback error: ${err}`, 'error');
-      isPlaying = false;
+      setIsPlaying(false);
     }
   }
 
-  function togglePlay() {
-    if (!currentTrack) return;
-    isPlaying = !isPlaying;
-
-    // TODO: invoke pause/resume commands
-    if (isPlaying) {
-      invoke('resume_playback').catch(console.error);
-    } else {
-      invoke('pause_playback').catch(console.error);
-    }
-  }
-
+  // Playback controls (delegating to playerStore)
   function handleSeek(time: number) {
-    currentTime = Math.max(0, Math.min(duration, time));
-    invoke('seek', { position: time }).catch(console.error);
+    playerSeek(time);
   }
 
   function handleVolumeChange(newVolume: number) {
-    volume = Math.max(0, Math.min(100, newVolume));
-    invoke('set_volume', { volume: newVolume / 100 }).catch(console.error);
+    playerSetVolume(newVolume);
   }
 
   async function toggleShuffle() {
@@ -757,7 +750,7 @@
         await invoke('remove_favorite', { favType: 'track', itemId: trackId });
         showToast('Removed from favorites', 'success');
       }
-      isFavorite = newFavoriteState;
+      setIsFavorite(newFavoriteState);
     } catch (err) {
       console.error('Failed to toggle favorite:', err);
       showToast('Failed to update favorites', 'error');
@@ -766,14 +759,15 @@
 
   // Skip track handlers - wired to backend queue
   async function handleSkipBack() {
-    if (!currentTrack || isSkipping) return;
+    const playerState = getPlayerState();
+    if (!playerState.currentTrack || playerState.isSkipping) return;
     // If more than 3 seconds in, restart track; otherwise go to previous
-    if (currentTime > 3) {
+    if (playerState.currentTime > 3) {
       handleSeek(0);
       return;
     }
 
-    isSkipping = true;
+    setIsSkipping(true);
     try {
       const prevTrack = await invoke<BackendQueueTrack | null>('previous_track');
       if (prevTrack) {
@@ -786,14 +780,15 @@
       console.error('Failed to go to previous track:', err);
       showToast('Failed to go to previous track', 'error');
     } finally {
-      isSkipping = false;
+      setIsSkipping(false);
     }
   }
 
   async function handleSkipForward() {
-    if (!currentTrack || isSkipping) return;
+    const playerState = getPlayerState();
+    if (!playerState.currentTrack || playerState.isSkipping) return;
 
-    isSkipping = true;
+    setIsSkipping(true);
     try {
       const nextTrackResult = await invoke<BackendQueueTrack | null>('next_track');
       if (nextTrackResult) {
@@ -801,14 +796,14 @@
       } else {
         // No next track - stop playback
         await invoke('stop_playback');
-        isPlaying = false;
+        setIsPlaying(false);
         showToast('Queue ended', 'info');
       }
     } catch (err) {
       console.error('Failed to go to next track:', err);
       showToast('Failed to go to next track', 'error');
     } finally {
-      isSkipping = false;
+      setIsSkipping(false);
     }
   }
 
@@ -817,20 +812,19 @@
     const isLocalTrack = localTrackIds.has(track.id);
 
     // Reset queue ended flag when playing a new track
-    queueEnded = false;
+    setQueueEnded(false);
 
-    currentTrack = {
+    const newTrack: PlayingTrack = {
       id: track.id,
       title: track.title,
       artist: track.artist,
       album: track.album,
       artwork: track.artwork_url || '',
       duration: track.duration_secs,
-      quality: isLocalTrack ? 'Local' : 'Hi-Res'
+      quality: isLocalTrack ? 'Local' : 'Hi-Res',
+      isLocal: isLocalTrack
     };
-
-    duration = track.duration_secs;
-    currentTime = 0;
+    setCurrentTrack(newTrack);
 
     try {
       // Use appropriate playback command based on track source
@@ -839,7 +833,7 @@
       } else {
         await invoke('play_track', { trackId: track.id });
       }
-      isPlaying = true;
+      setIsPlaying(true);
 
       // Update MPRIS
       await invoke('set_media_metadata', {
@@ -858,9 +852,9 @@
 
       // Check if track is favorite (for Qobuz tracks only)
       if (!isLocalTrack) {
-        isFavorite = await checkTrackFavorite(track.id);
+        setIsFavorite(await checkTrackFavorite(track.id));
       } else {
-        isFavorite = false;
+        setIsFavorite(false);
       }
 
       // Refresh queue state
@@ -868,7 +862,7 @@
     } catch (err) {
       console.error('Failed to play queue track:', err);
       showToast(`Playback error: ${err}`, 'error');
-      isPlaying = false;
+      setIsPlaying(false);
     }
   }
 
@@ -1410,72 +1404,17 @@
     }
   }
 
-  // Playback state polling - sync with backend every 500ms
-  interface PlaybackState {
-    is_playing: boolean;
-    position: number;
-    duration: number;
-    track_id: number;
-    volume: number;
-  }
-
-  let pollInterval: ReturnType<typeof setInterval> | null = null;
-
-  let isAdvancingTrack = false; // Prevent multiple advances
-  let isSkipping = false; // Prevent concurrent skip operations
-  let queueEnded = false; // Prevent spam when queue has no more tracks
-
-  async function pollPlaybackState() {
-    if (!currentTrack) return;
-
-    try {
-      const state = await invoke<PlaybackState>('get_playback_state');
-
-      // Only update if we have a matching track
-      if (state.track_id === currentTrack.id) {
-        currentTime = state.position;
-        isPlaying = state.is_playing;
-
-        // Check if track ended - auto-advance to next
-        // Don't try if queue already ended or we're already advancing
-        if (state.duration > 0 && state.position >= state.duration - 1 && !state.is_playing && !isAdvancingTrack && !queueEnded) {
-          console.log('Track finished, advancing to next...');
-          isAdvancingTrack = true;
-
-          try {
-            const nextTrackResult = await invoke<BackendQueueTrack | null>('next_track');
-            if (nextTrackResult) {
-              await playQueueTrack(nextTrackResult);
-            } else {
-              // Queue ended - set flag to prevent further attempts
-              console.log('Queue ended');
-              queueEnded = true;
-            }
-          } catch (err) {
-            console.error('Failed to auto-advance:', err);
-          } finally {
-            isAdvancingTrack = false;
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Failed to poll playback state:', err);
-    }
-  }
-
+  // Playback state polling - managed by playerStore
+  // Start/stop polling based on whether there's a current track
   $effect(() => {
     if (currentTrack) {
-      // Start polling when we have a track
-      pollInterval = setInterval(pollPlaybackState, 500);
-      // Also poll immediately
-      pollPlaybackState();
-    } else if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
+      startPolling();
+    } else {
+      stopPolling();
     }
 
     return () => {
-      if (pollInterval) clearInterval(pollInterval);
+      stopPolling();
     };
   });
 
@@ -1542,6 +1481,27 @@
       selectedPlaylistId = navState.selectedPlaylistId;
     });
 
+    // Subscribe to player state changes
+    const unsubscribePlayer = subscribePlayer(() => {
+      const playerState = getPlayerState();
+      currentTrack = playerState.currentTrack;
+      isPlaying = playerState.isPlaying;
+      currentTime = playerState.currentTime;
+      duration = playerState.duration;
+      volume = playerState.volume;
+      isFavorite = playerState.isFavorite;
+    });
+
+    // Set up track ended callback for auto-advance
+    setOnTrackEnded(async () => {
+      const nextTrackResult = await invoke<BackendQueueTrack | null>('next_track');
+      if (nextTrackResult) {
+        await playQueueTrack(nextTrackResult);
+      } else {
+        setQueueEnded(true);
+      }
+    });
+
     // Restore Last.fm session on app startup
     (async () => {
       try {
@@ -1576,6 +1536,8 @@
       unsubscribeUI();
       unsubscribeAuth();
       unsubscribeNav();
+      unsubscribePlayer();
+      stopPolling();
     };
   });
 
