@@ -23,6 +23,7 @@
     lyricsLines?: LyricsLine[];
     lyricsActiveIndex?: number;
     lyricsActiveProgress?: number;
+    lyricsSynced?: boolean;
     lyricsLoading?: boolean;
     lyricsError?: string | null;
   }
@@ -43,6 +44,7 @@
     lyricsLines = [],
     lyricsActiveIndex = -1,
     lyricsActiveProgress = 0,
+    lyricsSynced = false,
     lyricsLoading = false,
     lyricsError = null
   }: Props = $props();
@@ -141,6 +143,7 @@
               lines={lyricsLines}
               activeIndex={lyricsActiveIndex}
               activeProgress={lyricsActiveProgress}
+              isSynced={lyricsSynced}
               center={false}
               compact={false}
               immersive={true}

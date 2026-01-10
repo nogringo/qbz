@@ -12,6 +12,7 @@
     lines: LyricsLine[];
     activeIndex?: number;
     activeProgress?: number;
+    isSynced?: boolean;
     isLoading?: boolean;
     error?: string | null;
   }
@@ -22,6 +23,7 @@
     lines,
     activeIndex = -1,
     activeProgress = 0,
+    isSynced = false,
     isLoading = false,
     error = null
   }: Props = $props();
@@ -53,6 +55,7 @@
         {lines}
         {activeIndex}
         {activeProgress}
+        {isSynced}
         compact={true}
         center={false}
       />

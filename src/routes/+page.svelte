@@ -1102,6 +1102,7 @@
         lines={lyricsLines.map(l => ({ text: l.text }))}
         activeIndex={lyricsActiveIndex}
         activeProgress={lyricsActiveProgress}
+        isSynced={lyricsIsSynced}
         isLoading={lyricsStatus === 'loading'}
         error={lyricsStatus === 'error' ? lyricsError : (lyricsStatus === 'not_found' ? 'No lyrics found' : null)}
       />
@@ -1215,6 +1216,7 @@
         lyricsLines={lyricsLines.map(l => ({ text: l.text }))}
         lyricsActiveIndex={lyricsActiveIndex}
         lyricsActiveProgress={lyricsActiveProgress}
+        lyricsSynced={lyricsIsSynced}
         lyricsLoading={lyricsStatus === 'loading'}
         lyricsError={lyricsStatus === 'error' ? lyricsError : (lyricsStatus === 'not_found' ? 'No lyrics found' : null)}
       />

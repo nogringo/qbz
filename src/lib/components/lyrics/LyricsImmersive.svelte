@@ -9,6 +9,7 @@
     lines: LyricsLine[];
     activeIndex?: number;
     activeProgress?: number;
+    isSynced?: boolean;
     align?: 'left' | 'center';
     title?: string;
     artist?: string;
@@ -19,6 +20,7 @@
     lines,
     activeIndex = -1,
     activeProgress = 0,
+    isSynced = false,
     align = 'center',
     title = '',
     artist = '',
@@ -54,6 +56,7 @@
       {lines}
       {activeIndex}
       {activeProgress}
+      {isSynced}
       center={isCenter}
       compact={false}
     />

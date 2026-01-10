@@ -14,6 +14,7 @@
     compact?: boolean;
     scrollToActive?: boolean;
     immersive?: boolean;
+    isSynced?: boolean;
   }
 
   let {
@@ -24,7 +25,8 @@
     center = false,
     compact = false,
     scrollToActive = true,
-    immersive = false
+    immersive = false,
+    isSynced = false
   }: Props = $props();
 
   let container: HTMLDivElement | null = null;
@@ -99,18 +101,21 @@
   class:compact
   class:center
   class:immersive
+  class:static={!isSynced}
   bind:this={container}
 >
   {#if lines.length === 0}
     <div class="lyrics-empty">No lyrics available</div>
   {:else}
-    <!-- Spacer at top to allow first lines to scroll to center -->
-    <div class="lyrics-spacer"></div>
+    <!-- Spacer at top to allow first lines to scroll to center (only for synced) -->
+    {#if isSynced}
+      <div class="lyrics-spacer"></div>
+    {/if}
 
     {#each lines as line, index}
-      {@const isActive = index === activeIndex}
-      {@const isPast = index < activeIndex}
-      {@const opacity = getLineOpacity(index, activeIndex)}
+      {@const isActive = isSynced && index === activeIndex}
+      {@const isPast = isSynced && index < activeIndex}
+      {@const opacity = isSynced ? getLineOpacity(index, activeIndex) : 1}
       <div
         class="lyrics-line"
         class:active={isActive}
@@ -122,8 +127,10 @@
       </div>
     {/each}
 
-    <!-- Spacer at bottom to allow last lines to scroll to center -->
-    <div class="lyrics-spacer"></div>
+    <!-- Spacer at bottom to allow last lines to scroll to center (only for synced) -->
+    {#if isSynced}
+      <div class="lyrics-spacer"></div>
+    {/if}
   {/if}
 </div>
 
@@ -135,7 +142,6 @@
     padding: 16px 20px;
     overflow-y: auto;
     height: 100%;
-    scroll-behavior: smooth;
     scrollbar-width: thin;
     scrollbar-color: var(--bg-tertiary) transparent;
   }
@@ -156,6 +162,16 @@
   .lyrics-spacer {
     min-height: 40vh;
     flex-shrink: 0;
+  }
+
+  /* Static mode - non-synced lyrics, start at top */
+  .lyrics-lines.static {
+    justify-content: flex-start;
+  }
+
+  .lyrics-lines.static .lyrics-line {
+    opacity: 0.85;
+    color: var(--text-primary);
   }
 
   .lyrics-lines.center {
@@ -199,12 +215,13 @@
     letter-spacing: 0.01em;
     opacity: var(--line-opacity, 1);
     transition:
-      opacity 400ms cubic-bezier(0.4, 0, 0.2, 1),
-      transform 400ms cubic-bezier(0.4, 0, 0.2, 1),
-      font-size 300ms cubic-bezier(0.4, 0, 0.2, 1),
-      font-weight 300ms cubic-bezier(0.4, 0, 0.2, 1),
-      color 300ms cubic-bezier(0.4, 0, 0.2, 1);
+      opacity 150ms ease-out,
+      transform 150ms ease-out,
+      font-size 120ms ease-out,
+      font-weight 120ms ease-out,
+      color 150ms ease-out;
     transform-origin: left center;
+    will-change: opacity, transform;
   }
 
   .lyrics-lines.center .lyrics-line {
