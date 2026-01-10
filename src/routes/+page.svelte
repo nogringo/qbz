@@ -1590,6 +1590,7 @@
           onTrackRemoveDownload={handleTrackRemoveDownload}
           getTrackDownloadStatus={getTrackDownloadStatus}
           onDownloadAlbum={handleDownloadAlbum}
+          {downloadStateVersion}
         />
       {:else if activeView === 'artist' && selectedArtist}
         <ArtistDetailView
@@ -1629,6 +1630,7 @@
           onTrackDownload={handleDisplayTrackDownload}
           onTrackRemoveDownload={handleTrackRemoveDownload}
           getTrackDownloadStatus={getTrackDownloadStatus}
+          {downloadStateVersion}
         />
       {:else if activeView === 'favorites'}
         <FavoritesView

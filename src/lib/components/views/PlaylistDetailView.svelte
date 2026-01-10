@@ -75,6 +75,7 @@
     onTrackDownload?: (track: DisplayTrack) => void;
     onTrackRemoveDownload?: (trackId: number) => void;
     getTrackDownloadStatus?: (trackId: number) => { status: DownloadStatus; progress: number };
+    downloadStateVersion?: number;
   }
 
   let {
@@ -91,7 +92,8 @@
     onTrackGoToArtist,
     onTrackDownload,
     onTrackRemoveDownload,
-    getTrackDownloadStatus
+    getTrackDownloadStatus,
+    downloadStateVersion
   }: Props = $props();
 
   let playlist = $state<Playlist | null>(null);
@@ -500,7 +502,7 @@
         <span class="col-duration">Duration</span>
       </div>
 
-      {#each displayTracks as track, idx (track.id)}
+      {#each displayTracks as track, idx (`${track.id}-${downloadStateVersion}`)}
         {@const downloadInfo = getTrackDownloadStatus?.(track.id) ?? { status: 'none' as const, progress: 0 }}
         <TrackRow
           number={idx + 1}
