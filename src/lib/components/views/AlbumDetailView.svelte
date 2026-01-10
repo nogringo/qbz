@@ -74,13 +74,8 @@
   let favoriteTrackIds = $state<Set<number>>(new Set());
 
   interface FavoritesResponse {
-    items: Array<{ id: string }>;
-    total: number;
-  }
-
-  interface TrackFavoritesResponse {
-    items: Array<{ id: number }>;
-    total: number;
+    albums?: { items: Array<{ id: string }>; total: number };
+    tracks?: { items: Array<{ id: number }>; total: number };
   }
 
   // Check if album and tracks are in favorites on mount
@@ -92,19 +87,23 @@
         limit: 500,
         offset: 0
       });
-      isFavorite = response.items.some(item => item.id === album.id);
+      if (response.albums?.items) {
+        isFavorite = response.albums.items.some(item => item.id === album.id);
+      }
     } catch (err) {
       console.error('Failed to check album favorite status:', err);
     }
 
     // Fetch track favorites
     try {
-      const response = await invoke<TrackFavoritesResponse>('get_favorites', {
+      const response = await invoke<FavoritesResponse>('get_favorites', {
         favType: 'tracks',
         limit: 500,
         offset: 0
       });
-      favoriteTrackIds = new Set(response.items.map(item => item.id));
+      if (response.tracks?.items) {
+        favoriteTrackIds = new Set(response.tracks.items.map(item => item.id));
+      }
     } catch (err) {
       console.error('Failed to check track favorite status:', err);
     }

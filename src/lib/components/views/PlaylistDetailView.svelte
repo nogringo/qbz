@@ -101,9 +101,8 @@
   let customArtworkPath = $state<string | null>(null);
   let showSortMenu = $state(false);
 
-  interface TrackFavoritesResponse {
-    items: Array<{ id: number }>;
-    total: number;
+  interface FavoritesResponse {
+    tracks?: { items: Array<{ id: number }>; total: number };
   }
 
   onMount(() => {
@@ -114,12 +113,14 @@
 
   async function loadFavorites() {
     try {
-      const response = await invoke<TrackFavoritesResponse>('get_favorites', {
+      const response = await invoke<FavoritesResponse>('get_favorites', {
         favType: 'tracks',
         limit: 500,
         offset: 0
       });
-      favoriteTrackIds = new Set(response.items.map(item => item.id));
+      if (response.tracks?.items) {
+        favoriteTrackIds = new Set(response.tracks.items.map(item => item.id));
+      }
     } catch (err) {
       console.error('Failed to load favorite tracks:', err);
     }
