@@ -53,6 +53,18 @@
     type UserInfo
   } from '$lib/stores/authStore';
 
+  // Navigation state management
+  import {
+    subscribe as subscribeNav,
+    navigateTo as navTo,
+    goBack as navGoBack,
+    goForward as navGoForward,
+    selectPlaylist,
+    getNavigationState,
+    type ViewType,
+    type NavigationState
+  } from '$lib/stores/navigationStore';
+
   // Components
   import Sidebar from '$lib/components/Sidebar.svelte';
   import NowPlayingBar from '$lib/components/NowPlayingBar.svelte';
@@ -232,14 +244,12 @@
   let isLoggedIn = $state(false);
   let userInfo = $state<UserInfo | null>(null);
 
-  // View State
-  type ViewType = 'home' | 'search' | 'library' | 'settings' | 'album' | 'artist' | 'playlist' | 'favorites';
+  // View State (from navigationStore subscription)
   let activeView = $state<ViewType>('home');
-  let viewHistory = $state<ViewType[]>(['home']);
-  let forwardHistory = $state<ViewType[]>([]);
+  let selectedPlaylistId = $state<number | null>(null);
+  // Album and Artist data are fetched, so kept local
   let selectedAlbum = $state<AlbumDetail | null>(null);
   let selectedArtist = $state<ArtistDetail | null>(null);
-  let selectedPlaylistId = $state<number | null>(null);
 
   // Overlay States (from uiStore subscription)
   let isQueueOpen = $state(false);
@@ -276,41 +286,22 @@
   // Toast State (from store subscription)
   let toast = $state<ToastData | null>(null);
 
-  // Navigation Functions
+  // Navigation Functions (using store)
   function navigateTo(view: string) {
     console.log('navigateTo called with:', view, 'current activeView:', activeView);
-    const typedView = view as ViewType;
-    if (typedView !== activeView) {
-      viewHistory = [...viewHistory, typedView];
-      forwardHistory = [];
-      activeView = typedView;
-      console.log('View changed to:', activeView);
-    } else {
-      console.log('View unchanged (already on this view)');
-    }
+    navTo(view as ViewType);
   }
 
   function goBack() {
-    if (viewHistory.length > 1) {
-      const lastView = viewHistory[viewHistory.length - 1];
-      viewHistory = viewHistory.slice(0, -1);
-      forwardHistory = [...forwardHistory, lastView];
-      activeView = viewHistory[viewHistory.length - 1];
-    }
+    navGoBack();
   }
 
   function goForward() {
-    if (forwardHistory.length > 0) {
-      const nextView = forwardHistory[forwardHistory.length - 1];
-      forwardHistory = forwardHistory.slice(0, -1);
-      viewHistory = [...viewHistory, nextView];
-      activeView = nextView;
-    }
+    navGoForward();
   }
 
   function handlePlaylistSelect(playlistId: number) {
-    selectedPlaylistId = playlistId;
-    navigateTo('playlist');
+    selectPlaylist(playlistId);
   }
 
   async function handleAlbumClick(albumId: string) {
@@ -1544,6 +1535,13 @@
       userInfo = authState.userInfo;
     });
 
+    // Subscribe to navigation state changes
+    const unsubscribeNav = subscribeNav(() => {
+      const navState = getNavigationState();
+      activeView = navState.activeView;
+      selectedPlaylistId = navState.selectedPlaylistId;
+    });
+
     // Restore Last.fm session on app startup
     (async () => {
       try {
@@ -1577,6 +1575,7 @@
       unsubscribeToast();
       unsubscribeUI();
       unsubscribeAuth();
+      unsubscribeNav();
     };
   });
 
