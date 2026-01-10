@@ -2,6 +2,7 @@
 
 use reqwest::Client;
 use serde::Deserialize;
+use serde_json;
 use urlencoding::encode;
 
 use super::{normalize, LyricsProvider};
@@ -128,19 +129,29 @@ async fn fetch_lrclib_get(
 ) -> Result<Option<LrclibItem>, String> {
     let response = client
         .get("https://lrclib.net/api/get")
+        .header("User-Agent", "QBZ-Nix/1.0 (https://github.com/qbz-nix)")
         .query(&[("track_name", title), ("artist_name", artist)])
         .send()
         .await
         .map_err(|e| format!("LRCLIB get request failed: {}", e))?;
 
     if !response.status().is_success() {
+        println!("[Lyrics] LRCLIB get returned status: {}", response.status());
         return Ok(None);
     }
 
-    let item: LrclibItem = response
-        .json()
-        .await
+    // Get raw text first for debugging
+    let text = response.text().await
+        .map_err(|e| format!("LRCLIB get response text failed: {}", e))?;
+
+    // Log if syncedLyrics is present in raw response
+    let has_synced = text.contains("syncedLyrics") && !text.contains("\"syncedLyrics\":null");
+    println!("[Lyrics] LRCLIB get raw response has syncedLyrics: {}, len: {}", has_synced, text.len());
+
+    let item: LrclibItem = serde_json::from_str(&text)
         .map_err(|e| format!("LRCLIB get response parse failed: {}", e))?;
+
+    println!("[Lyrics] LRCLIB parsed - synced_lyrics present: {}", item.synced_lyrics.is_some());
 
     Ok(Some(item))
 }
@@ -153,6 +164,7 @@ async fn fetch_lrclib_search(
     let query = format!("{} {}", artist, title);
     let response = client
         .get("https://lrclib.net/api/search")
+        .header("User-Agent", "QBZ-Nix/1.0 (https://github.com/qbz-nix)")
         .query(&[("q", &query)])
         .send()
         .await
