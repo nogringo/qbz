@@ -216,8 +216,6 @@
         {/if}
       </button>
 
-      <div class="divider"></div>
-
       <button class="control-btn" title="Add to Playlist">
         <Plus size={16} />
       </button>
@@ -316,8 +314,6 @@
         <Maximize2 size={16} />
       </button>
 
-      <div class="divider"></div>
-
       <!-- Volume Control -->
       <div class="volume-control">
         <button
@@ -360,7 +356,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 96px;
+    height: 104px;
     background: linear-gradient(to top, rgba(18, 18, 20, 0.98) 0%, rgba(24, 24, 28, 0.95) 100%);
     backdrop-filter: blur(20px);
     border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -445,7 +441,7 @@
     flex: 1;
     display: flex;
     align-items: center;
-    padding: 6px 16px 18px 16px;
+    padding: 6px 16px 26px 16px;
     gap: 16px;
   }
 
@@ -470,13 +466,6 @@
     display: flex;
     justify-content: center;
     min-width: 0;
-  }
-
-  .divider {
-    width: 1px;
-    height: 20px;
-    background: rgba(255, 255, 255, 0.1);
-    margin: 0 8px;
   }
 
   /* ===== Control Buttons ===== */
