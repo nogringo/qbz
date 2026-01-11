@@ -190,7 +190,7 @@
           <h2 class="artist">{artist}</h2>
           <h3 class="album">{album}</h3>
           <div class="quality-info">
-            <QualityBadge {quality} {bitDepth} {samplingRate} size="md" />
+            <QualityBadge {quality} {bitDepth} {samplingRate} />
           </div>
         </div>
 

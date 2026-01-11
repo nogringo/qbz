@@ -162,10 +162,7 @@
         <div class="track-title">{trackTitle}</div>
         <div class="track-artist">{artist}</div>
         <div class="track-quality">
-          <QualityBadge {quality} {bitDepth} {samplingRate} />
-          {#if quality}
-            <span class="quality-text">{quality}</span>
-          {/if}
+          <QualityBadge {quality} {bitDepth} {samplingRate} compact />
         </div>
       </div>
     {:else}
