@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X, Github, Globe, ExternalLink } from 'lucide-svelte';
+  import { openUrl } from '@tauri-apps/plugin-opener';
 
   interface Props {
     isOpen: boolean;
@@ -10,6 +11,10 @@
 
   const APP_VERSION = '0.1.0';
   const BUILD_DATE = new Date().toISOString().split('T')[0];
+
+  function handleOpenUrl(url: string) {
+    openUrl(url).catch(err => console.error('Failed to open URL:', err));
+  }
 </script>
 
 {#if isOpen}
@@ -39,16 +44,16 @@
 
         <!-- Links -->
         <div class="links">
-          <a href="https://github.com/vicrodh/qbz" target="_blank" rel="noopener" class="link-btn">
+          <button class="link-btn" onclick={() => handleOpenUrl('https://github.com/vicrodh/qbz')}>
             <Github size={16} />
             <span>GitHub</span>
             <ExternalLink size={12} />
-          </a>
-          <a href="https://qbz.lol" target="_blank" rel="noopener" class="link-btn">
+          </button>
+          <button class="link-btn" onclick={() => handleOpenUrl('https://qbz.lol')}>
             <Globe size={16} />
             <span>Website</span>
             <ExternalLink size={12} />
-          </a>
+          </button>
         </div>
 
         <!-- Build Info -->
@@ -94,10 +99,10 @@
         <!-- Author -->
         <div class="info-section author-section">
           <h3>Author</h3>
-          <a href="https://github.com/vicrodh" target="_blank" rel="noopener" class="author-link">
+          <button class="author-link" onclick={() => handleOpenUrl('https://github.com/vicrodh')}>
             Victor RH
             <ExternalLink size={12} />
-          </a>
+          </button>
         </div>
 
         <!-- Signature -->
@@ -299,7 +304,10 @@
     gap: 6px;
     font-size: 14px;
     color: var(--text-primary);
-    text-decoration: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
     transition: color 150ms ease;
   }
 
