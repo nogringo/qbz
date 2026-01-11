@@ -6,22 +6,24 @@
     Pause,
     SkipForward,
     Repeat,
+    Repeat1,
     Heart,
     Plus,
-    List,
+    ListMusic,
     Volume2,
     VolumeX,
     Volume1,
     Cast,
-    Mic2
+    Mic2,
+    Maximize2
   } from 'lucide-svelte';
   import QualityBadge from './QualityBadge.svelte';
-  import GlassSurface from './glass/GlassSurface.svelte';
 
   interface Props {
     artwork?: string;
     trackTitle?: string;
     artist?: string;
+    album?: string;
     quality?: string;
     qualityLevel?: number;
     bitDepth?: number;
@@ -46,12 +48,16 @@
     onCast?: () => void;
     onToggleLyrics?: () => void;
     lyricsActive?: boolean;
+    isCastConnected?: boolean;
+    onArtistClick?: () => void;
+    onAlbumClick?: () => void;
   }
 
   let {
     artwork = '',
     trackTitle = '',
     artist = '',
+    album = '',
     quality = '',
     qualityLevel = 0,
     bitDepth,
@@ -75,20 +81,25 @@
     onOpenFullScreen,
     onCast,
     onToggleLyrics,
-    lyricsActive = false
+    lyricsActive = false,
+    isCastConnected = false,
+    onArtistClick,
+    onAlbumClick
   }: Props = $props();
 
   let progressRef: HTMLDivElement;
   let volumeRef: HTMLDivElement;
   let isDraggingProgress = $state(false);
   let isDraggingVolume = $state(false);
+  let showArtworkPreview = $state(false);
 
   const progress = $derived(duration > 0 ? (currentTime / duration) * 100 : 0);
   const hasTrack = $derived(trackTitle !== '');
+  const remainingTime = $derived(Math.max(0, duration - currentTime));
 
   function formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
@@ -129,10 +140,6 @@
     isDraggingVolume = false;
   }
 
-  function handleRepeatClick() {
-    onToggleRepeat?.();
-  }
-
   $effect(() => {
     if (isDraggingProgress || isDraggingVolume) {
       document.addEventListener('mousemove', handleMouseMove);
@@ -145,430 +152,562 @@
   });
 </script>
 
-<GlassSurface rootClassName="now-playing-bar" enableRipple={false} enableDistortion={false}>
-  <!-- Left Section - Track Info -->
-  <div class="track-info">
-    {#if hasTrack}
-      <button class="artwork-btn" onclick={onOpenFullScreen}>
-        {#if artwork}
-          <img src={artwork} alt={trackTitle} />
-        {:else}
-          <div class="artwork-placeholder">
-            <Play size={20} />
-          </div>
-        {/if}
-      </button>
-      <div class="track-details">
-        <div class="track-title">{trackTitle}</div>
-        <div class="track-artist">{artist}</div>
-        <div class="track-quality">
-          <QualityBadge {quality} {bitDepth} {samplingRate} />
-        </div>
+<div class="now-playing-bar">
+  <!-- Top: Full-width Seekbar -->
+  <div class="seekbar-container">
+    <span class="time current">{formatTime(currentTime)}</span>
+    <div
+      class="seekbar"
+      bind:this={progressRef}
+      onmousedown={handleProgressMouseDown}
+      role="slider"
+      tabindex="0"
+      aria-valuenow={currentTime}
+      aria-valuemin={0}
+      aria-valuemax={duration}
+    >
+      <div class="seekbar-track">
+        <div class="seekbar-fill" style="width: {progress}%"></div>
       </div>
-    {:else}
-      <div class="empty-state">
-        <span class="empty-text">No track playing</span>
-      </div>
-    {/if}
+      <div class="seekbar-thumb" style="left: {progress}%"></div>
+    </div>
+    <span class="time remaining">-{formatTime(remainingTime)}</span>
   </div>
 
-  <!-- Center Section - Controls & Progress -->
-  <div class="controls-section">
-    <div class="control-buttons">
+  <!-- Bottom: Controls Row -->
+  <div class="controls-row">
+    <!-- Left: Playback Controls -->
+    <div class="left-section">
       <button
         class="control-btn"
         class:active={isShuffle}
         onclick={onToggleShuffle}
+        title="Shuffle"
       >
-        <Shuffle size={20} />
+        <Shuffle size={18} />
       </button>
-      <button class="control-btn primary" onclick={onSkipBack}>
-        <SkipBack size={24} />
+
+      <button class="control-btn" onclick={onSkipBack} title="Previous">
+        <SkipBack size={20} />
       </button>
-      <button class="control-btn primary play-pause" onclick={onTogglePlay}>
+
+      <button class="control-btn play-btn" onclick={onTogglePlay} title={isPlaying ? 'Pause' : 'Play'}>
         {#if isPlaying}
-          <Pause size={28} />
+          <Pause size={22} />
         {:else}
-          <Play size={28} />
+          <Play size={22} />
         {/if}
       </button>
-      <button class="control-btn primary" onclick={onSkipForward}>
-        <SkipForward size={24} />
+
+      <button class="control-btn" onclick={onSkipForward} title="Next">
+        <SkipForward size={20} />
       </button>
+
       <button
         class="control-btn"
         class:active={repeatMode !== 'off'}
-        onclick={handleRepeatClick}
+        onclick={onToggleRepeat}
+        title={repeatMode === 'off' ? 'Repeat' : repeatMode === 'all' ? 'Repeat All' : 'Repeat One'}
       >
-        <Repeat size={20} />
         {#if repeatMode === 'one'}
-          <span class="repeat-one">1</span>
-        {/if}
-      </button>
-    </div>
-
-    <!-- Progress Bar -->
-    <div class="progress-container">
-      <span class="time">{formatTime(currentTime)}</span>
-      <div
-        class="progress-bar"
-        bind:this={progressRef}
-        onmousedown={handleProgressMouseDown}
-        role="slider"
-        tabindex="0"
-        aria-valuenow={currentTime}
-        aria-valuemin={0}
-        aria-valuemax={duration}
-      >
-        <div class="progress-fill" style="width: {progress}%"></div>
-        <div class="progress-thumb" style="left: {progress}%"></div>
-      </div>
-      <span class="time">{formatTime(duration)}</span>
-    </div>
-  </div>
-
-  <!-- Right Section - Actions & Volume -->
-  <div class="actions-section">
-    <button
-      class="action-btn"
-      class:active={isFavorite}
-      onclick={onToggleFavorite}
-    >
-      <Heart size={20} fill={isFavorite ? 'var(--accent-primary)' : 'none'} color={isFavorite ? 'var(--accent-primary)' : '#888888'} />
-    </button>
-    <button class="action-btn">
-      <Plus size={20} />
-    </button>
-    <button class="action-btn" onclick={onOpenQueue}>
-      <List size={20} />
-    </button>
-    <button class="action-btn" onclick={onCast} title="Cast to device">
-      <Cast size={20} />
-    </button>
-    <button
-      class="action-btn"
-      class:active={lyricsActive}
-      onclick={onToggleLyrics}
-      title="Lyrics"
-    >
-      <Mic2 size={20} />
-    </button>
-
-    <!-- Volume Control -->
-    <div class="volume-control">
-      <button class="action-btn" onclick={() => onVolumeChange?.(volume === 0 ? 70 : 0)}>
-        {#if volume === 0}
-          <VolumeX size={20} />
-        {:else if volume < 50}
-          <Volume1 size={20} />
+          <Repeat1 size={18} />
         {:else}
-          <Volume2 size={20} />
+          <Repeat size={18} />
         {/if}
       </button>
-      <div
-        class="volume-bar"
-        bind:this={volumeRef}
-        onmousedown={handleVolumeMouseDown}
-        role="slider"
-        tabindex="0"
-        aria-valuenow={volume}
-        aria-valuemin={0}
-        aria-valuemax={100}
+
+      <div class="divider"></div>
+
+      <button class="control-btn" title="Add to Playlist">
+        <Plus size={18} />
+      </button>
+
+      <button
+        class="control-btn"
+        class:active={isFavorite}
+        onclick={onToggleFavorite}
+        title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
       >
-        <div class="volume-fill" style="width: {volume}%"></div>
-        <div class="volume-thumb" style="left: {volume}%"></div>
-      </div>
+        <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
+      </button>
     </div>
 
-    <span class="remaining-time">-{formatTime(Math.max(0, duration - currentTime))}</span>
+    <!-- Center: Song Card -->
+    <div class="center-section">
+      {#if hasTrack}
+        <div
+          class="song-card"
+          role="button"
+          tabindex="0"
+          onmouseenter={() => showArtworkPreview = true}
+          onmouseleave={() => showArtworkPreview = false}
+        >
+          <button class="artwork-container" onclick={onOpenFullScreen}>
+            {#if artwork}
+              <img src={artwork} alt={trackTitle} class="artwork" />
+            {:else}
+              <div class="artwork-placeholder">
+                <Play size={16} />
+              </div>
+            {/if}
+
+            <!-- Artwork Preview on Hover -->
+            {#if showArtworkPreview && artwork}
+              <div class="artwork-preview">
+                <img src={artwork} alt={trackTitle} />
+              </div>
+            {/if}
+          </button>
+
+          <div class="song-info">
+            <span class="song-title" title={trackTitle}>{trackTitle}</span>
+            <div class="song-meta">
+              {#if artist}
+                <button class="meta-link" onclick={onArtistClick} title="Go to Artist">
+                  {artist}
+                </button>
+              {/if}
+              {#if artist && album}
+                <span class="meta-separator">·</span>
+              {/if}
+              {#if album}
+                <button class="meta-link" onclick={onAlbumClick} title="Go to Album">
+                  {album}
+                </button>
+              {/if}
+            </div>
+          </div>
+
+          <div class="quality-indicator">
+            <QualityBadge {quality} {bitDepth} {samplingRate} />
+          </div>
+        </div>
+      {:else}
+        <div class="empty-state">
+          <span>No track playing</span>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Right: Actions & Volume -->
+    <div class="right-section">
+      <button
+        class="control-btn"
+        class:cast-active={isCastConnected}
+        onclick={onCast}
+        title={isCastConnected ? 'Casting - Click to manage' : 'Cast to device'}
+      >
+        <Cast size={18} />
+      </button>
+
+      <button
+        class="control-btn"
+        class:active={lyricsActive}
+        onclick={onToggleLyrics}
+        title="Lyrics"
+      >
+        <Mic2 size={18} />
+      </button>
+
+      <button class="control-btn" onclick={onOpenQueue} title="Queue">
+        <ListMusic size={18} />
+      </button>
+
+      <button class="control-btn" onclick={onOpenFullScreen} title="Full Screen">
+        <Maximize2 size={18} />
+      </button>
+
+      <div class="divider"></div>
+
+      <!-- Volume Control -->
+      <div class="volume-control">
+        <button
+          class="control-btn volume-btn"
+          onclick={() => onVolumeChange?.(volume === 0 ? 70 : 0)}
+          title={volume === 0 ? 'Unmute' : 'Mute'}
+        >
+          {#if volume === 0}
+            <VolumeX size={18} />
+          {:else if volume < 50}
+            <Volume1 size={18} />
+          {:else}
+            <Volume2 size={18} />
+          {/if}
+        </button>
+
+        <div
+          class="volume-slider"
+          bind:this={volumeRef}
+          onmousedown={handleVolumeMouseDown}
+          role="slider"
+          tabindex="0"
+          aria-valuenow={volume}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div class="volume-track">
+            <div class="volume-fill" style="width: {volume}%"></div>
+          </div>
+          <div class="volume-thumb" style="left: {volume}%"></div>
+        </div>
+      </div>
+    </div>
   </div>
-</GlassSurface>
+</div>
 
 <style>
-  :global(.now-playing-bar) {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    top: auto !important;
-    height: 80px;
+  .now-playing-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 88px;
+    background: linear-gradient(to top, rgba(18, 18, 20, 0.98) 0%, rgba(24, 24, 28, 0.95) 100%);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
     z-index: 100;
-    --glass-bg: rgba(25, 25, 30, 0.88);
-    --glass-blur: 20px;
-    --glass-radius: 0;
-    --glass-border: rgba(255, 255, 255, 0.06);
-    --glass-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
-  }
-
-  :global(.now-playing-bar .glass-content) {
     display: flex;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-    padding: 0 16px;
-    gap: 24px;
+    flex-direction: column;
   }
 
-  /* Track Info */
-  .track-info {
-    width: 240px;
+  /* ===== Seekbar ===== */
+  .seekbar-container {
     display: flex;
     align-items: center;
     gap: 12px;
+    padding: 0 16px;
+    height: 24px;
+    flex-shrink: 0;
   }
 
-  .artwork-btn {
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    transition: opacity 150ms ease;
-  }
-
-  .artwork-btn:hover {
-    opacity: 0.8;
-  }
-
-  .artwork-btn img {
-    width: 56px;
-    height: 56px;
-    border-radius: 4px;
-    object-fit: cover;
-  }
-
-  .artwork-placeholder {
-    width: 56px;
-    height: 56px;
-    border-radius: 4px;
-    background: var(--bg-tertiary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-  }
-
-  .empty-state {
-    display: flex;
-    align-items: center;
-    height: 56px;
-  }
-
-  .empty-text {
-    font-size: 14px;
-    color: var(--text-muted);
-  }
-
-  .track-details {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .track-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .track-artist {
-    font-size: 13px;
-    color: var(--text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .track-quality {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 2px;
-  }
-
-  .quality-text {
+  .time {
     font-size: 11px;
-    color: #666666;
+    font-family: var(--font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.5);
+    min-width: 40px;
   }
 
-  /* Controls */
-  .controls-section {
+  .time.current {
+    text-align: right;
+  }
+
+  .time.remaining {
+    text-align: left;
+  }
+
+  .seekbar {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .control-buttons {
+    height: 24px;
     display: flex;
     align-items: center;
-    gap: 16px;
-  }
-
-  .control-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
     cursor: pointer;
-    transition: color 150ms ease, transform 100ms ease;
     position: relative;
   }
 
+  .seekbar-track {
+    width: 100%;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .seekbar-fill {
+    height: 100%;
+    background: var(--accent-primary, #6366f1);
+    border-radius: 2px;
+    transition: width 100ms linear;
+  }
+
+  .seekbar-thumb {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: opacity 150ms ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .seekbar:hover .seekbar-thumb {
+    opacity: 1;
+  }
+
+  .seekbar:hover .seekbar-track {
+    height: 4px;
+  }
+
+  /* ===== Controls Row ===== */
+  .controls-row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 0 16px 8px 16px;
+    gap: 16px;
+  }
+
+  .left-section,
+  .right-section {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .left-section {
+    min-width: 280px;
+  }
+
+  .right-section {
+    min-width: 280px;
+    justify-content: flex-end;
+  }
+
+  .center-section {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .divider {
+    width: 1px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 0 8px;
+  }
+
+  /* ===== Control Buttons ===== */
+  .control-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
   .control-btn:hover {
-    color: var(--text-primary);
+    color: white;
+    background: rgba(255, 255, 255, 0.08);
   }
 
   .control-btn:active {
     transform: scale(0.95);
   }
 
-  .control-btn.primary {
-    color: var(--text-primary);
-  }
-
-  .control-btn.primary:hover {
-    color: var(--accent-primary);
-  }
-
   .control-btn.active {
-    color: var(--accent-primary);
+    color: var(--accent-primary, #6366f1);
   }
 
-  .repeat-one {
-    position: absolute;
-    font-size: 10px;
-    font-weight: 700;
-    top: -8px;
-    right: -4px;
+  .control-btn.cast-active {
+    color: #22c55e;
+    animation: cast-pulse 2s ease-in-out infinite;
   }
 
-  .control-btn.play-pause {
-    margin: 0 8px;
+  @keyframes cast-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
   }
 
-  /* Progress Bar */
-  .progress-container {
-    width: 100%;
-    max-width: 600px;
+  .play-btn {
+    width: 36px;
+    height: 36px;
+    color: white;
+    margin: 0 4px;
+  }
+
+  .play-btn:hover {
+    color: var(--accent-primary, #6366f1);
+  }
+
+  /* ===== Song Card ===== */
+  .song-card {
     display: flex;
     align-items: center;
     gap: 12px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    max-width: 500px;
+    min-width: 320px;
   }
 
-  .time {
-    font-size: 12px;
-    color: #666666;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .progress-bar {
-    flex: 1;
-    height: 4px;
-    background-color: #333333;
-    border-radius: 9999px;
+  .artwork-container {
     position: relative;
-    cursor: pointer;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background-color: var(--accent-primary);
-    border-radius: 9999px;
-    transition: width 50ms linear;
-  }
-
-  .progress-thumb {
-    position: absolute;
-    top: 50%;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background-color: white;
-    transform: translate(-50%, -50%);
-    opacity: 0;
-    transition: opacity 150ms ease;
-  }
-
-  .progress-bar:hover .progress-thumb {
-    opacity: 1;
-  }
-
-  /* Actions */
-  .actions-section {
-    width: 200px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 12px;
-  }
-
-  .action-btn {
     background: none;
     border: none;
-    color: var(--text-muted);
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 0;
+  }
+
+  .artwork {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .artwork-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .artwork-preview {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    pointer-events: none;
+    animation: preview-appear 200ms ease;
+  }
+
+  .artwork-preview img {
+    width: 200px;
+    height: 200px;
+    border-radius: 8px;
+    object-fit: cover;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  @keyframes preview-appear {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(8px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
+  }
+
+  .song-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .song-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .song-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .meta-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
     cursor: pointer;
     transition: color 150ms ease;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .action-btn:hover {
-    color: var(--text-primary);
+  .meta-link:hover {
+    color: white;
+    text-decoration: underline;
   }
 
-  .action-btn.active {
-    color: var(--accent-primary);
+  .meta-separator {
+    color: rgba(255, 255, 255, 0.3);
   }
 
-  /* Volume */
+  .quality-indicator {
+    flex-shrink: 0;
+  }
+
+  .empty-state {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  /* ===== Volume Control ===== */
   .volume-control {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-left: 8px;
   }
 
-  .volume-bar {
-    width: 80px;
-    height: 4px;
-    background-color: #333333;
-    border-radius: 9999px;
-    position: relative;
+  .volume-slider {
+    width: 100px;
+    height: 24px;
+    display: flex;
+    align-items: center;
     cursor: pointer;
+    position: relative;
+  }
+
+  .volume-track {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    position: relative;
+    overflow: visible;
   }
 
   .volume-fill {
     height: 100%;
-    background-color: var(--accent-primary);
-    border-radius: 9999px;
+    background: var(--accent-primary, #6366f1);
+    border-radius: 2px;
+    position: relative;
+    z-index: 1;
   }
 
   .volume-thumb {
     position: absolute;
     top: 50%;
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
+    background: white;
     border-radius: 50%;
-    background-color: white;
     transform: translate(-50%, -50%);
     opacity: 0;
     transition: opacity 150ms ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    z-index: 2;
   }
 
-  .volume-bar:hover .volume-thumb {
+  .volume-slider:hover .volume-thumb {
     opacity: 1;
-  }
-
-  .remaining-time {
-    font-size: 12px;
-    color: #666666;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    margin-left: 8px;
   }
 </style>
