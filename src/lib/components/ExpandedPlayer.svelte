@@ -93,7 +93,9 @@
 
   // Ensure lyrics updates run when ExpandedPlayer is open with synced lyrics
   $effect(() => {
+    console.log('[ExpandedPlayer] Effect check:', { isOpen, isPlaying, lyricsSynced, lyricsActiveIndex, hasLyrics: lyricsLines.length > 0 });
     if (isOpen && isPlaying && lyricsSynced) {
+      console.log('[ExpandedPlayer] Starting lyrics updates');
       startActiveLineUpdates();
     }
   });

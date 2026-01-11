@@ -33,6 +33,11 @@
   let prevActiveIndex = -1;
   let hasInitialSync = false;
 
+  // Debug logging
+  $effect(() => {
+    console.log('[LyricsLines] Props:', { linesCount: lines.length, activeIndex, activeProgress: activeProgress.toFixed(2), isSynced, immersive });
+  });
+
   // Calculate opacity based on distance from active line
   function getLineOpacity(index: number, active: number): number {
     if (!dimInactive || active < 0) return 1;
