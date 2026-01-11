@@ -83,6 +83,7 @@
 
   // Loading states for progressive render
   let isInitializing = $state(true);
+  let isOverlayVisible = $state(true); // Overlay that fades out when ready
   let error = $state<string | null>(null);
   let loadingNewReleases = $state(true);
   let loadingPressAwards = $state(true);
@@ -93,6 +94,10 @@
   let loadingContinueTracks = $state(true);
   let loadingTopArtists = $state(true);
   let loadingFavoriteAlbums = $state(true);
+
+  // Track when we have enough content to show
+  let sectionsReady = $state(0);
+  const MIN_SECTIONS_BEFORE_SHOW = 2; // Wait for at least 2 sections
 
   // Featured albums (from Qobuz editorial)
   let newReleases = $state<AlbumCardData[]>([]);
@@ -120,6 +125,17 @@
     || topArtists.length > 0
     || favoriteAlbums.length > 0
   );
+
+  // Mark a section as ready and check if we can hide overlay
+  function markSectionReady() {
+    sectionsReady++;
+    if (sectionsReady >= MIN_SECTIONS_BEFORE_SHOW && isOverlayVisible) {
+      // Small delay to ensure DOM is ready, then fade out
+      setTimeout(() => {
+        isOverlayVisible = false;
+      }, 100);
+    }
+  }
 
   onMount(() => {
     // Subscribe to home settings changes
@@ -256,6 +272,8 @@
 
   async function loadHome() {
     isInitializing = true;
+    isOverlayVisible = true;
+    sectionsReady = 0;
     error = null;
     loadingNewReleases = true;
     loadingPressAwards = true;
@@ -274,8 +292,7 @@
       fetchFeaturedAlbums('new-releases', LIMITS.featuredAlbums).then(albums => {
         newReleases = albums;
         loadingNewReleases = false;
-        // Hide initializing as soon as we have some content
-        if (albums.length > 0) isInitializing = false;
+        if (albums.length > 0) markSectionReady();
       });
     } else {
       loadingNewReleases = false;
@@ -285,6 +302,7 @@
       fetchFeaturedAlbums('press-awards', LIMITS.featuredAlbums).then(albums => {
         pressAwards = albums;
         loadingPressAwards = false;
+        if (albums.length > 0) markSectionReady();
       });
     } else {
       loadingPressAwards = false;
@@ -294,6 +312,7 @@
       fetchFeaturedAlbums('most-streamed', LIMITS.featuredAlbums).then(albums => {
         mostStreamed = albums;
         loadingMostStreamed = false;
+        if (albums.length > 0) markSectionReady();
       });
     } else {
       loadingMostStreamed = false;
@@ -303,6 +322,7 @@
       fetchFeaturedAlbums('qobuzissimes', LIMITS.featuredAlbums).then(albums => {
         qobuzissimes = albums;
         loadingQobuzissimes = false;
+        if (albums.length > 0) markSectionReady();
       });
     } else {
       loadingQobuzissimes = false;
@@ -312,6 +332,7 @@
       fetchFeaturedAlbums('editor-picks', LIMITS.featuredAlbums).then(albums => {
         editorPicks = albums;
         loadingEditorPicks = false;
+        if (albums.length > 0) markSectionReady();
       });
     } else {
       loadingEditorPicks = false;
@@ -326,13 +347,14 @@
         limitFavorites: Math.max(LIMITS.favoriteAlbums, LIMITS.favoriteTracks)
       });
 
-      // Seeds are ready, hide initializing state - show sections with loading
+      // Seeds are ready, can start showing content
       isInitializing = false;
 
       // Load each section in parallel for progressive rendering
       const continueTracksPromise = fetchTracks(seeds.continueListeningTrackIds).then(tracks => {
         continueTracks = tracks;
         loadingContinueTracks = false;
+        if (tracks.length > 0) markSectionReady();
         return tracks;
       });
 
@@ -347,6 +369,7 @@
       fetchAlbums(recentAlbumIds.slice(0, LIMITS.recentAlbums)).then(albums => {
         recentAlbums = albums;
         loadingRecentAlbums = false;
+        if (albums.length > 0) markSectionReady();
       });
 
       // Favorite albums
@@ -358,6 +381,7 @@
         const albums = await fetchAlbums(favoriteAlbumIds.slice(0, LIMITS.favoriteAlbums));
         favoriteAlbums = albums;
         loadingFavoriteAlbums = false;
+        if (albums.length > 0) markSectionReady();
       });
 
       // Top artists
@@ -369,12 +393,14 @@
       fetchArtists(artistSeeds.slice(0, LIMITS.topArtists)).then(artists => {
         topArtists = artists;
         loadingTopArtists = false;
+        if (artists.length > 0) markSectionReady();
       });
 
     } catch (err) {
       console.error('Failed to load home data:', err);
       error = String(err);
       isInitializing = false;
+      isOverlayVisible = false;
       loadingRecentAlbums = false;
       loadingContinueTracks = false;
       loadingTopArtists = false;
@@ -384,6 +410,19 @@
 </script>
 
 <div class="home-view">
+  <!-- Loading Overlay - fades out when content is ready -->
+  {#if isOverlayVisible}
+    <div class="loading-overlay" class:fade-out={!isInitializing && sectionsReady >= MIN_SECTIONS_BEFORE_SHOW}>
+      <div class="loading-content">
+        <div class="loading-icon">
+          <Loader2 size={36} class="spinner" />
+        </div>
+        <h2>Loading your home</h2>
+        <p>Building recommendations from your listening history.</p>
+      </div>
+    </div>
+  {/if}
+
   <!-- Header with greeting and settings -->
   <div class="home-header">
     {#if homeSettings.greeting.enabled}
@@ -396,7 +435,7 @@
     </button>
   </div>
 
-  {#if isInitializing}
+  {#if isInitializing && !isOverlayVisible}
     <div class="home-state">
       <div class="state-icon loading">
         <Loader2 size={36} class="spinner" />
@@ -604,6 +643,61 @@
   .home-view {
     width: 100%;
     padding-bottom: 24px;
+    position: relative;
+  }
+
+  /* Loading Overlay */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 300ms ease-out;
+  }
+
+  .loading-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .loading-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary, #6366f1) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+  }
+
+  .loading-content h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .loading-content p {
+    font-size: 15px;
+    color: var(--text-muted);
+    margin: 0;
+    max-width: 360px;
+  }
+
+  .loading-icon :global(.spinner) {
+    animation: spin 1s linear infinite;
   }
 
   .home-header {

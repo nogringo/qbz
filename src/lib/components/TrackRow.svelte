@@ -97,14 +97,22 @@
     <div class="track-quality">{quality}</div>
   {/if}
 
-  <!-- Favorite Indicator -->
-  <div class="favorite-indicator" class:is-favorite={isFavorite}>
+  <!-- Favorite Button -->
+  <button
+    class="favorite-btn"
+    class:is-favorite={isFavorite}
+    onclick={(e) => {
+      e.stopPropagation();
+      menuActions?.onAddFavorite?.();
+    }}
+    title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+  >
     {#if isFavorite}
       <Heart size={14} fill="var(--accent-primary)" color="var(--accent-primary)" />
     {:else}
       <Heart size={14} color="var(--text-muted)" />
     {/if}
-  </div>
+  </button>
 
   <!-- Download Indicator -->
   {#if !hideDownload}
@@ -251,24 +259,35 @@
     text-align: right;
   }
 
-  .favorite-indicator {
+  .favorite-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
     opacity: 0.3;
-    transition: opacity 150ms ease;
+    transition: opacity 150ms ease, background-color 150ms ease;
   }
 
-  .favorite-indicator.is-favorite {
+  .favorite-btn.is-favorite {
     opacity: 1;
   }
 
-  .track-row:hover .favorite-indicator {
+  .favorite-btn:hover {
+    opacity: 1;
+    background-color: var(--bg-tertiary);
+  }
+
+  .track-row:hover .favorite-btn {
     opacity: 0.6;
   }
 
-  .track-row:hover .favorite-indicator.is-favorite {
+  .track-row:hover .favorite-btn.is-favorite,
+  .track-row:hover .favorite-btn:hover {
     opacity: 1;
   }
 
