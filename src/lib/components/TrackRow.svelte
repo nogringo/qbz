@@ -24,6 +24,7 @@
     downloadProgress?: number;
     hideDownload?: boolean;
     hideFavorite?: boolean;
+    compact?: boolean; // Compact mode: smaller height, artist as column
     onPlay?: () => void;
     onDownload?: () => void;
     onRemoveDownload?: () => void;
@@ -54,6 +55,7 @@
     downloadProgress = 0,
     hideDownload = false,
     hideFavorite = false,
+    compact = false,
     onPlay,
     onDownload,
     onRemoveDownload,
@@ -91,6 +93,7 @@
   class="track-row"
   class:playing={isPlaying}
   class:hovered={isHovered && !isPlaying}
+  class:compact
   onmouseenter={() => (isHovered = true)}
   onmouseleave={() => (isHovered = false)}
   onclick={onPlay}
@@ -116,10 +119,15 @@
   <!-- Track Info -->
   <div class="track-info">
     <div class="track-title" class:active={isPlaying}>{title}</div>
-    {#if artist}
+    {#if artist && !compact}
       <div class="track-artist">{artist}</div>
     {/if}
   </div>
+
+  <!-- Artist Column (compact mode) -->
+  {#if artist && compact}
+    <div class="track-artist-column">{artist}</div>
+  {/if}
 
   <!-- Duration -->
   <div class="track-duration">{duration}</div>
@@ -163,7 +171,7 @@
       onPlayNow={playNowAction}
       onPlayNext={menuActions?.onPlayNext}
       onPlayLater={menuActions?.onPlayLater}
-      onAddFavorite={handleToggleFavorite}
+      onAddFavorite={trackId !== undefined ? () => toggleTrackFavorite(trackId) : undefined}
       onAddToPlaylist={menuActions?.onAddToPlaylist}
       onShareQobuz={menuActions?.onShareQobuz}
       onShareSonglink={menuActions?.onShareSonglink}
@@ -194,6 +202,16 @@
 
   .track-row.playing {
     background-color: var(--bg-secondary);
+  }
+
+  .track-row.compact {
+    height: 44px;
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  .track-row.compact .track-number {
+    width: 32px;
   }
 
   .track-number {
@@ -267,6 +285,16 @@
   }
 
   .track-artist {
+    font-size: 13px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .track-artist-column {
+    width: 180px;
+    flex-shrink: 0;
     font-size: 13px;
     color: var(--text-muted);
     overflow: hidden;

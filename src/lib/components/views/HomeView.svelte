@@ -593,6 +593,7 @@
                 duration={track.duration}
                 quality={getTrackQuality(track)}
                 hideDownload={true}
+                compact={true}
                 onPlay={() => onTrackPlay?.(track)}
                 menuActions={{
                   onPlayNow: () => onTrackPlay?.(track)
