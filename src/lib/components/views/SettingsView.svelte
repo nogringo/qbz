@@ -361,17 +361,24 @@
     }
   }
 
+  // Get current raw device name for reinit
+  function getCurrentRawDevice(): string | null {
+    const rawName = deviceNameMap.get(outputDevice) ?? outputDevice;
+    return rawName === 'System Default' ? null : rawName;
+  }
+
   async function handleOutputDeviceChange(prettyName: string) {
     outputDevice = prettyName;
     // Convert pretty name back to raw name for saving
     const rawName = deviceNameMap.get(prettyName) ?? prettyName;
+    const deviceToUse = rawName === 'System Default' ? null : rawName;
     try {
-      await invoke('set_audio_output_device', {
-        device: rawName === 'System Default' ? null : rawName
-      });
-      console.log('Audio output device saved:', rawName, '(displayed as:', prettyName, ')');
+      await invoke('set_audio_output_device', { device: deviceToUse });
+      // Reinitialize audio to apply the change immediately
+      await invoke('reinit_audio_device', { device: deviceToUse });
+      console.log('Audio output device changed and reinitialized:', rawName, '(displayed as:', prettyName, ')');
     } catch (err) {
-      console.error('Failed to save audio output device:', err);
+      console.error('Failed to change audio output device:', err);
     }
   }
 
@@ -379,9 +386,11 @@
     exclusiveMode = enabled;
     try {
       await invoke('set_audio_exclusive_mode', { enabled });
-      console.log('Exclusive mode saved:', enabled);
+      // Reinitialize audio to apply/release exclusive mode immediately
+      await invoke('reinit_audio_device', { device: getCurrentRawDevice() });
+      console.log('Exclusive mode changed and audio reinitialized:', enabled);
     } catch (err) {
-      console.error('Failed to save exclusive mode:', err);
+      console.error('Failed to change exclusive mode:', err);
     }
   }
 
@@ -389,9 +398,11 @@
     dacPassthrough = enabled;
     try {
       await invoke('set_audio_dac_passthrough', { enabled });
-      console.log('DAC passthrough saved:', enabled);
+      // DAC passthrough may also require reinit for proper effect
+      await invoke('reinit_audio_device', { device: getCurrentRawDevice() });
+      console.log('DAC passthrough changed and audio reinitialized:', enabled);
     } catch (err) {
-      console.error('Failed to save DAC passthrough:', err);
+      console.error('Failed to change DAC passthrough:', err);
     }
   }
 

@@ -34,6 +34,8 @@ enum AudioCommand {
     SetVolume(f32),
     /// Seek to position in seconds
     Seek(u64),
+    /// Reinitialize audio device (releases and re-acquires)
+    ReinitDevice { device_name: Option<String> },
 }
 
 /// Event payload for playback state updates
@@ -197,84 +199,81 @@ impl Player {
                     .unwrap_or(false)
             };
 
-            // Find the requested device or use default
-            let device = if let Some(ref name) = device_name {
-                log::info!("Looking for audio device: {}", name);
-                let found = host.output_devices()
-                    .ok()
-                    .and_then(|mut devices| {
-                        devices.find(|d| d.name().ok().as_ref() == Some(name))
-                    });
+            // Helper to find and initialize audio device
+            let init_device = |name: &Option<String>, state: &SharedState| -> Option<(OutputStream, rodio::OutputStreamHandle)> {
+                let device = if let Some(ref name) = name {
+                    log::info!("Looking for audio device: {}", name);
+                    let found = host.output_devices()
+                        .ok()
+                        .and_then(|mut devices| {
+                            devices.find(|d| d.name().ok().as_ref() == Some(name))
+                        });
 
-                // Validate the found device
-                match found {
-                    Some(d) if is_device_valid(&d) => {
-                        log::info!("Found and validated device: {}", name);
-                        Some(d)
+                    match found {
+                        Some(d) if is_device_valid(&d) => {
+                            log::info!("Found and validated device: {}", name);
+                            Some(d)
+                        }
+                        Some(_) => {
+                            log::warn!("Device '{}' found but has no valid output configs, using default", name);
+                            host.default_output_device()
+                        }
+                        None => {
+                            log::warn!("Device '{}' not found, using default", name);
+                            host.default_output_device()
+                        }
                     }
-                    Some(_) => {
-                        log::warn!("Device '{}' found but has no valid output configs, using default", name);
-                        host.default_output_device()
+                } else {
+                    log::info!("Using default audio device");
+                    host.default_output_device()
+                };
+
+                let device = match device {
+                    Some(d) => {
+                        if let Ok(name) = d.name() {
+                            log::info!("Using audio device: {}", name);
+                            state.set_current_device(Some(name));
+                        }
+                        d
                     }
                     None => {
-                        log::warn!("Device '{}' not found, using default", name);
-                        host.default_output_device()
+                        log::error!("No audio output device available");
+                        state.set_current_device(None);
+                        return None;
                     }
-                }
-            } else {
-                log::info!("Using default audio device");
-                host.default_output_device()
-            };
+                };
 
-            let device = match device {
-                Some(d) => {
-                    if let Ok(name) = d.name() {
-                        log::info!("Using audio device: {}", name);
-                        thread_state.set_current_device(Some(name));
+                match OutputStream::try_from_device(&device) {
+                    Ok(s) => {
+                        log::info!("Audio output initialized successfully");
+                        Some(s)
                     }
-                    d
-                }
-                None => {
-                    log::error!("No audio output device available");
-                    thread_state.set_current_device(None);
-                    // Keep thread alive to receive commands
-                    loop {
-                        match rx.recv() {
-                            Ok(_) => log::warn!("Audio command received but no device available"),
-                            Err(_) => break,
-                        }
-                    }
-                    return;
-                }
-            };
-
-            // Create output stream on the selected device
-            let (_stream, stream_handle) = match OutputStream::try_from_device(&device) {
-                Ok(s) => {
-                    log::info!("Audio output initialized successfully");
-                    s
-                }
-                Err(e) => {
-                    log::error!("Failed to create audio output on device: {}. Trying default...", e);
-                    // Fallback to default
-                    match OutputStream::try_default() {
-                        Ok(s) => {
-                            log::info!("Fallback to default audio output succeeded");
-                            s
-                        }
-                        Err(e2) => {
-                            log::error!("Failed to create default audio output: {}", e2);
-                            loop {
-                                match rx.recv() {
-                                    Ok(_) => log::warn!("Audio command received but audio output is unavailable"),
-                                    Err(_) => break,
-                                }
+                    Err(e) => {
+                        log::error!("Failed to create audio output on device: {}. Trying default...", e);
+                        match OutputStream::try_default() {
+                            Ok(s) => {
+                                log::info!("Fallback to default audio output succeeded");
+                                Some(s)
                             }
-                            return;
+                            Err(e2) => {
+                                log::error!("Failed to create default audio output: {}", e2);
+                                state.set_current_device(None);
+                                None
+                            }
                         }
                     }
                 }
             };
+
+            // Initialize audio device
+            let mut current_device_name = device_name.clone();
+            let mut stream_opt: Option<(OutputStream, rodio::OutputStreamHandle)> =
+                init_device(&current_device_name, &thread_state);
+
+            if stream_opt.is_none() {
+                // Wait for ReinitDevice command
+                log::warn!("No audio device available, waiting for reinit command...");
+            }
 
             let mut current_sink: Option<Sink> = None;
             // Store audio data for seeking (we need to re-decode from the beginning)
@@ -291,6 +290,12 @@ impl Player {
                     Ok(AudioCommand::Play { data, track_id, duration_secs }) => {
                         log::info!("Audio thread: playing track {}", track_id);
 
+                        // Check if we have an audio stream
+                        let Some(ref stream) = stream_opt else {
+                            log::error!("Audio thread: no audio device available");
+                            continue;
+                        };
+
                         // Stop existing playback
                         if let Some(sink) = current_sink.take() {
                             sink.stop();
@@ -300,7 +305,7 @@ impl Player {
                         current_audio_data = Some(data.clone());
 
                         // Create new sink
-                        let sink = match Sink::try_new(&stream_handle) {
+                        let sink = match Sink::try_new(&stream.1) {
                             Ok(s) => {
                                 consecutive_sink_failures = 0; // Reset on success
                                 s
@@ -391,6 +396,11 @@ impl Player {
                             continue;
                         };
 
+                        let Some(ref stream) = stream_opt else {
+                            log::error!("Audio thread: cannot seek - no audio device available");
+                            continue;
+                        };
+
                         log::info!("Audio thread: seeking to {}s", position_secs);
 
                         // Stop current sink
@@ -399,7 +409,7 @@ impl Player {
                         }
 
                         // Create new sink
-                        let sink = match Sink::try_new(&stream_handle) {
+                        let sink = match Sink::try_new(&stream.1) {
                             Ok(s) => s,
                             Err(e) => {
                                 log::error!("Failed to create sink for seek: {}", e);
@@ -441,6 +451,39 @@ impl Player {
 
                         current_sink = Some(sink);
                         log::info!("Audio thread: seeked to {}s (was_playing: {})", position_secs, was_playing);
+                    }
+                    Ok(AudioCommand::ReinitDevice { device_name: new_device }) => {
+                        log::info!("Audio thread: reinitializing device (new: {:?})", new_device);
+
+                        // Stop any current playback
+                        if let Some(sink) = current_sink.take() {
+                            sink.stop();
+                        }
+
+                        // Drop the current stream to release the device
+                        // This is the key step - dropping releases exclusive access
+                        drop(stream_opt.take());
+                        log::info!("Audio thread: previous stream dropped, device released");
+
+                        // Small delay to let the system release the device
+                        std::thread::sleep(Duration::from_millis(100));
+
+                        // Reinitialize with new device
+                        current_device_name = new_device;
+                        stream_opt = init_device(&current_device_name, &thread_state);
+
+                        if stream_opt.is_some() {
+                            log::info!("Audio thread: device reinitialized successfully");
+                            consecutive_sink_failures = 0;
+                        } else {
+                            log::error!("Audio thread: failed to reinitialize device");
+                        }
+
+                        // Clear playback state
+                        thread_state.is_playing.store(false, Ordering::SeqCst);
+                        thread_state.position.store(0, Ordering::SeqCst);
+                        thread_state.playback_start_millis.store(0, Ordering::SeqCst);
+                        current_audio_data = None;
                     }
                     Err(RecvTimeoutError::Timeout) => {
                         // Check if sink is empty (playback finished)
@@ -596,6 +639,14 @@ impl Player {
         self.tx
             .send(AudioCommand::Seek(clamped_position))
             .map_err(|e| format!("Failed to send seek command: {}", e))
+    }
+
+    /// Reinitialize audio device (releases and re-acquires the device)
+    /// Use this when changing audio settings like exclusive mode
+    pub fn reinit_device(&self, device_name: Option<String>) -> Result<(), String> {
+        self.tx
+            .send(AudioCommand::ReinitDevice { device_name })
+            .map_err(|e| format!("Failed to send reinit command: {}", e))
     }
 
     /// Get current playback state with real-time position

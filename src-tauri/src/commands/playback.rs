@@ -348,6 +348,17 @@ pub fn get_audio_output_status(
     })
 }
 
+/// Reinitialize audio device (releases and re-acquires)
+/// Call this when changing audio settings like exclusive mode or output device
+#[tauri::command]
+pub fn reinit_audio_device(
+    device: Option<String>,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    log::info!("Command: reinit_audio_device {:?}", device);
+    state.player.reinit_device(device)
+}
+
 /// PipeWire/PulseAudio sink information
 #[derive(serde::Serialize, Clone)]
 pub struct PipewireSink {
