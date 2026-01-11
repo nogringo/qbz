@@ -442,7 +442,7 @@
     display: flex;
     align-items: center;
     padding: 6px 16px 26px 16px;
-    gap: 16px;
+    gap: 50px;
   }
 
   .left-section,
@@ -450,15 +450,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-  }
-
-  .left-section {
-    min-width: 280px;
-  }
-
-  .right-section {
-    min-width: 280px;
-    justify-content: flex-end;
+    flex-shrink: 0;
   }
 
   .center-section {
@@ -526,8 +518,9 @@
     padding: 8px 12px;
     background: rgba(255, 255, 255, 0.04);
     border-radius: 8px;
-    max-width: 700px;
     min-width: 580px;
+    flex: 1;
+    max-width: 800px;
   }
 
   .artwork-container {
