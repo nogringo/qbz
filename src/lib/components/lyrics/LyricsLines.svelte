@@ -117,15 +117,12 @@
       <div class="lyrics-spacer"></div>
     {/if}
 
-    {#each lines as line, index}
-      {@const isActive = isSynced && index === activeIndex}
-      {@const isPast = isSynced && index < activeIndex}
-      {@const opacity = isSynced ? getLineOpacity(index, activeIndex) : 1}
+    {#each lines as line, index (index)}
       <div
         class="lyrics-line"
-        class:active={isActive}
-        class:past={isPast}
-        style="--line-opacity: {opacity}; {isActive ? `--line-progress: ${Math.max(0, Math.min(1, activeProgress))}` : ''}"
+        class:active={isSynced && index === activeIndex}
+        class:past={isSynced && index < activeIndex}
+        style="--line-opacity: {isSynced ? getLineOpacity(index, activeIndex) : 1}; {isSynced && index === activeIndex ? `--line-progress: ${Math.max(0, Math.min(1, activeProgress))}` : ''}"
         data-line-index={index}
       >
         <span class="line-text">{line.text}</span>
