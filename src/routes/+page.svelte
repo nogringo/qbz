@@ -380,6 +380,8 @@
       artwork,
       duration: track.durationSeconds,
       quality,
+      bitDepth: track.bitDepth,
+      samplingRate: track.samplingRate,
       albumId: selectedAlbum?.id,
       artistId: track.artistId
     });
@@ -742,6 +744,8 @@
       artwork: track.albumArt || '',
       duration: track.durationSeconds,
       quality,
+      bitDepth: track.bitDepth,
+      samplingRate: track.samplingRate,
       albumId: track.albumId,
       artistId: track.artistId
     });
@@ -765,6 +769,8 @@
       artwork,
       duration: track.duration_secs,
       quality,
+      bitDepth: track.bit_depth,
+      samplingRate: track.sample_rate ? Math.round(track.sample_rate / 1000) : undefined,
       isLocal: true
     }, { isLocal: true });
   }
