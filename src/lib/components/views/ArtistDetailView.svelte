@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
-  import { ArrowLeft, User, ChevronDown, ChevronUp, Play, Music } from 'lucide-svelte';
+  import { ArrowLeft, User, ChevronDown, ChevronUp, Play, Music, Heart } from 'lucide-svelte';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackMenu from '../TrackMenu.svelte';
 
@@ -97,10 +97,50 @@
   let imageError = $state(false);
   let topTracks = $state<Track[]>([]);
   let tracksLoading = $state(false);
+  let isFavorite = $state(false);
+  let isFavoriteLoading = $state(false);
 
   onMount(() => {
     loadTopTracks();
+    checkFavoriteStatus();
   });
+
+  async function checkFavoriteStatus() {
+    try {
+      const response = await invoke<{ artists?: { items: Array<{ id: number }> } }>('get_favorites', {
+        favType: 'artists',
+        limit: 500,
+        offset: 0
+      });
+      if (response.artists?.items) {
+        isFavorite = response.artists.items.some(item => item.id === artist.id);
+      }
+    } catch (err) {
+      console.error('Failed to check artist favorite status:', err);
+    }
+  }
+
+  async function toggleFavorite() {
+    if (isFavoriteLoading) return;
+
+    isFavoriteLoading = true;
+    const wasFavorite = isFavorite;
+
+    try {
+      if (wasFavorite) {
+        await invoke('remove_favorite', { favType: 'artist', itemId: String(artist.id) });
+        isFavorite = false;
+      } else {
+        await invoke('add_favorite', { favType: 'artist', itemId: String(artist.id) });
+        isFavorite = true;
+      }
+    } catch (err) {
+      console.error('Failed to toggle artist favorite:', err);
+      isFavorite = wasFavorite; // Rollback on error
+    } finally {
+      isFavoriteLoading = false;
+    }
+  }
 
   async function loadTopTracks() {
     tracksLoading = true;
@@ -207,7 +247,22 @@
 
     <!-- Artist Info -->
     <div class="artist-info">
-      <h1 class="artist-name">{artist.name}</h1>
+      <div class="artist-name-row">
+        <h1 class="artist-name">{artist.name}</h1>
+        <button
+          class="favorite-btn"
+          class:is-favorite={isFavorite}
+          onclick={toggleFavorite}
+          disabled={isFavoriteLoading}
+          title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+        >
+          {#if isFavorite}
+            <Heart size={24} fill="var(--accent-primary)" color="var(--accent-primary)" />
+          {:else}
+            <Heart size={24} />
+          {/if}
+        </button>
+      </div>
       <div class="artist-stats">
         {artist.totalAlbums || artist.albumsCount || 0} albums
       </div>
@@ -396,11 +451,46 @@
     justify-content: center;
   }
 
+  .artist-name-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
   .artist-name {
     font-size: 36px;
     font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 8px;
+  }
+
+  .favorite-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background: var(--bg-tertiary);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 150ms ease;
+    flex-shrink: 0;
+  }
+
+  .favorite-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--accent-primary);
+  }
+
+  .favorite-btn.is-favorite {
+    background: rgba(var(--accent-primary-rgb, 139, 92, 246), 0.15);
+  }
+
+  .favorite-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .artist-stats {
