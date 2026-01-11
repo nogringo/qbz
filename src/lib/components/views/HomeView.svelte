@@ -86,6 +86,7 @@
   let error = $state<string | null>(null);
   let loadingNewReleases = $state(true);
   let loadingPressAwards = $state(true);
+  let loadingMostStreamed = $state(true);
   let loadingRecentAlbums = $state(true);
   let loadingContinueTracks = $state(true);
   let loadingTopArtists = $state(true);
@@ -94,6 +95,7 @@
   // Featured albums (from Qobuz editorial)
   let newReleases = $state<AlbumCardData[]>([]);
   let pressAwards = $state<AlbumCardData[]>([]);
+  let mostStreamed = $state<AlbumCardData[]>([]);
 
   // User-specific content
   let recentAlbums = $state<AlbumCardData[]>([]);
@@ -106,6 +108,7 @@
   const hasContent = $derived(
     newReleases.length > 0
     || pressAwards.length > 0
+    || mostStreamed.length > 0
     || recentAlbums.length > 0
     || continueTracks.length > 0
     || topArtists.length > 0
@@ -250,6 +253,7 @@
     error = null;
     loadingNewReleases = true;
     loadingPressAwards = true;
+    loadingMostStreamed = true;
     loadingRecentAlbums = true;
     loadingContinueTracks = true;
     loadingTopArtists = true;
@@ -257,17 +261,35 @@
 
     // Start loading featured albums immediately (no seeds needed)
     // These show first since they're fast API calls
-    fetchFeaturedAlbums('new-releases', LIMITS.featuredAlbums).then(albums => {
-      newReleases = albums;
+    // Only load if section is visible to save API calls
+    if (isSectionVisible('newReleases')) {
+      fetchFeaturedAlbums('new-releases', LIMITS.featuredAlbums).then(albums => {
+        newReleases = albums;
+        loadingNewReleases = false;
+        // Hide initializing as soon as we have some content
+        if (albums.length > 0) isInitializing = false;
+      });
+    } else {
       loadingNewReleases = false;
-      // Hide initializing as soon as we have some content
-      if (albums.length > 0) isInitializing = false;
-    });
+    }
 
-    fetchFeaturedAlbums('press-awards', LIMITS.featuredAlbums).then(albums => {
-      pressAwards = albums;
+    if (isSectionVisible('pressAwards')) {
+      fetchFeaturedAlbums('press-awards', LIMITS.featuredAlbums).then(albums => {
+        pressAwards = albums;
+        loadingPressAwards = false;
+      });
+    } else {
       loadingPressAwards = false;
-    });
+    }
+
+    if (isSectionVisible('mostStreamed')) {
+      fetchFeaturedAlbums('most-streamed', LIMITS.featuredAlbums).then(albums => {
+        mostStreamed = albums;
+        loadingMostStreamed = false;
+      });
+    } else {
+      loadingMostStreamed = false;
+    }
 
     try {
       // ML-based scoring for personalized recommendations (falls back to simple queries if no scores)
@@ -388,6 +410,23 @@
         <HorizontalScrollRow title="Press Awards">
           {#snippet children()}
             {#each pressAwards as album}
+              <AlbumCard
+                artwork={album.artwork}
+                title={album.title}
+                artist={album.artist}
+                quality={album.quality}
+                onclick={() => onAlbumClick?.(album.id)}
+              />
+            {/each}
+            <div class="spacer"></div>
+          {/snippet}
+        </HorizontalScrollRow>
+      {/if}
+
+      {#if sectionId === 'mostStreamed' && mostStreamed.length > 0}
+        <HorizontalScrollRow title="Popular Albums">
+          {#snippet children()}
+            {#each mostStreamed as album}
               <AlbumCard
                 artwork={album.artwork}
                 title={album.title}
