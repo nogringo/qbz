@@ -30,8 +30,7 @@
   }: Props = $props();
 
   let container: HTMLDivElement | null = null;
-  let prevActiveIndex = $state(-1);
-  let hasInitialSync = $state(false);
+  let lastScrolledIndex = -1;
 
   // Calculate opacity based on distance from active line
   function getLineOpacity(index: number, active: number): number {
@@ -48,11 +47,18 @@
   // Scroll active line into view (centered)
   // instant: true for catch-up sync, false for normal progression
   async function scrollActiveIntoView(index: number, instant: boolean = false) {
-    if (!container || index < 0) return;
+    console.log('[LyricsLines] scrollActiveIntoView called', { index, instant, hasContainer: !!container });
+
+    if (!container || index < 0) {
+      console.log('[LyricsLines] Early return - no container or invalid index');
+      return;
+    }
 
     await tick();
 
     const target = container.querySelector<HTMLElement>(`[data-line-index="${index}"]`);
+    console.log('[LyricsLines] Found target element:', !!target);
+
     if (!target) return;
 
     const containerRect = container.getBoundingClientRect();
@@ -61,38 +67,45 @@
     const containerCenter = containerRect.top + containerRect.height / 2;
     const scrollOffset = targetCenter - containerCenter;
 
+    console.log('[LyricsLines] Scrolling by', scrollOffset, { targetCenter, containerCenter });
+
     container.scrollBy({
       top: scrollOffset,
       behavior: instant ? 'instant' : 'smooth'
     });
   }
 
-  // React to activeIndex changes
+  // React to activeIndex changes - scroll to keep active line visible
   $effect(() => {
-    if (scrollToActive && activeIndex >= 0 && activeIndex !== prevActiveIndex) {
-      // Determine if we need instant scroll (catch-up sync)
-      const needsInstantSync = !hasInitialSync && activeIndex > 0;
-      const isLargeJump = prevActiveIndex >= 0 && Math.abs(activeIndex - prevActiveIndex) > 2;
-      const useInstant = needsInstantSync || isLargeJump;
+    console.log('[LyricsLines] Effect running', { scrollToActive, activeIndex, isSynced, lastScrolledIndex });
 
-      console.log('[LyricsLines] Scrolling to line', activeIndex, { prevActiveIndex, useInstant, hasInitialSync });
-
-      if (!hasInitialSync && activeIndex >= 0) {
-        hasInitialSync = true;
-      }
-
-      prevActiveIndex = activeIndex;
-      scrollActiveIntoView(activeIndex, useInstant);
+    // Only scroll if we should and have a valid index
+    if (!scrollToActive || activeIndex < 0 || !isSynced) {
+      console.log('[LyricsLines] Skipping scroll - conditions not met');
+      return;
     }
+
+    // Skip if we already scrolled to this index
+    if (activeIndex === lastScrolledIndex) {
+      console.log('[LyricsLines] Skipping scroll - same index');
+      return;
+    }
+
+    // Determine scroll behavior
+    const isLargeJump = lastScrolledIndex >= 0 && Math.abs(activeIndex - lastScrolledIndex) > 2;
+    const isInitialSync = lastScrolledIndex === -1 && activeIndex > 0;
+    const useInstant = isLargeJump || isInitialSync;
+
+    console.log('[LyricsLines] Will scroll to', activeIndex, { isLargeJump, isInitialSync, useInstant });
+    lastScrolledIndex = activeIndex;
+    scrollActiveIntoView(activeIndex, useInstant);
   });
 
-  // Reset initial sync flag when lines change (new track)
+  // Reset scroll tracking when lyrics change (new track)
   $effect(() => {
-    if (lines.length > 0) {
-      // New lyrics loaded - reset sync state
-      hasInitialSync = false;
-      prevActiveIndex = -1;
-    }
+    // This effect only cares about lines array identity changing
+    void lines;
+    lastScrolledIndex = -1;
   });
 </script>
 
