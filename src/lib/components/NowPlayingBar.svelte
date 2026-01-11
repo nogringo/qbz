@@ -515,9 +515,9 @@
   /* ===== Song Card ===== */
   .song-card {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     gap: 12px;
-    padding: 8px 12px;
+    padding: 2px 12px 2px 2px;
     background: rgba(255, 255, 255, 0.04);
     border-radius: 8px;
     min-width: 580px;
@@ -534,19 +534,20 @@
     cursor: pointer;
     flex-shrink: 0;
     line-height: 0;
+    align-self: center;
   }
 
   .artwork {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     border-radius: 6px;
     object-fit: cover;
     display: block;
   }
 
   .artwork-placeholder {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.1);
     display: flex;
@@ -589,7 +590,9 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     gap: 2px;
+    align-self: center;
   }
 
   .song-title {
@@ -636,8 +639,10 @@
   .quality-indicator {
     flex-shrink: 0;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 2px;
+    align-self: flex-start;
+    margin-top: 2px;
   }
 
   .empty-state {
