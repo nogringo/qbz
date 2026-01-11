@@ -190,18 +190,37 @@ impl Player {
             // Get the audio host
             let host = rodio::cpal::default_host();
 
+            // Helper to validate a device has supported output configs
+            let is_device_valid = |d: &rodio::cpal::Device| -> bool {
+                d.supported_output_configs()
+                    .map(|configs| configs.count() > 0)
+                    .unwrap_or(false)
+            };
+
             // Find the requested device or use default
             let device = if let Some(ref name) = device_name {
                 log::info!("Looking for audio device: {}", name);
-                host.output_devices()
+                let found = host.output_devices()
                     .ok()
                     .and_then(|mut devices| {
                         devices.find(|d| d.name().ok().as_ref() == Some(name))
-                    })
-                    .or_else(|| {
+                    });
+
+                // Validate the found device
+                match found {
+                    Some(d) if is_device_valid(&d) => {
+                        log::info!("Found and validated device: {}", name);
+                        Some(d)
+                    }
+                    Some(_) => {
+                        log::warn!("Device '{}' found but has no valid output configs, using default", name);
+                        host.default_output_device()
+                    }
+                    None => {
                         log::warn!("Device '{}' not found, using default", name);
                         host.default_output_device()
-                    })
+                    }
+                }
             } else {
                 log::info!("Using default audio device");
                 host.default_output_device()

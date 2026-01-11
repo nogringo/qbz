@@ -61,8 +61,8 @@
   onMount(() => {
     loadStatus();
 
-    // Poll for updates while playing
-    const interval = setInterval(loadStatus, 5000);
+    // Poll less frequently - only needed to detect settings changes
+    const interval = setInterval(loadStatus, 10000);
     return () => clearInterval(interval);
   });
 </script>
