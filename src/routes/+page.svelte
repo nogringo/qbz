@@ -1373,14 +1373,14 @@
     display: flex;
     flex: 1;
     min-width: 0;
-    height: calc(100vh - 140px); /* 104px NowPlayingBar + 36px TitleBar */
+    height: calc(100vh - 136px); /* 104px NowPlayingBar + 32px TitleBar */
     overflow: hidden;
   }
 
   .main-content {
     flex: 1;
     min-width: 0;
-    height: calc(100vh - 140px); /* 104px NowPlayingBar + 36px TitleBar */
+    height: calc(100vh - 136px); /* 104px NowPlayingBar + 32px TitleBar */
     overflow-y: auto;
     padding: 24px 32px;
   }

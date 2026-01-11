@@ -1,120 +1,150 @@
 <script lang="ts">
-  import { Minus, Square, X, Copy } from 'lucide-svelte';
+  import { Minus, Maximize2, Minimize2, X } from 'lucide-svelte';
   import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { onMount } from 'svelte';
 
   let isMaximized = $state(false);
+  let appWindow: ReturnType<typeof getCurrentWindow>;
 
-  const appWindow = getCurrentWindow();
+  onMount(async () => {
+    appWindow = getCurrentWindow();
 
-  // Check initial maximized state
-  appWindow.isMaximized().then((maximized) => {
-    isMaximized = maximized;
-  });
-
-  // Listen for window state changes
-  appWindow.onResized(async () => {
+    // Check initial maximized state
     isMaximized = await appWindow.isMaximized();
+
+    // Listen for window state changes
+    const unlisten = await appWindow.onResized(async () => {
+      isMaximized = await appWindow.isMaximized();
+    });
+
+    return () => {
+      unlisten();
+    };
   });
 
-  function handleMinimize() {
-    appWindow.minimize();
+  async function handleMinimize() {
+    await appWindow?.minimize();
   }
 
-  function handleMaximize() {
-    appWindow.toggleMaximize();
+  async function handleMaximize() {
+    await appWindow?.toggleMaximize();
   }
 
-  function handleClose() {
-    appWindow.close();
+  async function handleClose() {
+    await appWindow?.close();
+  }
+
+  async function startDrag() {
+    await appWindow?.startDragging();
+  }
+
+  async function handleDoubleClick() {
+    await appWindow?.toggleMaximize();
   }
 </script>
 
-<div class="titlebar" data-tauri-drag-region>
-  <div class="titlebar-content" data-tauri-drag-region>
-    <img src="/icons/AppIcons/android/48x48.png" alt="QBZ" class="titlebar-icon" />
-    <span class="titlebar-title">QBZ</span>
-  </div>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<header class="titlebar">
+  <!-- Drag region - entire left area -->
+  <div
+    class="drag-region"
+    onmousedown={startDrag}
+    ondblclick={handleDoubleClick}
+  ></div>
 
+  <!-- Window Controls -->
   <div class="window-controls">
-    <button class="control-btn" onclick={handleMinimize} title="Minimize">
-      <Minus size={14} />
+    <button
+      class="control-btn minimize"
+      onclick={handleMinimize}
+      title="Minimize"
+      aria-label="Minimize window"
+    >
+      <Minus size={16} strokeWidth={1.5} />
     </button>
-    <button class="control-btn" onclick={handleMaximize} title={isMaximized ? "Restore" : "Maximize"}>
+    <button
+      class="control-btn maximize"
+      onclick={handleMaximize}
+      title={isMaximized ? "Restore" : "Maximize"}
+      aria-label={isMaximized ? "Restore window" : "Maximize window"}
+    >
       {#if isMaximized}
-        <Copy size={12} />
+        <Minimize2 size={14} strokeWidth={1.5} />
       {:else}
-        <Square size={12} />
+        <Maximize2 size={14} strokeWidth={1.5} />
       {/if}
     </button>
-    <button class="control-btn close-btn" onclick={handleClose} title="Close">
-      <X size={14} />
+    <button
+      class="control-btn close"
+      onclick={handleClose}
+      title="Close"
+      aria-label="Close window"
+    >
+      <X size={16} strokeWidth={1.5} />
     </button>
   </div>
-</div>
+</header>
 
 <style>
   .titlebar {
-    height: 36px;
-    min-height: 36px;
-    background-color: var(--bg-primary);
+    height: 32px;
+    min-height: 32px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 8px;
+    padding: 0;
     user-select: none;
     -webkit-user-select: none;
-    border-bottom: 1px solid var(--bg-tertiary);
+    -webkit-app-region: drag;
+    app-region: drag;
   }
 
-  .titlebar-content {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .drag-region {
     flex: 1;
-  }
-
-  .titlebar-icon {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-    pointer-events: none;
-  }
-
-  .titlebar-title {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    pointer-events: none;
+    height: 100%;
+    cursor: default;
   }
 
   .window-controls {
     display: flex;
-    align-items: center;
-    gap: 2px;
+    align-items: stretch;
+    height: 100%;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
   }
 
   .control-btn {
-    width: 36px;
-    height: 28px;
+    width: 46px;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     background: transparent;
     border: none;
-    border-radius: 4px;
     color: var(--text-muted);
     cursor: pointer;
-    transition: all 100ms ease;
+    transition: background-color 150ms ease, color 150ms ease;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
   }
 
   .control-btn:hover {
-    background-color: var(--bg-hover);
     color: var(--text-primary);
   }
 
-  .control-btn.close-btn:hover {
+  .control-btn.minimize:hover,
+  .control-btn.maximize:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .control-btn.close:hover {
     background-color: #e81123;
     color: white;
+  }
+
+  .control-btn:active {
+    opacity: 0.8;
   }
 
   .control-btn :global(svg) {
