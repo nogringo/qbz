@@ -94,7 +94,10 @@
         <!-- Author -->
         <div class="info-section author-section">
           <h3>Author</h3>
-          <p class="author">Vic Rodríguez</p>
+          <a href="https://github.com/vicrodh" target="_blank" rel="noopener" class="author-link">
+            Victor RH
+            <ExternalLink size={12} />
+          </a>
         </div>
 
         <!-- Signature -->
@@ -292,10 +295,22 @@
     font-weight: 500;
   }
 
-  .author-section .author {
+  .author-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: 14px;
     color: var(--text-primary);
-    margin: 0;
+    text-decoration: none;
+    transition: color 150ms ease;
+  }
+
+  .author-link:hover {
+    color: var(--accent-primary);
+  }
+
+  .author-link :global(svg) {
+    opacity: 0.5;
   }
 
   .signature {
