@@ -19,6 +19,7 @@ pub mod media_controls;
 pub mod player;
 pub mod queue;
 pub mod reco_store;
+pub mod session_store;
 pub mod share;
 
 use std::sync::Arc;
@@ -120,6 +121,9 @@ pub fn run() {
     // Initialize API cache state
     let api_cache_state = api_cache::ApiCacheState::new()
         .expect("Failed to initialize API cache");
+    // Initialize session store state
+    let session_store_state = session_store::SessionStoreState::new()
+        .expect("Failed to initialize session store");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -179,6 +183,7 @@ pub fn run() {
         .manage(lyrics_state)
         .manage(reco_state)
         .manage(api_cache_state)
+        .manage(session_store_state)
         .invoke_handler(tauri::generate_handler![
             // Auth commands
             commands::init_client,
@@ -347,6 +352,13 @@ pub fn run() {
             reco_store::commands::reco_get_home,
             reco_store::commands::reco_train_scores,
             reco_store::commands::reco_get_home_ml,
+            // Session persistence commands
+            session_store::save_session_state,
+            session_store::load_session_state,
+            session_store::save_session_volume,
+            session_store::save_session_position,
+            session_store::save_session_playback_mode,
+            session_store::clear_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

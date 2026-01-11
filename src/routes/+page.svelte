@@ -170,6 +170,18 @@
   // Recommendation scoring
   import { trainScores } from '$lib/services/recoService';
 
+  // Session persistence
+  import {
+    loadSessionState,
+    saveSessionState,
+    saveSessionVolume,
+    saveSessionPlaybackMode,
+    debouncedSavePosition,
+    flushPositionSave,
+    clearSession,
+    type PersistedQueueTrack
+  } from '$lib/services/sessionService';
+
   // Lyrics state management
   import {
     subscribe as subscribeLyrics,
@@ -783,7 +795,7 @@
   }
 
   // Auth Handlers
-  function handleLoginSuccess(info: UserInfo) {
+  async function handleLoginSuccess(info: UserInfo) {
     setLoggedIn(info);
     showToast(`Welcome, ${info.userName}!`, 'success');
 
@@ -793,6 +805,64 @@
     }).catch(err => {
       console.debug('[Reco] Score training failed:', err);
     });
+
+    // Restore previous session if available
+    try {
+      const session = await loadSessionState();
+      if (session && session.queue_tracks.length > 0) {
+        console.log('[Session] Restoring previous session...');
+
+        // Restore queue
+        const tracks: BackendQueueTrack[] = session.queue_tracks.map(t => ({
+          id: t.id,
+          title: t.title,
+          artist: t.artist,
+          album: t.album,
+          duration_secs: t.duration_secs,
+          artwork_url: t.artwork_url
+        }));
+
+        await setQueue(tracks, session.current_index ?? 0, true);
+
+        // Restore shuffle/repeat mode
+        if (session.shuffle_enabled) {
+          await invoke('set_shuffle', { enabled: true });
+        }
+        if (session.repeat_mode !== 'off') {
+          await invoke('set_repeat', { mode: session.repeat_mode });
+        }
+
+        // Restore volume
+        playerSetVolume(Math.round(session.volume * 100));
+
+        // If there was a track playing, restore it (paused)
+        if (session.current_index !== null && tracks[session.current_index]) {
+          const track = tracks[session.current_index];
+          showToast(`Restored: ${track.title}`, 'info');
+
+          // Set the current track info without auto-playing
+          setCurrentTrack({
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            artwork: track.artwork_url || '',
+            duration: track.duration_secs,
+            quality: 'Restored',
+          });
+
+          // Seek to saved position if > 0
+          if (session.current_position_secs > 0) {
+            // Note: actual seek will happen when user presses play
+            console.log(`[Session] Will resume at ${session.current_position_secs}s`);
+          }
+        }
+
+        console.log('[Session] Session restored successfully');
+      }
+    } catch (err) {
+      console.error('[Session] Failed to restore session:', err);
+    }
   }
 
   async function handleLogout() {
@@ -806,6 +876,8 @@
         console.error('Failed to clear credentials:', clearErr);
         // Don't block logout if clearing fails
       }
+      // Clear session state
+      await clearSession();
       setLoggedOut();
       currentTrack = null;
       isPlaying = false;
@@ -813,6 +885,53 @@
     } catch (err) {
       console.error('Logout error:', err);
       showToast('Failed to logout', 'error');
+    }
+  }
+
+  // Save session state before window closes
+  async function saveSessionBeforeClose() {
+    if (!isLoggedIn || !currentTrack) return;
+
+    try {
+      // Get current queue state from backend
+      const queueState = await getBackendQueueState();
+      if (!queueState) return;
+
+      // Build persisted queue tracks
+      const allTracks: PersistedQueueTrack[] = [];
+      if (queueState.current_track) {
+        allTracks.push({
+          id: queueState.current_track.id,
+          title: queueState.current_track.title,
+          artist: queueState.current_track.artist,
+          album: queueState.current_track.album,
+          duration_secs: queueState.current_track.duration_secs,
+          artwork_url: queueState.current_track.artwork_url
+        });
+      }
+      for (const track of queueState.upcoming) {
+        allTracks.push({
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          duration_secs: track.duration_secs,
+          artwork_url: track.artwork_url
+        });
+      }
+
+      await saveSessionState(
+        allTracks,
+        queueState.current_index,
+        Math.floor(currentTime),
+        volume / 100,
+        isShuffle,
+        repeatMode,
+        isPlaying
+      );
+      console.log('[Session] Session saved on close');
+    } catch (err) {
+      console.error('[Session] Failed to save session on close:', err);
     }
   }
 
@@ -883,6 +1002,20 @@
 
     // Keyboard navigation
     document.addEventListener('keydown', handleKeydown);
+
+    // Session save on window close/hide
+    const handleBeforeUnload = () => {
+      saveSessionBeforeClose();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Also save when visibility changes (app goes to background)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        saveSessionBeforeClose();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Initialize download states
     initDownloadStates();
@@ -977,8 +1110,12 @@
     });
 
     return () => {
+      // Save session before cleanup
+      saveSessionBeforeClose();
       cleanupBootstrap();
       document.removeEventListener('keydown', handleKeydown);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopDownloadEventListeners();
       unsubscribeDownloads();
       unsubscribeToast();
