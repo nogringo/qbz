@@ -278,7 +278,9 @@
 
           <div class="quality-indicator">
             <QualityBadge {quality} {bitDepth} {samplingRate} />
-            <AudioOutputBadges />
+            <div class="audio-badges-row">
+              <AudioOutputBadges />
+            </div>
           </div>
         </div>
       {:else}
@@ -639,10 +641,16 @@
   .quality-indicator {
     flex-shrink: 0;
     display: flex;
-    align-items: flex-start;
+    flex-direction: column;
     gap: 2px;
-    align-self: flex-start;
-    margin: 2px 2px 0 0;
+    align-self: stretch;
+    margin: 2px 2px 2px 0;
+  }
+
+  .audio-badges-row {
+    display: flex;
+    flex: 1;
+    min-height: 0;
   }
 
   .empty-state {

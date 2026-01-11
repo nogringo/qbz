@@ -105,17 +105,18 @@
 <style>
   .audio-badges {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     gap: 3px;
     position: relative;
-    margin-left: 4px;
+    width: 100%;
+    height: 100%;
   }
 
   .badge {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2px 5px;
+    flex: 1;
     border-radius: 3px;
     font-size: 7px;
     font-weight: 600;
