@@ -955,16 +955,45 @@
           const track = tracks[session.current_index];
           showToast(`Restored: ${track.title}`, 'info');
 
-          // Set the current track info without auto-playing
-          setCurrentTrack({
-            id: track.id,
-            title: track.title,
-            artist: track.artist,
-            album: track.album,
-            artwork: track.artwork_url || '',
-            duration: track.duration_secs,
-            quality: 'Restored',
-          });
+          // Fetch full track info from Qobuz to get albumId, artistId, and quality
+          try {
+            const fullTrack = await invoke<QobuzTrack>('get_track', { trackId: track.id });
+            const artwork = fullTrack.album?.image?.large || fullTrack.album?.image?.thumbnail || track.artwork_url || '';
+            const quality = fullTrack.hires_streamable
+              ? `${fullTrack.maximum_bit_depth ?? 24}/${fullTrack.maximum_sampling_rate ?? 96}`
+              : 'CD';
+
+            setCurrentTrack({
+              id: track.id,
+              title: fullTrack.title || track.title,
+              artist: fullTrack.performer?.name || track.artist,
+              album: fullTrack.album?.title || track.album,
+              artwork,
+              duration: track.duration_secs,
+              quality,
+              bitDepth: fullTrack.maximum_bit_depth,
+              samplingRate: fullTrack.maximum_sampling_rate,
+              albumId: fullTrack.album?.id,
+              artistId: fullTrack.performer?.id,
+            });
+          } catch (fetchErr) {
+            console.warn('[Session] Failed to fetch track details, using cached data:', fetchErr);
+            // Fallback to cached data without albumId/artistId
+            const quality = track.hires
+              ? `${track.bit_depth ?? 24}/${track.sample_rate ? track.sample_rate / 1000 : 96}`
+              : 'CD';
+            setCurrentTrack({
+              id: track.id,
+              title: track.title,
+              artist: track.artist,
+              album: track.album,
+              artwork: track.artwork_url || '',
+              duration: track.duration_secs,
+              quality,
+              bitDepth: track.bit_depth ?? undefined,
+              samplingRate: track.sample_rate ?? undefined,
+            });
+          }
 
           // Mark that this track needs to be loaded when user presses play
           setPendingSessionRestore(track.id, session.current_position_secs);
