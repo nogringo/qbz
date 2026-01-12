@@ -77,7 +77,7 @@
 
   // Get icon path based on tier
   const iconPath = $derived.by(() => {
-    if (tier === 'max' || tier === 'hires') return '/hi-res.svg';
+    if (tier === 'max' || tier === 'hires') return '/hi-res-gray.svg';
     if (tier === 'cd') return '/cd.svg';
     if (tier === 'lossy') return '/mp3.svg';
     return '/cd.svg';
