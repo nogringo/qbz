@@ -628,6 +628,35 @@
     }
   }
 
+  // Save current queue as a new playlist
+  function handleSaveQueueAsPlaylist() {
+    // Collect all track IDs from queue (current track + upcoming)
+    const trackIds: number[] = [];
+
+    // Add current track if present
+    if (currentTrack) {
+      trackIds.push(currentTrack.id);
+    }
+
+    // Add all upcoming tracks
+    for (const track of queue) {
+      const numericId = parseInt(track.id, 10);
+      if (!isNaN(numericId) && !trackIds.includes(numericId)) {
+        trackIds.push(numericId);
+      }
+    }
+
+    if (trackIds.length === 0) {
+      showToast('Queue is empty', 'info');
+      return;
+    }
+
+    // Open playlist modal in addTrack mode with queue tracks
+    openAddToPlaylist(trackIds);
+    // Close queue panel
+    closeQueue();
+  }
+
   // Play all tracks from album (starting from first track)
   async function handlePlayAllAlbum() {
     if (!selectedAlbum?.tracks?.length) return;
@@ -1629,7 +1658,7 @@
       upcomingTracks={queue}
       onPlayTrack={handleQueueTrackPlay}
       onClearQueue={handleClearQueue}
-      onSaveAsPlaylist={() => showToast('Save as playlist coming soon', 'info')}
+      onSaveAsPlaylist={handleSaveQueueAsPlaylist}
       onReorderTrack={handleQueueReorder}
     />
 

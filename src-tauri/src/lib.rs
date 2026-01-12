@@ -113,8 +113,10 @@ pub fn run() {
         .expect("Failed to initialize Chromecast state");
     let dlna_state = cast::dlna::commands::DlnaState::new(cast_state.media_server.clone())
         .expect("Failed to initialize DLNA state");
-    let airplay_state = cast::airplay::commands::AirPlayState::new()
-        .expect("Failed to initialize AirPlay state");
+    // AirPlay state - DISABLED until RAOP implementation is complete
+    // See qbz-nix-docs/AIRPLAY_IMPLEMENTATION_STATUS.md for details
+    // let airplay_state = cast::airplay::commands::AirPlayState::new()
+    //     .expect("Failed to initialize AirPlay state");
 
     // Initialize download cache state
     let download_cache_state = download_cache::DownloadCacheState::new()
@@ -205,7 +207,7 @@ pub fn run() {
         .manage(library_state)
         .manage(cast_state)
         .manage(dlna_state)
-        .manage(airplay_state)
+        // .manage(airplay_state)  // AirPlay DISABLED
         .manage(download_cache_state)
         .manage(lyrics_state)
         .manage(reco_state)
@@ -369,18 +371,19 @@ pub fn run() {
             cast::dlna::commands::dlna_stop,
             cast::dlna::commands::dlna_seek,
             cast::dlna::commands::dlna_set_volume,
-            // AirPlay casting commands
-            cast::airplay::commands::airplay_start_discovery,
-            cast::airplay::commands::airplay_stop_discovery,
-            cast::airplay::commands::airplay_get_devices,
-            cast::airplay::commands::airplay_connect,
-            cast::airplay::commands::airplay_disconnect,
-            cast::airplay::commands::airplay_get_status,
-            cast::airplay::commands::airplay_load_media,
-            cast::airplay::commands::airplay_play,
-            cast::airplay::commands::airplay_pause,
-            cast::airplay::commands::airplay_stop,
-            cast::airplay::commands::airplay_set_volume,
+            // AirPlay casting commands - DISABLED until RAOP implementation is complete
+            // See docs/AIRPLAY_IMPLEMENTATION_STATUS.md for details
+            // cast::airplay::commands::airplay_start_discovery,
+            // cast::airplay::commands::airplay_stop_discovery,
+            // cast::airplay::commands::airplay_get_devices,
+            // cast::airplay::commands::airplay_connect,
+            // cast::airplay::commands::airplay_disconnect,
+            // cast::airplay::commands::airplay_get_status,
+            // cast::airplay::commands::airplay_load_media,
+            // cast::airplay::commands::airplay_play,
+            // cast::airplay::commands::airplay_pause,
+            // cast::airplay::commands::airplay_stop,
+            // cast::airplay::commands::airplay_set_volume,
             // Download cache commands
             download_cache::commands::download_track,
             download_cache::commands::is_track_downloaded,
