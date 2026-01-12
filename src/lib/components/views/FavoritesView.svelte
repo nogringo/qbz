@@ -206,6 +206,9 @@
       album: t.album?.title || 'Favorites',
       duration_secs: t.duration,
       artwork_url: t.album?.image?.thumbnail || t.album?.image?.small || '',
+      hires: t.hires ?? false,
+      bit_depth: t.maximum_bit_depth ?? null,
+      sample_rate: t.maximum_sampling_rate ?? null,
     }));
 
     try {
@@ -226,6 +229,9 @@
       album: t.album?.title || 'Favorites',
       duration_secs: t.duration,
       artwork_url: t.album?.image?.thumbnail || t.album?.image?.small || '',
+      hires: t.hires ?? false,
+      bit_depth: t.maximum_bit_depth ?? null,
+      sample_rate: t.maximum_sampling_rate ?? null,
     }));
 
     try {

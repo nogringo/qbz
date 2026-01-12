@@ -334,7 +334,9 @@
     const artwork = track.album?.image?.large || track.album?.image?.thumbnail || track.album?.image?.small || '';
     const quality = track.hires_streamable && track.maximum_bit_depth && track.maximum_sampling_rate
       ? `${track.maximum_bit_depth}bit/${track.maximum_sampling_rate}kHz`
-      : 'CD Quality';
+      : track.hires_streamable
+        ? 'Hi-Res'
+        : '-';
 
     await playTrack({
       id: track.id,
@@ -358,7 +360,9 @@
     const artwork = selectedAlbum?.artwork || '';
     const quality = track.hires && track.bitDepth && track.samplingRate
       ? `${track.bitDepth}bit/${track.samplingRate}kHz`
-      : 'CD Quality';
+      : track.hires
+        ? 'Hi-Res'
+        : '-';
 
     // Build queue from album tracks before playing
     if (selectedAlbum?.tracks) {
@@ -495,7 +499,7 @@
         ? `${track.bit_depth}bit/${track.sample_rate}kHz`
         : track.hires
           ? 'Hi-Res'
-          : 'CD Quality';
+          : '-';
 
     // Play track using unified service
     await playTrack({
@@ -673,7 +677,7 @@
         album: selectedAlbum?.title,
         albumId: selectedAlbum?.id,
         durationSecs: track.durationSeconds,
-        quality: track.quality || 'CD Quality',
+        quality: track.quality || '-',
         bitDepth: track.bitDepth,
         sampleRate: track.samplingRate,
       });
@@ -718,7 +722,7 @@
           album: selectedAlbum.title,
           albumId: selectedAlbum.id,
           durationSecs: track.durationSeconds,
-          quality: track.quality || 'CD Quality',
+          quality: track.quality || '-',
           bitDepth: track.bitDepth,
           sampleRate: track.samplingRate,
         });

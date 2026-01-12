@@ -353,7 +353,10 @@
       artist: t.artist,
       album: t.album,
       duration_secs: t.duration_secs,
-      artwork_url: t.artwork_path ? `file://${t.artwork_path}` : null
+      artwork_url: t.artwork_path ? `file://${t.artwork_path}` : null,
+      hires: (t.bit_depth && t.bit_depth > 16) || t.sample_rate > 44100,
+      bit_depth: t.bit_depth ?? null,
+      sample_rate: t.sample_rate ?? null,
     }));
 
     try {

@@ -49,6 +49,11 @@
     duration: string;
     durationSeconds: number;
     hires?: boolean;
+    bitDepth?: number;
+    samplingRate?: number;
+    albumId?: string;
+    artistId?: number;
+    isrc?: string;
   }
 
   interface Props {
@@ -178,7 +183,12 @@
         albumArt: track.album?.image?.large || track.album?.image?.thumbnail || '',
         duration: formatDuration(track.duration),
         durationSeconds: track.duration,
-        hires: track.hires_streamable
+        hires: track.hires_streamable,
+        bitDepth: track.maximum_bit_depth,
+        samplingRate: track.maximum_sampling_rate,
+        albumId: track.album?.id,
+        artistId: track.performer?.id ?? artist.id,
+        isrc: track.isrc,
       });
     }
   }
@@ -193,6 +203,9 @@
       album: t.album?.title || '',
       duration_secs: t.duration,
       artwork_url: t.album?.image?.large || t.album?.image?.thumbnail || '',
+      hires: t.hires_streamable ?? false,
+      bit_depth: t.maximum_bit_depth ?? null,
+      sample_rate: t.maximum_sampling_rate ?? null,
     }));
 
     try {

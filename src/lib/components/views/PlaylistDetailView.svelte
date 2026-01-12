@@ -391,6 +391,9 @@
         album: t.album || playlist?.name || 'Playlist',
         duration_secs: t.durationSeconds,
         artwork_url: t.albumArt || getPlaylistImage(),
+        hires: t.hires ?? false,
+        bit_depth: t.bitDepth ?? null,
+        sample_rate: t.samplingRate ?? null,
       }));
 
       try {
@@ -427,6 +430,9 @@
             album: t.album || playlist?.name || 'Playlist',
             duration_secs: t.durationSeconds,
             artwork_url: t.albumArt || getPlaylistImage(),
+            hires: t.hires ?? false,
+            bit_depth: t.bitDepth ?? null,
+            sample_rate: t.samplingRate ?? null,
           }
         });
       } catch (err) {
@@ -444,6 +450,9 @@
       album: t.album || playlist?.name || 'Playlist',
       duration_secs: t.durationSeconds,
       artwork_url: t.albumArt || getPlaylistImage(),
+      hires: t.hires ?? false,
+      bit_depth: t.bitDepth ?? null,
+      sample_rate: t.samplingRate ?? null,
     }));
 
     try {
