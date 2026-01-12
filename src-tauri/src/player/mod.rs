@@ -9,7 +9,7 @@
 //!
 //! Uses a dedicated audio thread since rodio's OutputStream is not Send.
 
-use std::io::{BufReader, Cursor};
+use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender, RecvTimeoutError};
@@ -17,8 +17,17 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use rodio::{Decoder, OutputStream, Sink, Source};
+use rodio::buffer::SamplesBuffer;
 use rodio::decoder::Mp4Type;
 use rodio::cpal::traits::{DeviceTrait, HostTrait};
+use symphonia::core::audio::SampleBuffer;
+use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::errors::Error as SymphoniaError;
+use symphonia::core::formats::FormatOptions;
+use symphonia::core::io::{MediaSource, MediaSourceStream};
+use symphonia::core::meta::MetadataOptions;
+use symphonia::core::probe::Hint;
+use symphonia::default::{get_codecs, get_probe};
 
 use crate::api::{client::QobuzClient, models::Quality};
 
@@ -40,15 +49,133 @@ enum AudioCommand {
     ReinitDevice { device_name: Option<String> },
 }
 
+struct CursorMediaSource {
+    inner: Cursor<Vec<u8>>,
+    len: u64,
+}
+
+impl CursorMediaSource {
+    fn new(data: Vec<u8>) -> Self {
+        let len = data.len() as u64;
+        Self { inner: Cursor::new(data), len }
+    }
+}
+
+impl MediaSource for CursorMediaSource {
+    fn is_seekable(&self) -> bool {
+        true
+    }
+
+    fn byte_len(&self) -> Option<u64> {
+        Some(self.len)
+    }
+}
+
+impl Read for CursorMediaSource {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.inner.read(buf)
+    }
+}
+
+impl Seek for CursorMediaSource {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.inner.seek(pos)
+    }
+}
+
+fn decode_with_symphonia(data: &[u8]) -> Result<SamplesBuffer<i16>, String> {
+    let source = Box::new(CursorMediaSource::new(data.to_vec())) as Box<dyn MediaSource>;
+    let mss = MediaSourceStream::new(source, Default::default());
+
+    let mut hint = Hint::new();
+    hint.with_extension("m4a");
+
+    let format_opts = FormatOptions {
+        enable_gapless: true,
+        ..Default::default()
+    };
+    let metadata_opts: MetadataOptions = Default::default();
+    let mut probed = get_probe()
+        .format(&hint, mss, &format_opts, &metadata_opts)
+        .map_err(|err| format!("Symphonia probe failed: {}", err))?;
+
+    let track = probed
+        .format
+        .default_track()
+        .ok_or_else(|| "Symphonia: no supported audio tracks".to_string())?;
+
+    let mut decoder = get_codecs()
+        .make(&track.codec_params, &DecoderOptions::default())
+        .map_err(|err| format!("Symphonia decoder init failed: {}", err))?;
+
+    let mut sample_rate = 0;
+    let mut channels = 0u16;
+    let mut samples: Vec<i16> = Vec::new();
+
+    loop {
+        let packet = match probed.format.next_packet() {
+            Ok(packet) => packet,
+            Err(SymphoniaError::IoError(_)) => break,
+            Err(err) => return Err(format!("Symphonia read error: {}", err)),
+        };
+
+        if packet.track_id() != track.id {
+            continue;
+        }
+
+        match decoder.decode(&packet) {
+            Ok(audio_buf) => {
+                let spec = *audio_buf.spec();
+                if sample_rate == 0 {
+                    sample_rate = spec.rate;
+                    channels = spec.channels.count() as u16;
+                }
+
+                let mut sample_buf = SampleBuffer::<i16>::new(audio_buf.frames() as u64, spec);
+                sample_buf.copy_interleaved_ref(audio_buf);
+                samples.extend_from_slice(sample_buf.samples());
+            }
+            Err(SymphoniaError::DecodeError(_)) => continue,
+            Err(SymphoniaError::ResetRequired) => {
+                decoder.reset();
+                continue;
+            }
+            Err(err) => return Err(format!("Symphonia decode error: {}", err)),
+        }
+    }
+
+    if samples.is_empty() || sample_rate == 0 || channels == 0 {
+        return Err("Symphonia decode produced no audio".to_string());
+    }
+
+    Ok(SamplesBuffer::new(channels, sample_rate, samples))
+}
+
+fn is_isomp4(data: &[u8]) -> bool {
+    if data.len() < 12 {
+        return false;
+    }
+
+    &data[4..8] == b"ftyp"
+}
+
 fn decode_with_fallback(
     data: &[u8],
-) -> Result<Decoder<BufReader<Cursor<Vec<u8>>>>, rodio::decoder::DecoderError> {
+) -> Result<Box<dyn Source<Item = i16> + Send>, String> {
+    if is_isomp4(data) {
+        return decode_with_symphonia(data)
+            .map(|buffer| {
+                log::info!("Decoded audio using symphonia fallback (isomp4)");
+                Box::new(buffer) as Box<dyn Source<Item = i16> + Send>
+            });
+    }
+
     let primary = panic::catch_unwind(AssertUnwindSafe(|| {
         Decoder::new(BufReader::new(Cursor::new(data.to_vec())))
     }));
 
     match primary {
-        Ok(Ok(decoder)) => return Ok(decoder),
+        Ok(Ok(decoder)) => return Ok(Box::new(decoder)),
         Ok(Err(err)) => {
             log::warn!("Primary decode failed, attempting mp4 fallback: {}", err);
         }
@@ -67,7 +194,7 @@ fn decode_with_fallback(
         match attempt {
             Ok(Ok(decoder)) => {
                 log::info!("Decoded audio using mp4 fallback ({})", hint_label);
-                return Ok(decoder);
+                return Ok(Box::new(decoder));
             }
             Ok(Err(err)) => {
                 log::warn!("mp4 fallback ({}) failed: {}", hint_label, err);
@@ -78,7 +205,13 @@ fn decode_with_fallback(
         }
     }
 
-    Err(rodio::decoder::DecoderError::UnrecognizedFormat)
+    match decode_with_symphonia(data) {
+        Ok(buffer) => {
+            log::info!("Decoded audio using symphonia fallback");
+            Ok(Box::new(buffer))
+        }
+        Err(err) => Err(err),
+    }
 }
 
 /// Event payload for playback state updates
