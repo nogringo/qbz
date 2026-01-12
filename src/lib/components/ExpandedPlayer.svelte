@@ -37,6 +37,7 @@
     onOpenQueue?: () => void;
     onOpenFocusMode?: () => void;
     onCast?: () => void;
+    isCastConnected?: boolean;
     // Lyrics props
     lyricsLines?: LyricsLine[];
     lyricsActiveIndex?: number;
@@ -75,6 +76,7 @@
     onOpenQueue,
     onOpenFocusMode,
     onCast,
+    isCastConnected = false,
     lyricsLines = [],
     lyricsActiveIndex = -1,
     lyricsActiveProgress = 0,
@@ -285,7 +287,12 @@
           <button class="action-btn" onclick={onOpenFocusMode} title="Focus Mode">
             <Maximize2 size={22} />
           </button>
-          <button class="action-btn" onclick={onCast} title="Cast to device">
+          <button
+            class="action-btn"
+            class:cast-active={isCastConnected}
+            onclick={onCast}
+            title={isCastConnected ? 'Casting - Click to manage' : 'Cast to device'}
+          >
             <Cast size={22} />
           </button>
           <button
@@ -657,6 +664,16 @@
 
   .action-btn.active {
     color: var(--accent-primary);
+  }
+
+  .action-btn.cast-active {
+    color: #22c55e;
+    animation: cast-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes cast-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
   }
 
   /* Right Section: Lyrics */

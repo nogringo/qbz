@@ -201,6 +201,13 @@
     type LyricsLine
   } from '$lib/stores/lyricsStore';
 
+  // Cast state management
+  import {
+    subscribe as subscribeCast,
+    getCastState,
+    isCasting
+  } from '$lib/stores/castStore';
+
   // Components
   import TitleBar from '$lib/components/TitleBar.svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
@@ -246,6 +253,9 @@
   let isFullScreenOpen = $state(false);
   let isFocusModeOpen = $state(false);
   let isCastPickerOpen = $state(false);
+
+  // Cast State
+  let isCastConnected = $state(false);
 
   // Playlist Modal State (from uiStore subscription)
   let isPlaylistModalOpen = $state(false);
@@ -1288,6 +1298,11 @@
       lyricsSidebarVisible = state.sidebarVisible;
     });
 
+    // Subscribe to cast state changes
+    const unsubscribeCast = subscribeCast(() => {
+      isCastConnected = isCasting();
+    });
+
     // Start lyrics watcher for track changes
     startLyricsWatching();
 
@@ -1341,6 +1356,7 @@
       unsubscribePlayer();
       unsubscribeQueue();
       unsubscribeLyrics();
+      unsubscribeCast();
       stopLyricsWatching();
       stopActiveLineUpdates();
       stopPolling();
@@ -1576,6 +1592,7 @@
         onOpenFullScreen={openFullScreen}
         onOpenMiniPlayer={enterMiniplayerMode}
         onCast={openCastPicker}
+        {isCastConnected}
         onToggleLyrics={toggleLyricsSidebar}
         lyricsActive={lyricsSidebarVisible}
         onArtistClick={() => {
@@ -1599,6 +1616,7 @@
         onOpenFullScreen={openFullScreen}
         onOpenMiniPlayer={enterMiniplayerMode}
         onCast={openCastPicker}
+        {isCastConnected}
       />
     {/if}
     </div><!-- end app-body -->
@@ -1652,6 +1670,7 @@
           openFocusMode();
         }}
         onCast={openCastPicker}
+        {isCastConnected}
         lyricsLines={lyricsLines.map(l => ({ text: l.text }))}
         lyricsActiveIndex={lyricsActiveIndex}
         lyricsActiveProgress={lyricsActiveProgress}
@@ -1722,9 +1741,6 @@
     <CastPicker
       isOpen={isCastPickerOpen}
       onClose={closeCastPicker}
-      onConnect={(deviceId) => {
-        showToast(`Connected to device`, 'success');
-      }}
     />
   </div>
 {/if}

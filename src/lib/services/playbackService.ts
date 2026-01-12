@@ -18,6 +18,13 @@ import {
 } from '$lib/stores/playerStore';
 import { syncQueueState } from '$lib/stores/queueStore';
 import { logRecoEvent } from '$lib/services/recoService';
+import {
+  isCasting,
+  castTrack,
+  castPlay,
+  castPause,
+  castStop
+} from '$lib/stores/castStore';
 
 // ============ Types ============
 
@@ -66,11 +73,23 @@ export async function playTrack(
       showToast(track.title, 'buffering');
     }
 
-    // Use appropriate playback command
-    if (isLocal) {
-      await invoke('library_play_track', { trackId: track.id });
+    // Check if we're casting to an external device
+    if (isCasting() && !isLocal) {
+      // Cast to connected device
+      await castTrack(track.id, {
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        artworkUrl: track.artwork,
+        durationSecs: track.duration
+      });
     } else {
-      await invoke('play_track', { trackId: track.id });
+      // Use appropriate local playback command
+      if (isLocal) {
+        await invoke('library_play_track', { trackId: track.id });
+      } else {
+        await invoke('play_track', { trackId: track.id });
+      }
     }
 
     // Dismiss buffering toast and show success

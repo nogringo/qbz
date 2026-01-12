@@ -108,9 +108,10 @@ pub fn run() {
         .expect("Failed to initialize library database");
 
     // Initialize casting state (Chromecast, DLNA, AirPlay)
+    // CastState creates the media server, DLNA shares it
     let cast_state = cast::CastState::new()
         .expect("Failed to initialize Chromecast state");
-    let dlna_state = cast::dlna::commands::DlnaState::new()
+    let dlna_state = cast::dlna::commands::DlnaState::new(cast_state.media_server.clone())
         .expect("Failed to initialize DLNA state");
     let airplay_state = cast::airplay::commands::AirPlayState::new()
         .expect("Failed to initialize AirPlay state");
@@ -361,10 +362,12 @@ pub fn run() {
             cast::dlna::commands::dlna_connect,
             cast::dlna::commands::dlna_disconnect,
             cast::dlna::commands::dlna_get_status,
+            cast::dlna::commands::dlna_play_track,
             cast::dlna::commands::dlna_load_media,
             cast::dlna::commands::dlna_play,
             cast::dlna::commands::dlna_pause,
             cast::dlna::commands::dlna_stop,
+            cast::dlna::commands::dlna_seek,
             cast::dlna::commands::dlna_set_volume,
             // AirPlay casting commands
             cast::airplay::commands::airplay_start_discovery,

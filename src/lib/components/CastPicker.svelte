@@ -1,24 +1,22 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { onMount, onDestroy } from 'svelte';
-  import { X, Cast, Loader2, Monitor, Wifi, Tv, Speaker } from 'lucide-svelte';
+  import { X, Cast, Loader2, Monitor, Wifi, Tv, Speaker, Power } from 'lucide-svelte';
+  import {
+    subscribe as subscribeCast,
+    getCastState,
+    connectToDevice,
+    disconnect,
+    type CastProtocol,
+    type CastDevice
+  } from '$lib/stores/castStore';
 
   interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onConnect: (deviceId: string, protocol: CastProtocol) => void;
   }
 
-  type CastProtocol = 'chromecast' | 'dlna' | 'airplay';
-
-  interface CastDevice {
-    id: string;
-    name: string;
-    ip: string;
-    port: number;
-  }
-
-  let { isOpen, onClose, onConnect }: Props = $props();
+  let { isOpen, onClose }: Props = $props();
 
   let activeProtocol = $state<CastProtocol>('chromecast');
   let chromecastDevices = $state<CastDevice[]>([]);
@@ -27,6 +25,10 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let discoveryStarted = $state(false);
+  let connecting = $state(false);
+
+  // Cast state from store
+  let castState = $state(getCastState());
 
   const devices = $derived(() => {
     switch (activeProtocol) {
@@ -36,13 +38,20 @@
     }
   });
 
+  let unsubscribeCast: (() => void) | null = null;
+
   onMount(() => {
+    unsubscribeCast = subscribeCast(() => {
+      castState = getCastState();
+    });
+
     if (isOpen) {
       startDiscovery();
     }
   });
 
   onDestroy(() => {
+    unsubscribeCast?.();
     if (discoveryStarted) {
       stopDiscovery();
     }
@@ -122,20 +131,21 @@
   }
 
   async function handleConnect(device: CastDevice) {
+    connecting = true;
+    error = null;
     try {
-      switch (activeProtocol) {
-        case 'chromecast':
-          await invoke('cast_connect', { deviceId: device.id });
-          break;
-        case 'dlna':
-          await invoke('dlna_connect', { deviceId: device.id });
-          break;
-        case 'airplay':
-          await invoke('airplay_connect', { deviceId: device.id });
-          break;
-      }
-      onConnect(device.id, activeProtocol);
+      await connectToDevice(device, activeProtocol);
       onClose();
+    } catch (err) {
+      error = String(err);
+    } finally {
+      connecting = false;
+    }
+  }
+
+  async function handleDisconnect() {
+    try {
+      await disconnect();
     } catch (err) {
       error = String(err);
     }
@@ -149,11 +159,11 @@
     }
   }
 
-  function getDeviceCount(protocol: CastProtocol): number {
+  function getProtocolLabel(protocol: CastProtocol): string {
     switch (protocol) {
-      case 'chromecast': return chromecastDevices.length;
-      case 'dlna': return dlnaDevices.length;
-      case 'airplay': return airplayDevices.length;
+      case 'chromecast': return 'Chromecast';
+      case 'dlna': return 'DLNA';
+      case 'airplay': return 'AirPlay';
     }
   }
 </script>
@@ -168,74 +178,96 @@
         </button>
       </div>
 
-      <!-- Protocol Tabs -->
-      <div class="protocol-tabs">
-        <button
-          class="protocol-tab"
-          class:active={activeProtocol === 'chromecast'}
-          onclick={() => activeProtocol = 'chromecast'}
-        >
-          <Cast size={16} />
-          <span>Chromecast</span>
-          {#if chromecastDevices.length > 0}
-            <span class="count">{chromecastDevices.length}</span>
-          {/if}
-        </button>
-        <button
-          class="protocol-tab"
-          class:active={activeProtocol === 'dlna'}
-          onclick={() => activeProtocol = 'dlna'}
-        >
-          <Tv size={16} />
-          <span>DLNA</span>
-          {#if dlnaDevices.length > 0}
-            <span class="count">{dlnaDevices.length}</span>
-          {/if}
-        </button>
-        <button
-          class="protocol-tab"
-          class:active={activeProtocol === 'airplay'}
-          onclick={() => activeProtocol = 'airplay'}
-        >
-          <Speaker size={16} />
-          <span>AirPlay</span>
-          {#if airplayDevices.length > 0}
-            <span class="count">{airplayDevices.length}</span>
-          {/if}
-        </button>
-      </div>
+      <!-- Connected Device Banner -->
+      {#if castState.isConnected && castState.device}
+        <div class="connected-banner">
+          <div class="connected-info">
+            <svelte:component this={getProtocolIcon(castState.protocol!)} size={20} />
+            <div class="connected-text">
+              <span class="connected-label">Connected to</span>
+              <span class="connected-name">{castState.device.name}</span>
+            </div>
+          </div>
+          <button class="disconnect-btn" onclick={handleDisconnect}>
+            <Power size={16} />
+            <span>Disconnect</span>
+          </button>
+        </div>
+      {:else}
+        <!-- Protocol Tabs (only show when not connected) -->
+        <div class="protocol-tabs">
+          <button
+            class="protocol-tab"
+            class:active={activeProtocol === 'chromecast'}
+            onclick={() => activeProtocol = 'chromecast'}
+          >
+            <Cast size={16} />
+            <span>Chromecast</span>
+            {#if chromecastDevices.length > 0}
+              <span class="count">{chromecastDevices.length}</span>
+            {/if}
+          </button>
+          <button
+            class="protocol-tab"
+            class:active={activeProtocol === 'dlna'}
+            onclick={() => activeProtocol = 'dlna'}
+          >
+            <Tv size={16} />
+            <span>DLNA</span>
+            {#if dlnaDevices.length > 0}
+              <span class="count">{dlnaDevices.length}</span>
+            {/if}
+          </button>
+          <button
+            class="protocol-tab"
+            class:active={activeProtocol === 'airplay'}
+            onclick={() => activeProtocol = 'airplay'}
+          >
+            <Speaker size={16} />
+            <span>AirPlay</span>
+            {#if airplayDevices.length > 0}
+              <span class="count">{airplayDevices.length}</span>
+            {/if}
+          </button>
+        </div>
 
-      <div class="content">
-        {#if loading && devices().length === 0}
-          <div class="loading">
-            <Loader2 size={32} class="spin" />
-            <p>Searching for devices...</p>
-          </div>
-        {:else if error}
-          <div class="error">
-            <p>{error}</p>
-          </div>
-        {:else if devices().length === 0}
-          <div class="empty">
-            <Wifi size={32} />
-            <p>No {activeProtocol === 'chromecast' ? 'Chromecast' : activeProtocol === 'dlna' ? 'DLNA' : 'AirPlay'} devices found</p>
-            <p class="hint">Make sure devices are on the same network</p>
-          </div>
-        {:else}
-          <div class="devices">
-            {#each devices() as device}
-              <button class="device" onclick={() => handleConnect(device)}>
-                <Monitor size={24} />
-                <div class="device-info">
-                  <span class="device-name">{device.name}</span>
-                  <span class="device-ip">{device.ip}</span>
-                </div>
-                <svelte:component this={getProtocolIcon(activeProtocol)} size={20} class="cast-icon" />
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
+        <div class="content">
+          {#if connecting}
+            <div class="loading">
+              <Loader2 size={32} class="spin" />
+              <p>Connecting...</p>
+            </div>
+          {:else if loading && devices().length === 0}
+            <div class="loading">
+              <Loader2 size={32} class="spin" />
+              <p>Searching for devices...</p>
+            </div>
+          {:else if error}
+            <div class="error">
+              <p>{error}</p>
+            </div>
+          {:else if devices().length === 0}
+            <div class="empty">
+              <Wifi size={32} />
+              <p>No {getProtocolLabel(activeProtocol)} devices found</p>
+              <p class="hint">Make sure devices are on the same network</p>
+            </div>
+          {:else}
+            <div class="devices">
+              {#each devices() as device}
+                <button class="device" onclick={() => handleConnect(device)}>
+                  <Monitor size={24} />
+                  <div class="device-info">
+                    <span class="device-name">{device.name}</span>
+                    <span class="device-ip">{device.ip}</span>
+                  </div>
+                  <svelte:component this={getProtocolIcon(activeProtocol)} size={20} class="cast-icon" />
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -415,5 +447,61 @@
   .device:hover :global(.cast-icon) {
     opacity: 1;
     color: var(--accent-primary);
+  }
+
+  /* Connected Banner */
+  .connected-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%);
+    border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+  }
+
+  .connected-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #22c55e;
+  }
+
+  .connected-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .connected-label {
+    font-size: 11px;
+    color: rgba(34, 197, 94, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .connected-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .disconnect-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    color: #ef4444;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .disconnect-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
   }
 </style>
