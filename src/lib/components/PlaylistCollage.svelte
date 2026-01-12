@@ -99,12 +99,11 @@
     object-fit: cover;
   }
 
-  /* Collage covers - sized smaller to fit within square with overlap */
+  /* Collage covers - full height, will be cropped on sides */
   .cover {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    height: 90%;
+    top: 0;
+    height: 100%;
     width: auto;
     aspect-ratio: 1;
     object-fit: cover;
@@ -112,24 +111,20 @@
     z-index: calc(4 - var(--index));
     /* Shadow on right edge for depth */
     box-shadow: 3px 0 10px rgba(0, 0, 0, 0.5);
-    border-radius: 4px;
   }
 
-  /* 2 covers - side by side with overlap */
+  /* 2 covers */
   .collage[style*="--count: 2"] .cover {
-    height: 85%;
-    left: calc(var(--index) * (var(--size) * 0.45));
+    left: calc(var(--index) * (var(--size) * 0.5));
   }
 
   /* 3 covers */
   .collage[style*="--count: 3"] .cover {
-    height: 85%;
-    left: calc(var(--index) * (var(--size) * 0.30));
+    left: calc(var(--index) * (var(--size) * 0.33));
   }
 
-  /* 4 covers - tighter overlap */
+  /* 4 covers */
   .collage[style*="--count: 4"] .cover {
-    height: 80%;
-    left: calc(var(--index) * (var(--size) * 0.22));
+    left: calc(var(--index) * (var(--size) * 0.25));
   }
 </style>
