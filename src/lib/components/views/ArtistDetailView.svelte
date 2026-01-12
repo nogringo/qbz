@@ -87,6 +87,11 @@
   let similarArtists = $state<QobuzArtist[]>([]);
   let similarArtistsLoading = $state(false);
   let similarArtistImageErrors = $state<Set<number>>(new Set());
+  let topTracksSection = $state<HTMLDivElement | null>(null);
+  let discographySection = $state<HTMLDivElement | null>(null);
+  let epsSinglesSection = $state<HTMLDivElement | null>(null);
+  let compilationsSection = $state<HTMLDivElement | null>(null);
+  let playlistsSection = $state<HTMLDivElement | null>(null);
 
   interface SimilarArtistsPage {
     items: QobuzArtist[];
@@ -264,6 +269,17 @@
   );
 
   let hasMoreAlbums = $derived(!!onLoadMore && artist.albumsFetched < artist.totalAlbums);
+  let hasTopTracks = $derived(topTracks.length > 0 || tracksLoading);
+  let hasEpsSingles = $derived(artist.epsSingles.length > 0);
+  let hasCompilations = $derived(artist.compilations.length > 0);
+  let hasPlaylists = $derived(artist.playlists.length > 0);
+  let showJumpNav = $derived(
+    [hasTopTracks, true, hasEpsSingles, hasCompilations, hasPlaylists].filter(Boolean).length > 1
+  );
+
+  function scrollToSection(target: HTMLDivElement | null) {
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 </script>
 
 <div class="artist-detail">
@@ -369,12 +385,43 @@
     </div>
   </div>
 
+  {#if showJumpNav}
+    <div class="jump-nav">
+      <div class="jump-label">Jump to</div>
+      <div class="jump-buttons">
+        {#if hasTopTracks}
+          <button class="jump-btn" onclick={() => scrollToSection(topTracksSection)}>
+            Popular Tracks
+          </button>
+        {/if}
+        <button class="jump-btn" onclick={() => scrollToSection(discographySection)}>
+          Discography
+        </button>
+        {#if hasEpsSingles}
+          <button class="jump-btn" onclick={() => scrollToSection(epsSinglesSection)}>
+            EPs & Singles
+          </button>
+        {/if}
+        {#if hasCompilations}
+          <button class="jump-btn" onclick={() => scrollToSection(compilationsSection)}>
+            Compilations
+          </button>
+        {/if}
+        {#if hasPlaylists}
+          <button class="jump-btn" onclick={() => scrollToSection(playlistsSection)}>
+            Playlists
+          </button>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
   <!-- Divider -->
   <div class="divider"></div>
 
   <!-- Top Tracks Section -->
   {#if topTracks.length > 0 || tracksLoading}
-    <div class="top-tracks-section">
+    <div class="top-tracks-section section-anchor" bind:this={topTracksSection}>
       <div class="section-header-row">
         <h2 class="section-title">Popular Tracks</h2>
         {#if topTracks.length > 0}
@@ -435,7 +482,7 @@
   {/if}
 
   <!-- Discography Section -->
-  <div class="discography">
+  <div class="discography section-anchor" bind:this={discographySection}>
     <h2 class="section-title">Discography</h2>
 
     {#if artist.albums.length === 0}
@@ -470,7 +517,7 @@
   {#if artist.epsSingles.length > 0}
     <div class="divider"></div>
 
-    <div class="discography">
+    <div class="discography section-anchor" bind:this={epsSinglesSection}>
       <h2 class="section-title">EPs & Singles</h2>
       <div class="albums-grid">
         {#each artist.epsSingles as album}
@@ -489,7 +536,7 @@
   {#if artist.compilations.length > 0}
     <div class="divider"></div>
 
-    <div class="discography">
+    <div class="discography section-anchor" bind:this={compilationsSection}>
       <h2 class="section-title">Compilations</h2>
       <div class="albums-grid">
         {#each artist.compilations as album}
@@ -508,7 +555,7 @@
   {#if artist.playlists.length > 0}
     <div class="divider"></div>
 
-    <div class="playlists-section">
+    <div class="playlists-section section-anchor" bind:this={playlistsSection}>
       <h2 class="section-title">Playlists</h2>
       <div class="playlists-grid">
         {#each artist.playlists as playlist}
@@ -709,6 +756,51 @@
     margin-top: 8px;
   }
 
+  .jump-nav {
+    position: sticky;
+    top: 8px;
+    z-index: 4;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--bg-tertiary);
+    margin-bottom: 16px;
+  }
+
+  .jump-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .jump-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .jump-btn {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--bg-tertiary);
+    background-color: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+
+  .jump-btn:hover {
+    background-color: var(--bg-tertiary);
+    border-color: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
   .similar-artists {
     margin-top: 16px;
   }
@@ -777,6 +869,10 @@
     height: 1px;
     background-color: var(--bg-tertiary);
     margin: 32px 0;
+  }
+
+  .section-anchor {
+    scroll-margin-top: 120px;
   }
 
   .section-title {
