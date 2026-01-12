@@ -71,11 +71,12 @@
     discoveryStarted = true;
 
     try {
-      // Start all discovery protocols in parallel
+      // Start discovery protocols in parallel
+      // Note: AirPlay discovery disabled until RAOP streaming is implemented
       await Promise.allSettled([
         invoke('cast_start_discovery'),
-        invoke('dlna_start_discovery'),
-        invoke('airplay_start_discovery')
+        invoke('dlna_start_discovery')
+        // invoke('airplay_start_discovery')  // Disabled - see docs/AIRPLAY_IMPLEMENTATION_STATUS.md
       ]);
       // Poll for devices
       pollDevices();
@@ -90,8 +91,8 @@
     try {
       await Promise.allSettled([
         invoke('cast_stop_discovery'),
-        invoke('dlna_stop_discovery'),
-        invoke('airplay_stop_discovery')
+        invoke('dlna_stop_discovery')
+        // invoke('airplay_stop_discovery')  // Disabled
       ]);
     } catch (err) {
       console.error('Failed to stop discovery:', err);
@@ -102,11 +103,12 @@
     if (!discoveryStarted) return;
 
     try {
-      // Poll all protocols in parallel
-      const [chromecast, dlna, airplay] = await Promise.allSettled([
+      // Poll active protocols in parallel
+      // Note: AirPlay polling disabled until RAOP streaming is implemented
+      const [chromecast, dlna] = await Promise.allSettled([
         invoke<CastDevice[]>('cast_get_devices'),
-        invoke<CastDevice[]>('dlna_get_devices'),
-        invoke<CastDevice[]>('airplay_get_devices')
+        invoke<CastDevice[]>('dlna_get_devices')
+        // invoke<CastDevice[]>('airplay_get_devices')  // Disabled
       ]);
 
       if (chromecast.status === 'fulfilled') {
@@ -115,9 +117,10 @@
       if (dlna.status === 'fulfilled') {
         dlnaDevices = dlna.value;
       }
-      if (airplay.status === 'fulfilled') {
-        airplayDevices = airplay.value;
-      }
+      // AirPlay disabled
+      // if (airplay.status === 'fulfilled') {
+      //   airplayDevices = airplay.value;
+      // }
     } catch (err) {
       console.error('Failed to get devices:', err);
     }
@@ -218,17 +221,8 @@
               <span class="count">{dlnaDevices.length}</span>
             {/if}
           </button>
-          <button
-            class="protocol-tab"
-            class:active={activeProtocol === 'airplay'}
-            onclick={() => activeProtocol = 'airplay'}
-          >
-            <Speaker size={16} />
-            <span>AirPlay</span>
-            {#if airplayDevices.length > 0}
-              <span class="count">{airplayDevices.length}</span>
-            {/if}
-          </button>
+          <!-- AirPlay hidden until RAOP streaming is implemented -->
+          <!-- See docs/AIRPLAY_IMPLEMENTATION_STATUS.md for details -->
         </div>
 
         <div class="content">
