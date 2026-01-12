@@ -1,7 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { X } from 'lucide-svelte';
-  import GlassSurface from './glass/GlassSurface.svelte';
   import { showToast } from '$lib/stores/toastStore';
 
   type ProviderKey = 'spotify' | 'apple' | 'tidal' | 'deezer';
@@ -168,7 +167,7 @@
     aria-modal="true"
     tabindex="-1"
   >
-    <GlassSurface rootClassName="modal playlist-import-modal" enableRipple={false} onclick={(e) => e.stopPropagation()}>
+    <div class="modal" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
         <div class="header-title">
           <img src="/qobuz-logo.svg" alt="Qobuz" class="qobuz-logo" />
@@ -247,7 +246,7 @@
           {/if}
         </button>
       </div>
-    </GlassSurface>
+    </div>
   </div>
 {/if}
 
@@ -262,18 +261,17 @@
     z-index: 1000;
   }
 
-  :global(.playlist-import-modal) {
+  .modal {
     width: 100%;
     max-width: 560px;
     max-height: 90vh;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    --glass-bg: rgba(30, 30, 35, 0.9);
-    --glass-blur: 24px;
-    --glass-radius: 16px;
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --glass-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    background: var(--bg-secondary);
+    border-radius: 16px;
+    border: 1px solid var(--bg-tertiary);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
   }
 
   .modal-header {
@@ -506,7 +504,7 @@
   }
 
   @media (max-width: 720px) {
-    :global(.playlist-import-modal) {
+    .modal {
       max-width: calc(100% - 24px);
     }
 

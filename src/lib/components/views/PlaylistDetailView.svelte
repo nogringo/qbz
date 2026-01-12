@@ -876,6 +876,7 @@
   .collage-wrapper .artwork-overlay {
     position: absolute;
     inset: 0;
+    z-index: 10;
     background: rgba(0, 0, 0, 0.6);
     display: flex;
     align-items: center;
