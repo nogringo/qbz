@@ -2,6 +2,11 @@ name: release-flatpak
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional release tag to build (e.g. v0.1.0)"
+        required: false
+        type: string
   push:
     tags:
       - "v*"
@@ -14,6 +19,54 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve release version
+        id: release
+        run: |
+          VERSION=""
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          elif [[ -n "${{ inputs.tag }}" ]]; then
+            VERSION="${{ inputs.tag }}"
+            VERSION="${VERSION#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Sync version to build metadata
+        if: steps.release.outputs.version != ''
+        env:
+          QBZ_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+
+          version = os.environ["QBZ_VERSION"]
+
+          def update_json(path, updater):
+              p = pathlib.Path(path)
+              data = json.loads(p.read_text(encoding="utf-8"))
+              updater(data)
+              p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+          update_json("package.json", lambda d: d.__setitem__("version", version))
+
+          def update_lock(d):
+              d["version"] = version
+              packages = d.get("packages")
+              if isinstance(packages, dict) and "" in packages:
+                  packages[""]["version"] = version
+          update_json("package-lock.json", update_lock)
+
+          update_json("src-tauri/tauri.conf.json", lambda d: d.__setitem__("version", version))
+
+          cargo_path = pathlib.Path("src-tauri/Cargo.toml")
+          cargo_text = cargo_path.read_text(encoding="utf-8")
+          cargo_text = re.sub(r'(?m)^version = \"[^\"]+\"', f'version = \"{version}\"', cargo_text, count=1)
+          cargo_path.write_text(cargo_text, encoding="utf-8")
+          PY
 
       - name: Install flatpak tooling
         run: |
