@@ -98,15 +98,16 @@
 
 ## 6. Playlist Management
 
-**Status:** Partial (Import implemented)
+**Status:** Partial (Import fully working)
 
 **Description:** Create, edit, and manage playlists within QBZ.
 
 **Implemented Features:**
-- [x] Import playlists from Spotify, Apple Music, Tidal, Deezer
+- [x] Import playlists from Spotify, Apple Music, Tidal, Deezer (all working)
 - [x] Track matching via ISRC + fuzzy matching algorithm
 - [x] Progress log UI during import
 - [x] Auto-create Qobuz playlist with matched tracks
+- [x] Tidal rate limiting and API chunk size fixes
 
 **TODO:**
 - [ ] Create new playlists (basic UI exists)
