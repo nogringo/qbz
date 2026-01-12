@@ -188,7 +188,7 @@
           title: t.title,
           artist: t.performer?.name,
           album: t.album?.title,
-          albumArt: t.album?.image?.thumbnail || t.album?.image?.small,
+          albumArt: t.album?.image?.large || t.album?.image?.thumbnail || t.album?.image?.small,
           albumId: t.album?.id,
           artistId: t.performer?.id,
           duration: formatDuration(t.duration),
@@ -522,11 +522,18 @@
 </script>
 
 <div class="playlist-detail">
-  <!-- Back Navigation -->
-  <button class="back-btn" onclick={onBack}>
-    <ArrowLeft size={16} />
-    <span>Back</span>
-  </button>
+  <!-- Navigation Row -->
+  <div class="nav-row">
+    <button class="back-btn" onclick={onBack}>
+      <ArrowLeft size={16} />
+      <span>Back</span>
+    </button>
+    {#if playlist}
+      <button class="edit-btn" onclick={() => editModalOpen = true} title="Edit playlist">
+        <Edit3 size={16} />
+      </button>
+    {/if}
+  </div>
 
   {#if loading}
     <div class="loading">
@@ -605,9 +612,6 @@
           <button class="secondary-btn" onclick={handleShuffle}>
             <Shuffle size={18} />
             <span>Shuffle</span>
-          </button>
-          <button class="secondary-btn" onclick={() => editModalOpen = true} title="Edit playlist">
-            <Edit3 size={18} />
           </button>
           <AlbumMenu
             onPlayNext={handlePlayAllNext}
@@ -774,6 +778,13 @@
     height: 100%;
   }
 
+  .nav-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
   .back-btn {
     display: flex;
     align-items: center;
@@ -784,12 +795,30 @@
     color: var(--text-secondary);
     cursor: pointer;
     font-size: 14px;
-    margin-bottom: 24px;
     transition: color 150ms ease;
   }
 
   .back-btn:hover {
     color: var(--text-primary);
+  }
+
+  .edit-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 150ms ease;
+  }
+
+  .edit-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
   }
 
   .loading,
