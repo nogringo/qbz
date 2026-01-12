@@ -41,6 +41,12 @@ Coming soon.
 - Favorites and playlists from your Qobuz account.
 - Local library backend: directory scanning, metadata extraction, CUE sheet parsing, and SQLite indexing.
 
+### Network Casting
+- Chromecast device discovery and streaming.
+- DLNA/UPnP device discovery and streaming (AVTransport SOAP).
+- Unified cast picker with protocol selection.
+- Seamless playback handoff to network devices.
+
 ### Integrations
 - MPRIS media controls and media key support on Linux.
 - Desktop notifications for track changes.
@@ -146,6 +152,7 @@ qbz-nix/
 │       ├── player/       # Audio playback engine
 │       ├── queue/        # Queue management
 │       ├── cache/        # Audio cache and prefetch
+│       ├── cast/         # Chromecast & DLNA casting
 │       ├── library/      # Local library backend
 │       ├── lastfm/       # Last.fm integration
 │       ├── share/        # SongLink / share utilities

@@ -97,23 +97,26 @@
 
 ---
 
-## 5. DLNA and AirCast Integration
+## 5. Network Casting (Chromecast & DLNA)
 
-**Status:** Partial (ChromeCast only)
+**Status:** Completed
 
-**Description:** Stream to network devices via DLNA, AirPlay, and ChromeCast.
+**Description:** Stream to network devices via Chromecast and DLNA/UPnP.
 
-**Current State:**
-- ChromeCast streaming works
-- DLNA not implemented
-- AirPlay (AirCast) not implemented
+**Implemented Features:**
+- [x] Chromecast device discovery (mDNS)
+- [x] Chromecast streaming via media server
+- [x] DLNA/UPnP device discovery (SSDP)
+- [x] DLNA AVTransport SOAP implementation (SetAVTransportURI, Play, Pause, Stop, Seek)
+- [x] DLNA RenderingControl for volume
+- [x] DIDL-Lite metadata for track info
+- [x] Unified CastPicker UI with protocol tabs
+- [x] CastStore for state management across protocols
+- [x] Connected device banner with disconnect button
+- [x] Automatic casting when connected (playbackService integration)
 
-**TODO:**
-- [ ] DLNA device discovery
-- [ ] DLNA streaming implementation
-- [ ] AirPlay/AirCast support
-- [ ] Device selector in UI
-- [ ] Handle network device disconnection gracefully
+**Not Implemented (Deferred):**
+- [ ] AirPlay/RAOP streaming - No viable Rust RAOP library exists. See qbz-nix-docs/AIRPLAY_IMPLEMENTATION_STATUS.md for research findings and future options.
 
 ---
 
@@ -188,9 +191,15 @@
 
 ---
 
-## Priority Order for Remaining Work
+## v1.0 Launch Status
 
-1. **Session Persistence debugging** - Critical for UX
-2. **Tray Icon** - Expected feature for music apps
-3. **MiniPlayer** - Nice to have
-4. **DLNA/AirPlay** - Lower priority
+All 6 roadmap items are now **COMPLETE**:
+1. Session Persistence - Done
+2. Device Select / Passthrough - Done
+3. Tray Icon - Done
+4. MiniPlayer - Done
+5. Network Casting (Chromecast & DLNA) - Done
+6. Playlist Management - Done
+
+**Deferred to v1.1+:**
+- AirPlay/RAOP streaming (blocked on Rust library availability)
