@@ -646,7 +646,11 @@
             artist={track.artist}
             album={track.album}
             duration={track.duration}
-            quality={track.hires ? 'Hi-Res' : undefined}
+            quality={track.bitDepth && track.samplingRate
+              ? `${track.bitDepth}bit/${track.samplingRate}kHz`
+              : track.hires
+                ? 'Hi-Res'
+                : 'CD Quality'}
             hideFavorite={track.isLocal}
             hideDownload={track.isLocal}
             downloadStatus={downloadInfo.status}

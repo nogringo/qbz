@@ -139,10 +139,8 @@
   <!-- Duration -->
   <div class="track-duration">{duration}</div>
 
-  <!-- Quality -->
-  {#if quality}
-    <div class="track-quality">{quality}</div>
-  {/if}
+  <!-- Quality (always render to maintain column alignment) -->
+  <div class="track-quality">{quality ?? ''}</div>
 
   <!-- Favorite Button -->
   {#if !hideFavorite}
