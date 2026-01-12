@@ -100,8 +100,15 @@ export function canGoForward(): boolean {
  * Navigate to playlist detail view
  */
 export function selectPlaylist(playlistId: number): void {
+  const previousId = selectedPlaylistId;
   selectedPlaylistId = playlistId;
-  navigateTo('playlist');
+
+  // If already on playlist view, still notify so the component reloads with new ID
+  if (activeView === 'playlist' && previousId !== playlistId) {
+    notifyListeners();
+  } else {
+    navigateTo('playlist');
+  }
 }
 
 /**

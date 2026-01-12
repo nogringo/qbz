@@ -4,7 +4,6 @@
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import { invoke } from '@tauri-apps/api/core';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { onMount } from 'svelte';
   import TrackRow from '../TrackRow.svelte';
   import { type DownloadStatus } from '$lib/stores/downloadState';
 
@@ -137,7 +136,10 @@
   let customArtworkPath = $state<string | null>(null);
   let showSortMenu = $state(false);
 
-  onMount(() => {
+  // Reload playlist when playlistId changes
+  $effect(() => {
+    // Access playlistId to create dependency
+    const id = playlistId;
     loadPlaylist();
     loadSettings();
     loadLocalTracks();
@@ -841,11 +843,11 @@
   }
 
   .playlist-title {
-    font-size: 48px;
+    font-size: 24px;
     font-weight: 700;
     color: var(--text-primary);
     margin: 0 0 8px 0;
-    line-height: 1.1;
+    line-height: 1.2;
   }
 
   .playlist-description {
