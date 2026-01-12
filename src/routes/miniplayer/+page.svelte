@@ -15,7 +15,8 @@
     Maximize2,
     Volume2,
     VolumeX,
-    Volume1
+    Volume1,
+    ListMusic
   } from 'lucide-svelte';
   import {
     subscribe as subscribePlayer,
@@ -23,6 +24,8 @@
     togglePlay,
     seek as playerSeek,
     setVolume as playerSetVolume,
+    startPolling,
+    stopPolling,
     type PlayerState
   } from '$lib/stores/playerStore';
   import {
@@ -44,6 +47,7 @@
   let isDragging = $state(false);
   let isDraggingProgress = $state(false);
   let isDraggingVolume = $state(false);
+  let queueCount = $state(0);
 
   // Refs
   let progressRef: HTMLDivElement;
@@ -51,7 +55,6 @@
 
   // Derived state
   const progress = $derived(playerState.duration > 0 ? (playerState.currentTime / playerState.duration) * 100 : 0);
-  const hasTrack = $derived(playerState.currentTrack !== null);
 
   function formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
@@ -63,7 +66,12 @@
   let unsubscribePlayer: (() => void) | null = null;
   let unsubscribeQueue: (() => void) | null = null;
 
-  onMount(() => {
+  onMount(async () => {
+    console.log('[MiniPlayer] Mounting, starting polling...');
+
+    // Start listening for playback events
+    await startPolling();
+
     // Subscribe to player state
     unsubscribePlayer = subscribePlayer(() => {
       playerState = getPlayerState();
@@ -74,17 +82,21 @@
       const qState = getQueueState();
       isShuffle = qState.isShuffle;
       repeatMode = qState.repeatMode;
+      queueCount = qState.tracks.length;
     });
 
-    // Initial queue state
+    // Initial state
     const qState = getQueueState();
     isShuffle = qState.isShuffle;
     repeatMode = qState.repeatMode;
+    queueCount = qState.tracks.length;
   });
 
   onDestroy(() => {
+    console.log('[MiniPlayer] Unmounting, stopping polling...');
     unsubscribePlayer?.();
     unsubscribeQueue?.();
+    stopPolling();
   });
 
   // Playback controls
@@ -187,6 +199,7 @@
 
   // Window controls
   async function handleRestore(): Promise<void> {
+    console.log('[MiniPlayer] Restore button clicked');
     await exitMiniplayerMode();
   }
 
@@ -205,6 +218,12 @@
     } finally {
       isDragging = false;
     }
+  }
+
+  // Queue info (placeholder - will open queue panel later)
+  function handleOpenQueue(): void {
+    console.log('[MiniPlayer] Queue button clicked, tracks:', queueCount);
+    // TODO: Open queue panel or switch to expanded mode
   }
 </script>
 
@@ -311,8 +330,19 @@
         </button>
       </div>
 
-      <!-- Volume Control -->
-      <div class="volume-control">
+      <!-- Right Controls: Queue + Volume -->
+      <div class="right-controls">
+        <button
+          class="control-btn small"
+          onclick={handleOpenQueue}
+          title="Queue ({queueCount} tracks)"
+        >
+          <ListMusic size={14} />
+          {#if queueCount > 0}
+            <span class="queue-badge">{queueCount > 99 ? '99+' : queueCount}</span>
+          {/if}
+        </button>
+
         <button class="control-btn small" onclick={handleMuteToggle} title={playerState.volume === 0 ? 'Unmute' : 'Mute'}>
           {#if playerState.volume === 0}
             <VolumeX size={14} />
@@ -343,24 +373,14 @@
 </div>
 
 <style>
-  :global(body) {
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    overflow: hidden;
-  }
-
   .miniplayer {
     display: flex;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #1a1a1f 0%, #252530 100%);
-    border-radius: 12px;
+    background: #18181b;
     color: white;
     user-select: none;
     overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .miniplayer.dragging {
@@ -374,6 +394,7 @@
     flex-shrink: 0;
     cursor: grab;
     position: relative;
+    background: #0f0f11;
   }
 
   .artwork-section:active {
@@ -384,18 +405,16 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 12px 0 0 12px;
   }
 
   .artwork-placeholder {
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #2a2a35 0%, #1f1f28 100%);
+    background: linear-gradient(135deg, #27272a 0%, #18181b 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     color: rgba(255, 255, 255, 0.3);
-    border-radius: 12px 0 0 12px;
   }
 
   /* Content Section */
@@ -403,7 +422,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 12px 16px;
+    padding: 12px 14px;
     min-width: 0;
   }
 
@@ -412,7 +431,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     cursor: grab;
   }
 
@@ -428,7 +447,7 @@
 
   .title {
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -437,12 +456,12 @@
   }
 
   .artist {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-top: 2px;
+    margin-top: 1px;
   }
 
   .window-controls {
@@ -456,24 +475,24 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    background: rgba(255, 255, 255, 0.08);
+    width: 22px;
+    height: 22px;
+    background: rgba(255, 255, 255, 0.06);
     border: none;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    border-radius: 6px;
+    border-radius: 4px;
     transition: all 0.15s ease;
   }
 
   .window-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.12);
     color: rgba(255, 255, 255, 0.9);
   }
 
   .window-btn.restore:hover {
-    background: rgba(99, 102, 241, 0.3);
-    color: #818cf8;
+    background: rgba(99, 102, 241, 0.25);
+    color: #a5b4fc;
   }
 
   /* Progress Section */
@@ -481,15 +500,15 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .time {
     font-size: 10px;
     font-family: var(--font-mono, monospace);
     font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.5);
-    min-width: 32px;
+    color: rgba(255, 255, 255, 0.4);
+    min-width: 30px;
   }
 
   .time.remaining {
@@ -498,7 +517,7 @@
 
   .progress-bar {
     flex: 1;
-    height: 20px;
+    height: 16px;
     display: flex;
     align-items: center;
     cursor: pointer;
@@ -508,14 +527,14 @@
   .progress-track {
     width: 100%;
     height: 3px;
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 2px;
     overflow: hidden;
   }
 
   .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #6366f1 0%, #818cf8 100%);
+    background: #6366f1;
     border-radius: 2px;
     transition: width 100ms linear;
   }
@@ -530,15 +549,11 @@
     transform: translate(-50%, -50%);
     opacity: 0;
     transition: opacity 150ms ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   }
 
   .progress-bar:hover .progress-thumb {
     opacity: 1;
-  }
-
-  .progress-bar:hover .progress-track {
-    height: 4px;
   }
 
   /* Controls Row */
@@ -551,6 +566,12 @@
   .playback-controls {
     display: flex;
     align-items: center;
+    gap: 2px;
+  }
+
+  .right-controls {
+    display: flex;
+    align-items: center;
     gap: 4px;
   }
 
@@ -558,18 +579,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     background: transparent;
     border: none;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
     border-radius: 50%;
     transition: all 0.15s ease;
+    position: relative;
   }
 
   .control-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
     color: #fff;
   }
 
@@ -587,27 +609,37 @@
   }
 
   .control-btn.play {
-    width: 38px;
-    height: 38px;
-    background: rgba(255, 255, 255, 0.12);
-    margin: 0 4px;
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 0 2px;
   }
 
   .control-btn.play:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .queue-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background: #6366f1;
+    color: white;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   /* Volume Control */
-  .volume-control {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
   .volume-slider {
-    width: 60px;
-    height: 20px;
+    width: 50px;
+    height: 16px;
     display: flex;
     align-items: center;
     cursor: pointer;
@@ -617,14 +649,14 @@
   .volume-track {
     width: 100%;
     height: 3px;
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 2px;
     overflow: hidden;
   }
 
   .volume-fill {
     height: 100%;
-    background: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.5);
     border-radius: 2px;
   }
 

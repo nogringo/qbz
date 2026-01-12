@@ -17,30 +17,12 @@ const MINIPLAYER_HEIGHT = 150;
 let originalSize: PhysicalSize | null = null;
 let originalPosition: PhysicalPosition | null = null;
 let originalMaximized = false;
-let isMiniplayerMode = false;
-
-// Callbacks for state management
-let onModeChangeCallback: ((isMini: boolean) => void) | null = null;
-
-/**
- * Set callback for mode changes
- */
-export function onModeChange(callback: (isMini: boolean) => void): void {
-  onModeChangeCallback = callback;
-}
-
-/**
- * Check if currently in miniplayer mode
- */
-export function isInMiniplayerMode(): boolean {
-  return isMiniplayerMode;
-}
 
 /**
  * Enter miniplayer mode - resize window and navigate to miniplayer route
  */
 export async function enterMiniplayerMode(): Promise<void> {
-  if (isMiniplayerMode) return;
+  console.log('[MiniPlayer] Entering miniplayer mode...');
 
   try {
     const window = getCurrentWindow();
@@ -50,7 +32,7 @@ export async function enterMiniplayerMode(): Promise<void> {
     originalSize = await window.innerSize();
     originalPosition = await window.innerPosition();
 
-    console.log('[MiniPlayer] Saving original state:', {
+    console.log('[MiniPlayer] Saved original state:', {
       size: originalSize,
       position: originalPosition,
       maximized: originalMaximized
@@ -70,9 +52,6 @@ export async function enterMiniplayerMode(): Promise<void> {
     // Navigate to miniplayer route
     await goto('/miniplayer');
 
-    isMiniplayerMode = true;
-    onModeChangeCallback?.(true);
-
     console.log('[MiniPlayer] Entered miniplayer mode');
   } catch (err) {
     console.error('[MiniPlayer] Failed to enter miniplayer mode:', err);
@@ -83,39 +62,41 @@ export async function enterMiniplayerMode(): Promise<void> {
  * Exit miniplayer mode - restore original window state
  */
 export async function exitMiniplayerMode(): Promise<void> {
-  if (!isMiniplayerMode) return;
+  console.log('[MiniPlayer] Exiting miniplayer mode...');
+  console.log('[MiniPlayer] Original state:', { originalSize, originalPosition, originalMaximized });
 
   try {
     const window = getCurrentWindow();
 
-    // Restore window properties
+    // Restore window properties first
     await window.setAlwaysOnTop(false);
     await window.setDecorations(true);
     await window.setResizable(true);
 
     // Restore size
     if (originalSize) {
+      console.log('[MiniPlayer] Restoring size:', originalSize);
       await window.setSize({ type: 'Physical', width: originalSize.width, height: originalSize.height });
     } else {
       // Fallback to default size
+      console.log('[MiniPlayer] No original size, using default');
       await window.setSize({ type: 'Physical', width: 1280, height: 800 });
     }
 
     // Restore position
     if (originalPosition) {
+      console.log('[MiniPlayer] Restoring position:', originalPosition);
       await window.setPosition({ type: 'Physical', x: originalPosition.x, y: originalPosition.y });
     }
 
     // Restore maximized state
     if (originalMaximized) {
+      console.log('[MiniPlayer] Restoring maximized state');
       await window.maximize();
     }
 
     // Navigate back to main
     await goto('/');
-
-    isMiniplayerMode = false;
-    onModeChangeCallback?.(false);
 
     console.log('[MiniPlayer] Exited miniplayer mode');
   } catch (err) {
@@ -124,22 +105,9 @@ export async function exitMiniplayerMode(): Promise<void> {
 }
 
 /**
- * Toggle between normal and miniplayer modes
- */
-export async function toggleMiniplayerMode(): Promise<void> {
-  if (isMiniplayerMode) {
-    await exitMiniplayerMode();
-  } else {
-    await enterMiniplayerMode();
-  }
-}
-
-/**
  * Set miniplayer always on top
  */
 export async function setMiniplayerAlwaysOnTop(alwaysOnTop: boolean): Promise<void> {
-  if (!isMiniplayerMode) return;
-
   try {
     const window = getCurrentWindow();
     await window.setAlwaysOnTop(alwaysOnTop);
