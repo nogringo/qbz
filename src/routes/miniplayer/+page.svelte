@@ -207,10 +207,9 @@
   class:dragging={isDragging}
   role="application"
   aria-label="MiniPlayer"
-  onmousedown={startDrag}
 >
-  <!-- Album Art -->
-  <div class="artwork-section">
+  <!-- Album Art - draggable -->
+  <div class="artwork-section" onmousedown={startDrag}>
     {#if playerState.currentTrack?.artwork}
       <img src={playerState.currentTrack.artwork} alt="Album art" class="artwork" />
     {:else}
@@ -224,7 +223,7 @@
   <div class="content-section">
     <!-- Header: Track info + window controls -->
     <div class="header">
-      <div class="track-info">
+      <div class="track-info" onmousedown={startDrag}>
         <div class="title">{playerState.currentTrack?.title ?? 'No track'}</div>
         <div class="artist">{playerState.currentTrack?.artist ?? '—'}</div>
       </div>
@@ -322,20 +321,24 @@
     color: white;
     user-select: none;
     overflow: hidden;
-    cursor: grab;
   }
 
   .miniplayer.dragging {
     cursor: grabbing;
   }
 
+  .miniplayer.dragging * {
+    cursor: grabbing;
+  }
+
   /* Album Art */
   .artwork-section {
-    width: 180px;
+    width: 110px;
     flex-shrink: 0;
     padding: 6px;
     display: flex;
     align-items: center;
+    cursor: grab;
   }
 
   .artwork {
@@ -378,6 +381,7 @@
     flex: 1;
     min-width: 0;
     overflow: hidden;
+    cursor: grab;
   }
 
   .title {

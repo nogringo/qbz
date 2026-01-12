@@ -96,7 +96,7 @@ export async function enterMiniplayerMode(): Promise<void> {
     console.log('[MiniPlayer] Setting size to', MINIPLAYER_WIDTH, 'x', MINIPLAYER_HEIGHT);
     await window.setSize({ type: 'Physical', width: MINIPLAYER_WIDTH, height: MINIPLAYER_HEIGHT });
 
-    await window.setResizable(false);
+    await window.setResizable(true);
     await window.setDecorations(false);
     await window.setAlwaysOnTop(true);
 
