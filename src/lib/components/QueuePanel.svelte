@@ -160,7 +160,10 @@
           <div class="section-header">
             Next Up ({filteredTracks.length}{searchQuery ? ` / ${upcomingTracks.length}` : ''})
           </div>
-          <div class="tracks">
+          <div
+            class="tracks"
+            onwheel={(e) => e.stopPropagation()}
+          >
             {#each filteredTracks as track, index}
               {@const originalIndex = upcomingTracks.findIndex(t => t.id === track.id)}
               <div
@@ -302,11 +305,12 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     padding: 8px 10px;
     background-color: var(--bg-tertiary);
     border-radius: 6px;
     flex-shrink: 0;
+    flex-grow: 0;
   }
 
   .search-container :global(.search-icon) {
@@ -344,29 +348,11 @@
 
   .content {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     padding: 12px 16px;
     min-height: 0;
-    overscroll-behavior: contain; /* Prevent scroll chaining to parent */
-  }
-
-  /* Fancy scrollbar */
-  .content::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .content::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 4px;
-  }
-
-  .content::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.25);
   }
 
   .section {
@@ -380,7 +366,9 @@
   .next-up-section {
     display: flex;
     flex-direction: column;
+    flex: 1;
     min-height: 0;
+    overflow: hidden;
   }
 
   .section-header {
@@ -435,6 +423,34 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    padding-right: 4px; /* Space for scrollbar */
+  }
+
+  /* Thin fancy scrollbar - only visible when scrollable */
+  .tracks::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .tracks::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .tracks::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    transition: background 150ms ease;
+  }
+
+  .tracks:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .tracks::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
   }
 
   .queue-track {
