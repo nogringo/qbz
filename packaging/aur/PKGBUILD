@@ -15,10 +15,10 @@ provides=('qbz')
 conflicts=('qbz')
 options=('!strip')
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/vicrodh/qbz/releases/download/v${pkgver}/qbz_${pkgver}_amd64.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('7803ee50d63b1759f6fbd2f62749b62990bf75bfd5ffe0709a9269dc3af0e254')
 
 package() {
-    cd "${srcdir}"
+    cd "${srcdir}/qbz_${pkgver}_amd64"
 
     # Install binary
     install -Dm755 "qbz" "${pkgdir}/usr/bin/qbz"
@@ -27,13 +27,6 @@ package() {
     install -Dm644 "qbz.desktop" "${pkgdir}/usr/share/applications/qbz.desktop"
 
     # Install icons
-    for size in 32x32 128x128 256x256; do
-        if [[ -f "icons/hicolor/${size}/apps/qbz.png" ]]; then
-            install -Dm644 "icons/hicolor/${size}/apps/qbz.png" \
-                "${pkgdir}/usr/share/icons/hicolor/${size}/apps/qbz.png"
-        fi
-    done
-
-    # Install license
-    install -Dm644 "${srcdir}/../LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
+    install -Dm644 "icons/hicolor/32x32.png" "${pkgdir}/usr/share/icons/hicolor/32x32/apps/qbz.png"
+    install -Dm644 "icons/hicolor/128x128.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/qbz.png"
 }
