@@ -30,7 +30,7 @@ modules:
     build-commands:
       - npm ci
       - npm run build
-      - npm run tauri build -- --bundles none
+      - cd src-tauri && cargo build --release
       - install -Dm755 src-tauri/target/release/qbz-nix /app/bin/qbz
       - install -Dm644 packaging/flatpak/com.blitzkriegfc.qbz.desktop /app/share/applications/com.blitzkriegfc.qbz.desktop
       - install -Dm644 packaging/flatpak/com.blitzkriegfc.qbz.metainfo.xml /app/share/metainfo/com.blitzkriegfc.qbz.metainfo.xml
