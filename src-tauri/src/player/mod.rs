@@ -67,6 +67,8 @@ pub struct SharedState {
     position_at_start: Arc<AtomicU64>,
     /// Current output device name
     current_device: Arc<std::sync::RwLock<Option<String>>>,
+    /// Stream error flag (set when ALSA/audio errors are detected)
+    stream_error: Arc<AtomicBool>,
 }
 
 impl Default for SharedState {
@@ -86,7 +88,16 @@ impl SharedState {
             playback_start_millis: Arc::new(AtomicU64::new(0)),
             position_at_start: Arc::new(AtomicU64::new(0)),
             current_device: Arc::new(std::sync::RwLock::new(None)),
+            stream_error: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub fn set_stream_error(&self, error: bool) {
+        self.stream_error.store(error, Ordering::SeqCst);
+    }
+
+    pub fn has_stream_error(&self) -> bool {
+        self.stream_error.load(Ordering::SeqCst)
     }
 
     pub fn set_current_device(&self, device: Option<String>) {
@@ -265,14 +276,34 @@ impl Player {
                 }
             };
 
-            // Initialize audio device
+            // Initialize audio device with retry logic
+            // PipeWire/ALSA may need time to initialize at app startup
             let mut current_device_name = device_name.clone();
-            let mut stream_opt: Option<(OutputStream, rodio::OutputStreamHandle)> =
-                init_device(&current_device_name, &thread_state);
+            let mut stream_opt: Option<(OutputStream, rodio::OutputStreamHandle)> = None;
+
+            const MAX_INIT_RETRIES: u32 = 5;
+            const RETRY_DELAY_MS: u64 = 500;
+
+            for attempt in 1..=MAX_INIT_RETRIES {
+                log::info!("Audio device initialization attempt {}/{}", attempt, MAX_INIT_RETRIES);
+
+                stream_opt = init_device(&current_device_name, &thread_state);
+
+                if stream_opt.is_some() {
+                    log::info!("Audio device initialized successfully on attempt {}", attempt);
+                    thread_state.set_stream_error(false);
+                    break;
+                }
+
+                if attempt < MAX_INIT_RETRIES {
+                    log::warn!("Audio init failed, retrying in {}ms...", RETRY_DELAY_MS);
+                    std::thread::sleep(Duration::from_millis(RETRY_DELAY_MS));
+                }
+            }
 
             if stream_opt.is_none() {
-                // Wait for ReinitDevice command
-                log::warn!("No audio device available, waiting for reinit command...");
+                log::error!("Failed to initialize audio after {} attempts. Audio will not work until device is reinitialized.", MAX_INIT_RETRIES);
+                thread_state.set_stream_error(true);
             }
 
             let mut current_sink: Option<Sink> = None;
@@ -308,16 +339,32 @@ impl Player {
                         let sink = match Sink::try_new(&stream.1) {
                             Ok(s) => {
                                 consecutive_sink_failures = 0; // Reset on success
+                                thread_state.set_stream_error(false);
                                 s
                             }
                             Err(e) => {
                                 consecutive_sink_failures += 1;
+                                log::error!("Failed to create sink (attempt {}): {}", consecutive_sink_failures, e);
+
                                 if consecutive_sink_failures >= MAX_SINK_FAILURES {
-                                    log::error!("Audio stream appears broken after {} failures. Stopping playback.", consecutive_sink_failures);
-                                    thread_state.is_playing.store(false, Ordering::SeqCst);
-                                    thread_state.set_current_device(None);
+                                    log::warn!("Audio stream appears broken after {} failures. Auto-reinitializing...", consecutive_sink_failures);
+                                    thread_state.set_stream_error(true);
+
+                                    // Auto-reinit: drop current stream and try to create a new one
+                                    drop(stream_opt.take());
+                                    std::thread::sleep(Duration::from_millis(200));
+
+                                    stream_opt = init_device(&current_device_name, &thread_state);
+                                    if stream_opt.is_some() {
+                                        log::info!("Audio stream auto-reinitialized successfully");
+                                        consecutive_sink_failures = 0;
+                                        thread_state.set_stream_error(false);
+                                    } else {
+                                        log::error!("Auto-reinit failed. Audio device unavailable.");
+                                        thread_state.is_playing.store(false, Ordering::SeqCst);
+                                        thread_state.set_current_device(None);
+                                    }
                                 }
-                                log::error!("Failed to create sink: {}", e);
                                 continue;
                             }
                         };
