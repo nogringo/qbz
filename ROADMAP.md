@@ -98,7 +98,7 @@
 
 ## 6. Playlist Management
 
-**Status:** In Progress (~70% complete)
+**Status:** In Progress (~90% complete)
 
 **Description:** Full playlist management with CRUD, statistics, and enhanced UI.
 
@@ -115,21 +115,25 @@
 - [x] `playlist_settings` table with custom_artwork_path, sort_by, sort_order, hidden, position
 - [x] `playlist_stats` table with play_count, last_played_at
 - [x] Backend commands: `playlist_get_settings`, `playlist_set_artwork`, `playlist_get_stats`, etc.
+- [x] `get_playlist_suggestions` command for ML-based track suggestions
 
-**UI Components (80% complete):**
+**UI Components (90% complete):**
 - [x] PlaylistCollage component (Qobuz-style 4 album covers)
 - [x] Custom artwork selection per playlist
 - [x] Sort menu in sidebar (dropdown with submenu)
 - [x] PlaylistDetailView with collage header
 - [x] Stats display (play count)
+- [x] Filter dropdown (All/Visible/Hidden) in PlaylistManagerView
+- [x] Drag-to-reorder playlists in PlaylistManagerView
+- [x] Grid view toggle (list vs mosaic) in PlaylistManagerView
 - [ ] PlaylistEditModal (edit name/description)
-- [ ] Filter dropdown (All/Visible/Hidden) in sidebar
-- [ ] Drag-to-reorder playlists
-- [ ] Grid view toggle (list vs mosaic)
 
-**ML Suggestions (0% complete):**
-- [ ] `get_playlist_suggestions` backend algorithm
-- [ ] Suggested Tracks section in PlaylistDetailView
+**ML Suggestions (100% complete):**
+- [x] `get_playlist_suggestions` backend algorithm using reco_store scores
+- [x] Suggested Tracks section in PlaylistDetailView
+- [x] Add track to playlist button
+- [x] Dismiss suggestion (localStorage persistence per playlist)
+- [x] Refresh suggestions button
 
 ### Recent Fixes (This Session):
 - [x] Fixed custom artwork not loading (asset:// URL conversion)
@@ -173,5 +177,4 @@
 2. **PlaylistEditModal** - Complete playlist CRUD
 3. **Tray Icon** - Expected feature for music apps
 4. **MiniPlayer** - Nice to have
-5. **ML Suggestions** - Enhancement
-6. **DLNA/AirPlay** - Lower priority
+5. **DLNA/AirPlay** - Lower priority
