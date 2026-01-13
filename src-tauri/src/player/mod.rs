@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender, RecvTimeoutError};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use rodio::{Decoder, OutputStream, Sink, Source};
 use rodio::buffer::SamplesBuffer;
 use rodio::decoder::Mp4Type;
@@ -467,6 +467,9 @@ impl Player {
             // Track consecutive sink creation failures to detect broken streams
             let mut consecutive_sink_failures: u32 = 0;
             const MAX_SINK_FAILURES: u32 = 3;
+            // Delay dropping the audio stream after pause to reduce CPU usage.
+            const PAUSE_SUSPEND_DELAY_MS: u64 = 2000;
+            let mut pause_suspend_deadline: Option<Instant> = None;
 
             log::info!("Audio thread ready and waiting for commands");
 
@@ -475,10 +478,12 @@ impl Player {
                                       current_audio_data: &mut Option<Vec<u8>>,
                                       stream_opt: &mut Option<(OutputStream, rodio::OutputStreamHandle)>,
                                       current_device_name: &mut Option<String>,
-                                      consecutive_sink_failures: &mut u32| {
+                                      consecutive_sink_failures: &mut u32,
+                                      pause_suspend_deadline: &mut Option<Instant>| {
                 match command {
                     AudioCommand::Play { data, track_id, duration_secs } => {
                         log::info!("Audio thread: playing track {}", track_id);
+                        *pause_suspend_deadline = None;
 
                         if stream_opt.is_none() {
                             for attempt in 1..=MAX_INIT_RETRIES {
@@ -595,6 +600,8 @@ impl Player {
                             sink.pause();
                             thread_state.pause_playback_timer();
                             thread_state.is_playing.store(false, Ordering::SeqCst);
+                            *pause_suspend_deadline =
+                                Some(Instant::now() + Duration::from_millis(PAUSE_SUSPEND_DELAY_MS));
                             log::info!(
                                 "Audio thread: paused at {}s",
                                 thread_state.position.load(Ordering::SeqCst)
@@ -602,6 +609,57 @@ impl Player {
                         }
                     }
                     AudioCommand::Resume => {
+                        *pause_suspend_deadline = None;
+                        if current_sink.is_none() {
+                            let Some(ref audio_data) = *current_audio_data else {
+                                log::warn!("Audio thread: cannot resume - no audio data available");
+                                return;
+                            };
+
+                            if stream_opt.is_none() {
+                                *stream_opt = init_device(current_device_name, &thread_state);
+                            }
+
+                            let Some(ref stream) = *stream_opt else {
+                                log::error!("Audio thread: cannot resume - no audio device available");
+                                return;
+                            };
+
+                            let sink = match Sink::try_new(&stream.1) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    log::error!("Failed to create sink for resume: {}", e);
+                                    return;
+                                }
+                            };
+
+                            let volume = thread_state.volume.load(Ordering::SeqCst) as f32 / 100.0;
+                            sink.set_volume(volume);
+
+                            let source = match decode_with_fallback(audio_data) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    log::error!("Failed to decode audio for resume: {}", e);
+                                    return;
+                                }
+                            };
+
+                            let resume_pos = thread_state.position.load(Ordering::SeqCst);
+                            let skipped_source = if resume_pos > 0 {
+                                source.skip_duration(Duration::from_secs(resume_pos))
+                            } else {
+                                source
+                            };
+
+                            sink.append(skipped_source);
+                            thread_state.start_playback_timer(resume_pos);
+                            thread_state.is_playing.store(true, Ordering::SeqCst);
+                            *current_sink = Some(sink);
+
+                            log::info!("Audio thread: resumed from {}s", resume_pos);
+                            return;
+                        }
+
                         if let Some(ref sink) = *current_sink {
                             sink.play();
                             let current_pos = thread_state.position.load(Ordering::SeqCst);
@@ -621,6 +679,7 @@ impl Player {
                         thread_state.position_at_start.store(0, Ordering::SeqCst);
                         // Drop the stream to release the device and stop background CPU use.
                         drop(stream_opt.take());
+                        *pause_suspend_deadline = None;
                         log::info!("Audio thread: stopped");
                     }
                     AudioCommand::SetVolume(volume) => {
@@ -633,6 +692,7 @@ impl Player {
                         log::info!("Audio thread: volume set to {}", volume);
                     }
                     AudioCommand::Seek(position_secs) => {
+                        *pause_suspend_deadline = None;
                         let Some(ref audio_data) = *current_audio_data else {
                             log::warn!("Audio thread: cannot seek - no audio data available");
                             return;
@@ -695,6 +755,7 @@ impl Player {
                             "Audio thread: reinitializing device (new: {:?})",
                             new_device
                         );
+                        *pause_suspend_deadline = None;
 
                         if let Some(sink) = current_sink.take() {
                             sink.stop();
@@ -733,6 +794,7 @@ impl Player {
                             &mut stream_opt,
                             &mut current_device_name,
                             &mut consecutive_sink_failures,
+                            &mut pause_suspend_deadline,
                         ),
                         Err(RecvTimeoutError::Timeout) => {
                             if let Some(ref sink) = current_sink {
@@ -751,6 +813,42 @@ impl Player {
                         }
                     }
                 } else {
+                    if let Some(deadline) = pause_suspend_deadline {
+                        if stream_opt.is_some() {
+                            let now = Instant::now();
+                            if now >= deadline {
+                                if let Some(sink) = current_sink.take() {
+                                    sink.stop();
+                                }
+                                drop(stream_opt.take());
+                                pause_suspend_deadline = None;
+                                log::info!("Audio thread: suspended stream after pause");
+                                continue;
+                            }
+
+                            let wait = deadline.saturating_duration_since(now);
+                            let wait = std::cmp::min(wait, Duration::from_millis(250));
+                            match rx.recv_timeout(wait) {
+                                Ok(command) => handle_command(
+                                    command,
+                                    &mut current_sink,
+                                    &mut current_audio_data,
+                                    &mut stream_opt,
+                                    &mut current_device_name,
+                                    &mut consecutive_sink_failures,
+                                    &mut pause_suspend_deadline,
+                                ),
+                                Err(RecvTimeoutError::Timeout) => {}
+                                Err(RecvTimeoutError::Disconnected) => {
+                                    log::info!("Audio thread: channel closed, exiting");
+                                    break;
+                                }
+                            }
+                            continue;
+                        }
+                        *pause_suspend_deadline = None;
+                    }
+
                     match rx.recv() {
                         Ok(command) => handle_command(
                             command,
@@ -759,6 +857,7 @@ impl Player {
                             &mut stream_opt,
                             &mut current_device_name,
                             &mut consecutive_sink_failures,
+                            &mut pause_suspend_deadline,
                         ),
                         Err(_) => {
                             log::info!("Audio thread: channel closed, exiting");
