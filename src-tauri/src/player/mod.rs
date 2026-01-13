@@ -493,47 +493,43 @@ impl Player {
 
             log::info!("Audio thread ready and waiting for commands");
 
-            loop {
-                // Adaptive timeout: fast (100ms) when playing, slow (500ms) when idle
-                let timeout = if thread_state.is_playing.load(Ordering::SeqCst) {
-                    Duration::from_millis(100)
-                } else {
-                    Duration::from_millis(500)
-                };
-                match rx.recv_timeout(timeout) {
-                    Ok(AudioCommand::Play { data, track_id, duration_secs }) => {
+            let mut handle_command = |command: AudioCommand| {
+                match command {
+                    AudioCommand::Play { data, track_id, duration_secs } => {
                         log::info!("Audio thread: playing track {}", track_id);
 
-                        // Check if we have an audio stream
                         let Some(ref stream) = stream_opt else {
                             log::error!("Audio thread: no audio device available");
-                            continue;
+                            return;
                         };
 
-                        // Stop existing playback
                         if let Some(sink) = current_sink.take() {
                             sink.stop();
                         }
 
-                        // Store audio data for potential seeking
                         current_audio_data = Some(data.clone());
 
-                        // Create new sink
                         let sink = match Sink::try_new(&stream.1) {
                             Ok(s) => {
-                                consecutive_sink_failures = 0; // Reset on success
+                                consecutive_sink_failures = 0;
                                 thread_state.set_stream_error(false);
                                 s
                             }
                             Err(e) => {
                                 consecutive_sink_failures += 1;
-                                log::error!("Failed to create sink (attempt {}): {}", consecutive_sink_failures, e);
+                                log::error!(
+                                    "Failed to create sink (attempt {}): {}",
+                                    consecutive_sink_failures,
+                                    e
+                                );
 
                                 if consecutive_sink_failures >= MAX_SINK_FAILURES {
-                                    log::warn!("Audio stream appears broken after {} failures. Auto-reinitializing...", consecutive_sink_failures);
+                                    log::warn!(
+                                        "Audio stream appears broken after {} failures. Auto-reinitializing...",
+                                        consecutive_sink_failures
+                                    );
                                     thread_state.set_stream_error(true);
 
-                                    // Auto-reinit: drop current stream and try to create a new one
                                     drop(stream_opt.take());
                                     std::thread::sleep(Duration::from_millis(200));
 
@@ -548,49 +544,52 @@ impl Player {
                                         thread_state.set_current_device(None);
                                     }
                                 }
-                                continue;
+                                return;
                             }
                         };
 
-                        // Set volume
                         let volume = thread_state.volume.load(Ordering::SeqCst) as f32 / 100.0;
                         sink.set_volume(volume);
 
-                        // Decode audio
                         let source = match decode_with_fallback(&data) {
                             Ok(s) => s,
                             Err(e) => {
                                 log::error!("Failed to decode audio: {}", e);
-                                continue;
+                                return;
                             }
                         };
 
-                        // Get duration from source if available, otherwise use provided duration
-                        let actual_duration = source.total_duration()
+                        let actual_duration = source
+                            .total_duration()
                             .map(|d| d.as_secs())
                             .unwrap_or(duration_secs);
                         thread_state.duration.store(actual_duration, Ordering::SeqCst);
 
                         sink.append(source);
 
-                        // Update state
                         thread_state.is_playing.store(true, Ordering::SeqCst);
                         thread_state.position.store(0, Ordering::SeqCst);
                         thread_state.current_track_id.store(track_id, Ordering::SeqCst);
                         thread_state.start_playback_timer(0);
 
                         current_sink = Some(sink);
-                        log::info!("Audio thread: playback started, duration: {}s", actual_duration);
+                        log::info!(
+                            "Audio thread: playback started, duration: {}s",
+                            actual_duration
+                        );
                     }
-                    Ok(AudioCommand::Pause) => {
+                    AudioCommand::Pause => {
                         if let Some(ref sink) = current_sink {
                             sink.pause();
                             thread_state.pause_playback_timer();
                             thread_state.is_playing.store(false, Ordering::SeqCst);
-                            log::info!("Audio thread: paused at {}s", thread_state.position.load(Ordering::SeqCst));
+                            log::info!(
+                                "Audio thread: paused at {}s",
+                                thread_state.position.load(Ordering::SeqCst)
+                            );
                         }
                     }
-                    Ok(AudioCommand::Resume) => {
+                    AudioCommand::Resume => {
                         if let Some(ref sink) = current_sink {
                             sink.play();
                             let current_pos = thread_state.position.load(Ordering::SeqCst);
@@ -599,7 +598,7 @@ impl Player {
                             log::info!("Audio thread: resumed");
                         }
                     }
-                    Ok(AudioCommand::Stop) => {
+                    AudioCommand::Stop => {
                         if let Some(sink) = current_sink.take() {
                             sink.stop();
                         }
@@ -610,7 +609,7 @@ impl Player {
                         thread_state.position_at_start.store(0, Ordering::SeqCst);
                         log::info!("Audio thread: stopped");
                     }
-                    Ok(AudioCommand::SetVolume(volume)) => {
+                    AudioCommand::SetVolume(volume) => {
                         thread_state
                             .volume
                             .store((volume * 100.0) as u64, Ordering::SeqCst);
@@ -619,84 +618,79 @@ impl Player {
                         }
                         log::info!("Audio thread: volume set to {}", volume);
                     }
-                    Ok(AudioCommand::Seek(position_secs)) => {
+                    AudioCommand::Seek(position_secs) => {
                         let Some(ref audio_data) = current_audio_data else {
                             log::warn!("Audio thread: cannot seek - no audio data available");
-                            continue;
+                            return;
                         };
 
                         let Some(ref stream) = stream_opt else {
                             log::error!("Audio thread: cannot seek - no audio device available");
-                            continue;
+                            return;
                         };
 
                         log::info!("Audio thread: seeking to {}s", position_secs);
 
-                        // Stop current sink
                         if let Some(sink) = current_sink.take() {
                             sink.stop();
                         }
 
-                        // Create new sink
                         let sink = match Sink::try_new(&stream.1) {
                             Ok(s) => s,
                             Err(e) => {
                                 log::error!("Failed to create sink for seek: {}", e);
-                                continue;
+                                return;
                             }
                         };
 
-                        // Set volume
                         let volume = thread_state.volume.load(Ordering::SeqCst) as f32 / 100.0;
                         sink.set_volume(volume);
 
-                        // Re-decode audio
                         let source = match decode_with_fallback(audio_data) {
                             Ok(s) => s,
                             Err(e) => {
                                 log::error!("Failed to decode audio for seek: {}", e);
-                                continue;
+                                return;
                             }
                         };
 
-                        // Skip to the desired position
                         let skip_duration = Duration::from_secs(position_secs);
                         let skipped_source = source.skip_duration(skip_duration);
 
                         sink.append(skipped_source);
 
-                        // Check if we were playing before seek
                         let was_playing = thread_state.is_playing.load(Ordering::SeqCst);
                         if !was_playing {
                             sink.pause();
                         }
 
-                        // Update state
                         thread_state.position.store(position_secs, Ordering::SeqCst);
                         if was_playing {
                             thread_state.start_playback_timer(position_secs);
                         }
 
                         current_sink = Some(sink);
-                        log::info!("Audio thread: seeked to {}s (was_playing: {})", position_secs, was_playing);
+                        log::info!(
+                            "Audio thread: seeked to {}s (was_playing: {})",
+                            position_secs,
+                            was_playing
+                        );
                     }
-                    Ok(AudioCommand::ReinitDevice { device_name: new_device }) => {
-                        log::info!("Audio thread: reinitializing device (new: {:?})", new_device);
+                    AudioCommand::ReinitDevice { device_name: new_device } => {
+                        log::info!(
+                            "Audio thread: reinitializing device (new: {:?})",
+                            new_device
+                        );
 
-                        // Stop any current playback
                         if let Some(sink) = current_sink.take() {
                             sink.stop();
                         }
 
-                        // Drop the current stream to release the device
-                        // This is the key step - dropping releases exclusive access
                         drop(stream_opt.take());
                         log::info!("Audio thread: previous stream dropped, device released");
 
-                        // Small delay to let the system release the device
                         std::thread::sleep(Duration::from_millis(100));
 
-                        // Reinitialize with new device
                         current_device_name = new_device;
                         stream_opt = init_device(&current_device_name, &thread_state);
 
@@ -707,30 +701,41 @@ impl Player {
                             log::error!("Audio thread: failed to reinitialize device");
                         }
 
-                        // Clear playback state
                         thread_state.is_playing.store(false, Ordering::SeqCst);
                         thread_state.position.store(0, Ordering::SeqCst);
                         thread_state.playback_start_millis.store(0, Ordering::SeqCst);
                         current_audio_data = None;
                     }
-                    Err(RecvTimeoutError::Timeout) => {
-                        // Check if sink is empty (playback finished)
-                        if let Some(ref sink) = current_sink {
-                            if sink.empty() && thread_state.is_playing.load(Ordering::SeqCst) {
-                                // Track finished playing naturally
-                                log::info!("Audio thread: track finished (sink empty)");
-                                thread_state.is_playing.store(false, Ordering::SeqCst);
-                                // Set position to duration to signal completion
-                                let duration = thread_state.duration.load(Ordering::SeqCst);
-                                thread_state.position.store(duration, Ordering::SeqCst);
-                                thread_state.playback_start_millis.store(0, Ordering::SeqCst);
+                }
+            };
+
+            loop {
+                if thread_state.is_playing.load(Ordering::SeqCst) {
+                    match rx.recv_timeout(Duration::from_millis(100)) {
+                        Ok(command) => handle_command(command),
+                        Err(RecvTimeoutError::Timeout) => {
+                            if let Some(ref sink) = current_sink {
+                                if sink.empty() && thread_state.is_playing.load(Ordering::SeqCst) {
+                                    log::info!("Audio thread: track finished (sink empty)");
+                                    thread_state.is_playing.store(false, Ordering::SeqCst);
+                                    let duration = thread_state.duration.load(Ordering::SeqCst);
+                                    thread_state.position.store(duration, Ordering::SeqCst);
+                                    thread_state.playback_start_millis.store(0, Ordering::SeqCst);
+                                }
                             }
                         }
+                        Err(RecvTimeoutError::Disconnected) => {
+                            log::info!("Audio thread: channel closed, exiting");
+                            break;
+                        }
                     }
-                    Err(RecvTimeoutError::Disconnected) => {
-                        // Channel closed, exit thread
-                        log::info!("Audio thread: channel closed, exiting");
-                        break;
+                } else {
+                    match rx.recv() {
+                        Ok(command) => handle_command(command),
+                        Err(_) => {
+                            log::info!("Audio thread: channel closed, exiting");
+                            break;
+                        }
                     }
                 }
             }
