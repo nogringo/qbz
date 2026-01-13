@@ -645,8 +645,8 @@ impl Player {
                             };
 
                             let resume_pos = thread_state.position.load(Ordering::SeqCst);
-                            let skipped_source = if resume_pos > 0 {
-                                source.skip_duration(Duration::from_secs(resume_pos))
+                            let skipped_source: Box<dyn Source<Item = i16> + Send> = if resume_pos > 0 {
+                                Box::new(source.skip_duration(Duration::from_secs(resume_pos)))
                             } else {
                                 source
                             };
@@ -679,7 +679,7 @@ impl Player {
                         thread_state.position_at_start.store(0, Ordering::SeqCst);
                         // Drop the stream to release the device and stop background CPU use.
                         drop(stream_opt.take());
-                        *pause_suspend_deadline = None;
+                        pause_suspend_deadline = None;
                         log::info!("Audio thread: stopped");
                     }
                     AudioCommand::SetVolume(volume) => {

@@ -128,7 +128,7 @@ impl Sink {
             .skippable()
             .stoppable()
             // if you change the duration update the docs for try_seek!
-            .periodic_access(Duration::from_millis(20), move |src| {
+            .periodic_access(Duration::from_millis(50), move |src| {
                 if controls.stopped.load(Ordering::SeqCst) {
                     src.stop();
                                         *controls.position.lock().unwrap() = Duration::ZERO;
