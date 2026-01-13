@@ -1,13 +1,17 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { Search, Disc3, Music, Mic2, User, X } from 'lucide-svelte';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackMenu from '../TrackMenu.svelte';
   import { getSearchState, setSearchState, type SearchResults, type SearchTab } from '$lib/stores/searchState';
 
-  onMount(() => {
+  let searchInput: HTMLInputElement | null = null;
+
+  onMount(async () => {
     console.log('SearchView mounted!');
+    await tick();
+    searchInput?.focus();
   });
 
   // Track which images have failed to load
@@ -271,6 +275,7 @@
         bind:value={query}
         oninput={debounceSearch}
         class="search-input"
+        bind:this={searchInput}
       />
       {#if query.trim()}
         <button class="search-clear" onclick={clearSearch} aria-label="Clear search">
