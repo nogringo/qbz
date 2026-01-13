@@ -97,6 +97,11 @@
   type AlbumGroupMode = 'alpha' | 'artist';
   let albumGroupMode = $state<AlbumGroupMode>('alpha');
   let showGroupMenu = $state(false);
+  let trackSearch = $state('');
+  type TrackGroupMode = 'album' | 'artist' | 'name';
+  let trackGroupMode = $state<TrackGroupMode>('album');
+  let showTrackGroupMenu = $state(false);
+  let trackSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Data state
   let albums = $state<LocalAlbum[]>([]);
@@ -192,10 +197,10 @@
     }
   }
 
-  async function loadTracks() {
+  async function loadTracks(query = '') {
     loading = true;
     try {
-      tracks = await invoke<LocalTrack[]>('library_search', { query: '', limit: 500 });
+      tracks = await invoke<LocalTrack[]>('library_search', { query, limit: 1000 });
     } catch (err) {
       console.error('Failed to load tracks:', err);
       error = String(err);
@@ -211,7 +216,7 @@
     if (tab === 'artists' && artists.length === 0) {
       loadArtists();
     } else if (tab === 'tracks' && tracks.length === 0) {
-      loadTracks();
+      loadTracks(trackSearch.trim());
     }
   }
 
@@ -460,14 +465,15 @@
       .replace(/^-+|-+$/g, '') || 'group';
   }
 
-  function groupIdForKey(mode: AlbumGroupMode, key: string): string {
-    if (mode === 'alpha' && key === '#') {
-      return 'alpha-num';
+  function groupIdForKey(prefix: string, key: string): string {
+    if (key === '#') {
+      return `${prefix}-num`;
     }
-    return `${mode}-${slugify(key)}`;
+    return `${prefix}-${slugify(key)}`;
   }
 
   function groupAlbums(items: LocalAlbum[], mode: AlbumGroupMode) {
+    const prefix = `album-${mode}`;
     const sorted = [...items].sort((a, b) => {
       if (mode === 'artist') {
         const artistCmp = a.artist.localeCompare(b.artist);
@@ -496,16 +502,104 @@
 
     return keys.map(key => ({
       key,
-      id: groupIdForKey(mode, key),
+      id: groupIdForKey(prefix, key),
       albums: groups.get(key) ?? []
     }));
   }
 
-  function scrollToGroup(letter: string, available: Set<string>) {
+  function scrollToGroup(prefix: string, letter: string, available: Set<string>) {
     if (!available.has(letter)) return;
-    const id = groupIdForKey('alpha', letter);
+    const id = groupIdForKey(prefix, letter);
     const target = document.getElementById(id);
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function scheduleTrackSearch() {
+    if (trackSearchTimer) {
+      clearTimeout(trackSearchTimer);
+    }
+    trackSearchTimer = setTimeout(() => {
+      loadTracks(trackSearch.trim());
+    }, 250);
+  }
+
+  function trackSortValue(track: LocalTrack) {
+    const disc = track.disc_number ?? 0;
+    const trackNumber = track.track_number ?? 0;
+    return { disc, trackNumber };
+  }
+
+  function groupTracks(items: LocalTrack[], mode: TrackGroupMode) {
+    const prefix = `track-${mode}`;
+    const sorted = [...items].sort((a, b) => {
+      if (mode === 'album') {
+        const albumCmp = a.album.localeCompare(b.album);
+        if (albumCmp !== 0) return albumCmp;
+        const artistCmp = a.artist.localeCompare(b.artist);
+        if (artistCmp !== 0) return artistCmp;
+        const aOrder = trackSortValue(a);
+        const bOrder = trackSortValue(b);
+        if (aOrder.disc !== bOrder.disc) return aOrder.disc - bOrder.disc;
+        if (aOrder.trackNumber !== bOrder.trackNumber) return aOrder.trackNumber - bOrder.trackNumber;
+        return a.title.localeCompare(b.title);
+      }
+      if (mode === 'artist') {
+        const artistCmp = a.artist.localeCompare(b.artist);
+        if (artistCmp !== 0) return artistCmp;
+        const albumCmp = a.album.localeCompare(b.album);
+        if (albumCmp !== 0) return albumCmp;
+        const aOrder = trackSortValue(a);
+        const bOrder = trackSortValue(b);
+        if (aOrder.disc !== bOrder.disc) return aOrder.disc - bOrder.disc;
+        if (aOrder.trackNumber !== bOrder.trackNumber) return aOrder.trackNumber - bOrder.trackNumber;
+        return a.title.localeCompare(b.title);
+      }
+      const titleCmp = a.title.localeCompare(b.title);
+      if (titleCmp !== 0) return titleCmp;
+      const artistCmp = a.artist.localeCompare(b.artist);
+      if (artistCmp !== 0) return artistCmp;
+      return a.album.localeCompare(b.album);
+    });
+
+    const groups = new Map<string, { title: string; subtitle?: string; tracks: LocalTrack[] }>();
+    for (const track of sorted) {
+      if (mode === 'album') {
+        const artist = track.album_artist ?? track.artist ?? 'Unknown Artist';
+        const key = `${track.album}|||${artist}`;
+        if (!groups.has(key)) {
+          groups.set(key, { title: track.album, subtitle: artist, tracks: [] });
+        }
+        groups.get(key)?.tracks.push(track);
+      } else if (mode === 'artist') {
+        const key = track.artist || 'Unknown Artist';
+        if (!groups.has(key)) {
+          groups.set(key, { title: key, tracks: [] });
+        }
+        groups.get(key)?.tracks.push(track);
+      } else {
+        const key = alphaGroupKey(track.title);
+        if (!groups.has(key)) {
+          groups.set(key, { title: key, tracks: [] });
+        }
+        groups.get(key)?.tracks.push(track);
+      }
+    }
+
+    const keys = [...groups.keys()].sort((a, b) => {
+      if (mode === 'name') {
+        if (a === '#') return -1;
+        if (b === '#') return 1;
+      }
+      return a.localeCompare(b);
+    });
+
+    return keys.map(key => ({
+      key,
+      id: groupIdForKey(prefix, key),
+      title: groups.get(key)?.title ?? key,
+      subtitle: groups.get(key)?.subtitle,
+      tracks: groups.get(key)?.tracks ?? []
+    }));
   }
 </script>
 
@@ -799,10 +893,10 @@
               <p class="empty-hint">Try a different artist or album name</p>
             </div>
           {:else}
-            {@const groupedAlbums = groupAlbums(filteredAlbums, albumGroupMode)}
-            {@const alphaGroups = albumGroupMode === 'alpha'
-              ? new Set(groupedAlbums.map(group => group.key))
-              : new Set<string>()}
+          {@const groupedAlbums = groupAlbums(filteredAlbums, albumGroupMode)}
+          {@const alphaGroups = albumGroupMode === 'alpha'
+            ? new Set(groupedAlbums.map(group => group.key))
+            : new Set<string>()}
 
             <div class="album-sections">
               <div class="album-group-list">
@@ -865,7 +959,7 @@
                     <button
                       class="alpha-letter"
                       class:disabled={!alphaGroups.has(letter)}
-                      onclick={() => scrollToGroup(letter, alphaGroups)}
+                      onclick={() => scrollToGroup('album-alpha', letter, alphaGroups)}
                     >
                       {letter}
                     </button>
@@ -903,25 +997,121 @@
             <p>No tracks in library</p>
           </div>
         {:else}
-          <div class="track-list">
-            {#each tracks as track, index (track.id)}
-              <TrackRow
-                number={index + 1}
-                title={track.title}
-                artist={track.artist}
-                duration={formatDuration(track.duration_secs)}
-                quality={getQualityBadge(track)}
-                hideDownload={true}
-                hideFavorite={true}
-                onPlay={() => handleTrackPlay(track)}
-                menuActions={{
-                  onPlayNow: () => handleTrackPlay(track),
-                  onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(track) : undefined,
-                  onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(track) : undefined,
-                  onAddToPlaylist: () => openPlaylistPicker(track)
-                }}
+          <div class="track-controls">
+            <div class="search-container">
+              <Search size={16} class="search-icon" />
+              <input
+                type="text"
+                placeholder="Search tracks, albums, artists..."
+                bind:value={trackSearch}
+                oninput={scheduleTrackSearch}
+                class="search-input"
               />
-            {/each}
+              {#if trackSearch}
+                <button class="clear-search" onclick={() => { trackSearch = ''; loadTracks(''); }}>
+                  <X size={14} />
+                </button>
+              {/if}
+            </div>
+
+            <div class="dropdown-container">
+              <button
+                class="control-btn"
+                onclick={() => (showTrackGroupMenu = !showTrackGroupMenu)}
+                title="Group tracks"
+              >
+                <span>
+                  {trackGroupMode === 'album'
+                    ? 'Group: Album'
+                    : trackGroupMode === 'artist'
+                      ? 'Group: Artist'
+                      : 'Group: Name'}
+                </span>
+              </button>
+              {#if showTrackGroupMenu}
+                <div class="dropdown-menu">
+                  <button
+                    class="dropdown-item"
+                    class:selected={trackGroupMode === 'album'}
+                    onclick={() => { trackGroupMode = 'album'; showTrackGroupMenu = false; }}
+                  >
+                    Album
+                  </button>
+                  <button
+                    class="dropdown-item"
+                    class:selected={trackGroupMode === 'artist'}
+                    onclick={() => { trackGroupMode = 'artist'; showTrackGroupMenu = false; }}
+                  >
+                    Artist
+                  </button>
+                  <button
+                    class="dropdown-item"
+                    class:selected={trackGroupMode === 'name'}
+                    onclick={() => { trackGroupMode = 'name'; showTrackGroupMenu = false; }}
+                  >
+                    Name (A-Z)
+                  </button>
+                </div>
+              {/if}
+            </div>
+
+            <span class="album-count">{tracks.length} tracks</span>
+          </div>
+
+          {@const groupedTracks = groupTracks(tracks, trackGroupMode)}
+          {@const trackAlphaGroups = trackGroupMode === 'name' || trackGroupMode === 'artist'
+            ? new Set(groupedTracks.map(group => group.key))
+            : new Set<string>()}
+
+          <div class="track-sections">
+            <div class="track-group-list">
+              {#each groupedTracks as group (group.id)}
+                <div class="track-group" id={group.id}>
+                  <div class="track-group-header">
+                    <div class="track-group-title">{group.title}</div>
+                    {#if group.subtitle}
+                      <div class="track-group-subtitle">{group.subtitle}</div>
+                    {/if}
+                    <div class="track-group-count">{group.tracks.length} tracks</div>
+                  </div>
+
+                  <div class="track-list">
+                    {#each group.tracks as track, index (track.id)}
+                      <TrackRow
+                        number={track.track_number ?? index + 1}
+                        title={track.title}
+                        artist={track.artist}
+                        duration={formatDuration(track.duration_secs)}
+                        quality={getQualityBadge(track)}
+                        hideDownload={true}
+                        hideFavorite={true}
+                        onPlay={() => handleTrackPlay(track)}
+                        menuActions={{
+                          onPlayNow: () => handleTrackPlay(track),
+                          onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(track) : undefined,
+                          onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(track) : undefined,
+                          onAddToPlaylist: () => openPlaylistPicker(track)
+                        }}
+                      />
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            </div>
+
+            {#if trackGroupMode === 'name' || trackGroupMode === 'artist'}
+              <div class="alpha-index">
+                {#each alphaIndexLetters as letter}
+                  <button
+                    class="alpha-letter"
+                    class:disabled={!trackAlphaGroups.has(letter)}
+                    onclick={() => scrollToGroup(`track-${trackGroupMode}`, letter, trackAlphaGroups)}
+                  >
+                    {letter}
+                  </button>
+                {/each}
+              </div>
+            {/if}
           </div>
         {/if}
       {/if}
@@ -1548,6 +1738,56 @@
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: white;
     border-color: transparent;
+  }
+
+  /* Track Controls */
+  .track-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .track-sections {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .track-group-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .track-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .track-group-header {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .track-group-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .track-group-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .track-group-count {
+    font-size: 12px;
+    color: var(--text-muted);
   }
 
   .alpha-index {
