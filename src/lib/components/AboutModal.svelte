@@ -138,7 +138,8 @@
         <!-- Signature -->
         <div class="signature">
           <p>
-            Made with <span class="strikethrough">love in <img src="/mexico-flag.svg" alt="México" class="inline-icon flag" /></span> hatred.
+            Made with <span class="strikethrough">love</span> <strong>hate</strong> in
+            <img src="/mexico-flag.svg" alt="México" class="inline-icon flag" />
           </p>
           <p class="signature-detail">
             Hatred towards all those companies that discriminate against the Linux community
