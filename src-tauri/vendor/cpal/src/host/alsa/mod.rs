@@ -1067,9 +1067,9 @@ fn set_hw_params_from_format(
             // Without them, we are at the mercy of the device.
             //
             // QBZ note: prefer fewer wakeups during playback to reduce CPU usage.
-            // 50ms period / 200ms buffer is still reasonable for music playback.
-            hw_params.set_period_time_near(50_000, alsa::ValueOr::Nearest)?;
-            hw_params.set_buffer_time_near(200_000, alsa::ValueOr::Nearest)?;
+            // 100ms period / 400ms buffer is still reasonable for music playback.
+            hw_params.set_period_time_near(100_000, alsa::ValueOr::Nearest)?;
+            hw_params.set_buffer_time_near(400_000, alsa::ValueOr::Nearest)?;
         }
     }
 
