@@ -69,6 +69,9 @@ jobs:
         run: |
           cd /tmp/aur-qbz-bin
 
+          # Copy PKGBUILD from main repo (source of truth)
+          cp ${{ github.workspace }}/packaging/aur/PKGBUILD .
+
           # Update version
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
 
