@@ -330,7 +330,7 @@
       {
         root: artistDetailEl,
         rootMargin: '-20% 0px -60% 0px',
-        threshold: [0, 0.2, 0.5, 1]
+        threshold: [0.5]  // Single threshold for better performance
       }
     );
 
@@ -363,6 +363,8 @@
           src={artist.image}
           alt={artist.name}
           class="artist-image"
+          loading="lazy"
+          decoding="async"
           onerror={handleImageError}
         />
       {/if}
@@ -434,6 +436,8 @@
                     src={getSimilarArtistImage(similar)}
                     alt={similar.name}
                     class="similar-avatar"
+                    loading="lazy"
+                    decoding="async"
                     onerror={() => handleSimilarArtistImageError(similar.id)}
                   />
                 {/if}
@@ -494,7 +498,7 @@
               <div class="track-number">{index + 1}</div>
               <div class="track-artwork">
                 {#if track.album?.image?.thumbnail || track.album?.image?.small}
-                  <img src={track.album?.image?.thumbnail || track.album?.image?.small} alt={track.title} />
+                  <img src={track.album?.image?.thumbnail || track.album?.image?.small} alt={track.title} loading="lazy" decoding="async" />
                 {:else}
                   <div class="track-artwork-placeholder">
                     <Music size={16} />
@@ -632,7 +636,7 @@
           >
             <div class="playlist-artwork">
               {#if playlist.artwork}
-                <img src={playlist.artwork} alt={playlist.title} />
+                <img src={playlist.artwork} alt={playlist.title} loading="lazy" decoding="async" />
               {:else}
                 <div class="playlist-artwork-placeholder">
                   <Music size={18} />

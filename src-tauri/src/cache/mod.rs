@@ -31,13 +31,13 @@ struct CacheState {
 /// Audio cache manager with LRU eviction
 pub struct AudioCache {
     state: Mutex<CacheState>,
-    /// Maximum cache size in bytes (default: 500MB)
+    /// Maximum cache size in bytes (default: 200MB)
     max_size_bytes: usize,
 }
 
 impl Default for AudioCache {
     fn default() -> Self {
-        Self::new(500 * 1024 * 1024) // 500MB default
+        Self::new(200 * 1024 * 1024) // 200MB default (reduced from 500MB for lower memory footprint)
     }
 }
 

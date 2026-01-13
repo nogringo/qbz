@@ -12,7 +12,6 @@
 
   let { artwork, title, artist, quality, size = 'standard', onclick }: Props = $props();
 
-  let isHovered = $state(false);
   let imageError = $state(false);
   const cardSize = $derived(size === 'large' ? 180 : 162);
 
@@ -24,8 +23,6 @@
 <div
   class="album-card"
   style="width: {cardSize}px"
-  onmouseenter={() => (isHovered = true)}
-  onmouseleave={() => (isHovered = false)}
   onclick={onclick}
   role="button"
   tabindex="0"
@@ -34,24 +31,22 @@
   <!-- Artwork Container -->
   <div
     class="artwork-container"
-    style="width: {cardSize}px; height: {cardSize}px; transform: scale({isHovered ? 1.02 : 1})"
+    style="width: {cardSize}px; height: {cardSize}px"
   >
     {#if imageError || !artwork}
       <div class="artwork-placeholder">
         <Disc3 size={48} />
       </div>
     {:else}
-      <img src={artwork} alt={title} onerror={handleImageError} />
+      <img src={artwork} alt={title} loading="lazy" decoding="async" onerror={handleImageError} />
     {/if}
 
-    <!-- Play Button Overlay -->
-    {#if isHovered}
-      <div class="play-overlay">
-        <div class="play-button">
-          <Play size={24} fill="white" color="white" />
-        </div>
+    <!-- Play Button Overlay (CSS-only hover) -->
+    <div class="play-overlay">
+      <div class="play-button">
+        <Play size={24} fill="white" color="white" />
       </div>
-    {/if}
+    </div>
   </div>
 
   <!-- Text Info -->
@@ -77,6 +72,10 @@
     border-radius: 8px;
     overflow: hidden;
     transition: transform 150ms ease-out;
+  }
+
+  .album-card:hover .artwork-container {
+    transform: scale(1.02);
   }
 
   .artwork-container img {
@@ -113,6 +112,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  .album-card:hover .play-overlay {
+    opacity: 1;
   }
 
   .play-button {
