@@ -34,6 +34,7 @@ export interface PlayTrackOptions {
   isLocal?: boolean;
   showLoadingToast?: boolean;
   showSuccessToast?: boolean;
+  awaitPlaybackStart?: boolean;
   playbackStartTimeoutMs?: number;
 }
 
@@ -71,9 +72,10 @@ export async function playTrack(
     isLocal = false,
     showLoadingToast = true,
     showSuccessToast = true,
+    awaitPlaybackStart = false,
     playbackStartTimeoutMs = 6000
   } = options;
-  const shouldAwaitPlayback = showLoadingToast && !isCasting();
+  const shouldAwaitPlayback = awaitPlaybackStart && !isCasting();
 
   // Set current track in store
   setCurrentTrack(track);
