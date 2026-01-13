@@ -18,6 +18,8 @@
     artist: string;
     album: string;
     album_artist?: string;
+    album_group_key?: string;
+    album_group_title?: string;
     track_number?: number;
     disc_number?: number;
     year?: number;
@@ -555,6 +557,12 @@
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  function scrollToGroupId(groupId?: string) {
+    if (!groupId) return;
+    const target = document.getElementById(groupId);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function scheduleTrackSearch() {
     if (trackSearchTimer) {
       clearTimeout(trackSearchTimer);
@@ -568,6 +576,15 @@
     const disc = track.disc_number ?? 0;
     const trackNumber = track.track_number ?? 0;
     return { disc, trackNumber };
+  }
+
+  function normalizeAlbumTitle(title: string): string {
+    const trimmed = title.trim();
+    if (!trimmed) return trimmed;
+
+    let normalized = trimmed.replace(/\s*[\[(](disc|disk|cd)\s*\d+[\])]\s*$/i, '');
+    normalized = normalized.replace(/\s+(disc|disk|cd)\s*\d+\s*$/i, '');
+    return normalized.trim() || trimmed;
   }
 
   function groupTracks(items: LocalTrack[], mode: TrackGroupMode) {
@@ -602,25 +619,41 @@
       return a.album.localeCompare(b.album);
     });
 
-    const groups = new Map<string, { title: string; subtitle?: string; tracks: LocalTrack[] }>();
+    const groups = new Map<string, { title: string; subtitle?: string; tracks: LocalTrack[]; artists: Set<string> }>();
     for (const track of sorted) {
       if (mode === 'album') {
-        const artist = track.album_artist ?? track.artist ?? 'Unknown Artist';
-        const key = `${track.album}|||${artist}`;
-        if (!groups.has(key)) {
-          groups.set(key, { title: track.album, subtitle: artist, tracks: [] });
+        const title = track.album_group_title?.trim() || normalizeAlbumTitle(track.album);
+        const albumArtist = track.album_artist?.trim() || '';
+        const groupKey = track.album_group_key?.trim()
+          ? track.album_group_key
+          : albumArtist
+            ? `${title}|||${albumArtist}`
+            : title;
+        const entry = groups.get(groupKey);
+        if (!entry) {
+          groups.set(groupKey, {
+            title,
+            subtitle: albumArtist || undefined,
+            tracks: [track],
+            artists: new Set([track.artist || 'Unknown Artist'])
+          });
+        } else {
+          entry.tracks.push(track);
+          if (albumArtist && !entry.subtitle) {
+            entry.subtitle = albumArtist;
+          }
+          entry.artists.add(track.artist || 'Unknown Artist');
         }
-        groups.get(key)?.tracks.push(track);
       } else if (mode === 'artist') {
         const key = track.artist || 'Unknown Artist';
         if (!groups.has(key)) {
-          groups.set(key, { title: key, tracks: [] });
+          groups.set(key, { title: key, tracks: [], artists: new Set([key]) });
         }
         groups.get(key)?.tracks.push(track);
       } else {
         const key = alphaGroupKey(track.title);
         if (!groups.has(key)) {
-          groups.set(key, { title: key, tracks: [] });
+          groups.set(key, { title: key, tracks: [], artists: new Set() });
         }
         groups.get(key)?.tracks.push(track);
       }
@@ -631,6 +664,10 @@
         if (a === '#') return -1;
         if (b === '#') return 1;
       }
+      if (mode === 'album') {
+        const titleCmp = (groups.get(a)?.title ?? a).localeCompare(groups.get(b)?.title ?? b);
+        if (titleCmp !== 0) return titleCmp;
+      }
       return a.localeCompare(b);
     });
 
@@ -638,7 +675,17 @@
       key,
       id: groupIdForKey(prefix, key),
       title: groups.get(key)?.title ?? key,
-      subtitle: groups.get(key)?.subtitle,
+      subtitle: (() => {
+        const entry = groups.get(key);
+        if (!entry) return undefined;
+        if (mode === 'album') {
+          if (entry.subtitle) return entry.subtitle;
+          const artists = [...entry.artists];
+          if (artists.length > 1) return 'Various Artists';
+          return artists[0];
+        }
+        return entry.subtitle;
+      })(),
       tracks: groups.get(key)?.tracks ?? []
     }));
   }
@@ -1107,9 +1154,23 @@
           </div>
 
           {@const groupedTracks = groupTracks(tracks, trackGroupMode)}
-          {@const trackAlphaGroups = trackGroupMode === 'name' || trackGroupMode === 'artist'
+          {@const trackIndexTargets = trackGroupMode === 'artist'
+            ? (() => {
+                const map = new Map<string, string>();
+                for (const group of groupedTracks) {
+                  const letter = alphaGroupKey(group.title);
+                  if (!map.has(letter)) {
+                    map.set(letter, group.id);
+                  }
+                }
+                return map;
+              })()
+            : new Map<string, string>()}
+          {@const trackAlphaGroups = trackGroupMode === 'name'
             ? new Set(groupedTracks.map(group => group.key))
-            : new Set<string>()}
+            : trackGroupMode === 'artist'
+              ? new Set(trackIndexTargets.keys())
+              : new Set<string>()}
 
           <div class="track-sections">
             <div class="track-group-list">
@@ -1181,7 +1242,9 @@
                   <button
                     class="alpha-letter"
                     class:disabled={!trackAlphaGroups.has(letter)}
-                    onclick={() => scrollToGroup(`track-${trackGroupMode}`, letter, trackAlphaGroups)}
+                    onclick={() => trackGroupMode === 'artist'
+                      ? scrollToGroupId(trackIndexTargets.get(letter))
+                      : scrollToGroup(`track-${trackGroupMode}`, letter, trackAlphaGroups)}
                   >
                     {letter}
                   </button>

@@ -489,27 +489,29 @@
       {/if}
 
       {#if !playlistsCollapsed}
-        {#if playlistsLoading}
-          <div class="playlists-loading">Loading...</div>
-        {:else if visiblePlaylists.length > 0}
-          <nav class="playlists-nav">
-            {#each visiblePlaylists as playlist (playlist.id)}
-              <NavigationItem
-                label={playlist.name}
-                tooltip={getPlaylistTooltip(playlist)}
-                active={activeView === 'playlist' && selectedPlaylistId === playlist.id}
-                onclick={() => handlePlaylistClick(playlist)}
-                onHover={() => loadPlaylistTooltip(playlist)}
-              >
-                {#snippet icon()}<ListMusic size={14} />{/snippet}
-              </NavigationItem>
-            {/each}
-          </nav>
-        {:else if userPlaylists.length > 0}
-          <div class="no-playlists">All playlists are hidden</div>
-        {:else}
-          <div class="no-playlists">No playlists yet</div>
-        {/if}
+        <div class="playlists-scroll">
+          {#if playlistsLoading}
+            <div class="playlists-loading">Loading...</div>
+          {:else if visiblePlaylists.length > 0}
+            <nav class="playlists-nav">
+              {#each visiblePlaylists as playlist (playlist.id)}
+                <NavigationItem
+                  label={playlist.name}
+                  tooltip={getPlaylistTooltip(playlist)}
+                  active={activeView === 'playlist' && selectedPlaylistId === playlist.id}
+                  onclick={() => handlePlaylistClick(playlist)}
+                  onHover={() => loadPlaylistTooltip(playlist)}
+                >
+                  {#snippet icon()}<ListMusic size={14} />{/snippet}
+                </NavigationItem>
+              {/each}
+            </nav>
+          {:else if userPlaylists.length > 0}
+            <div class="no-playlists">All playlists are hidden</div>
+          {:else}
+            <div class="no-playlists">No playlists yet</div>
+          {/if}
+        </div>
       {/if}
     </div>
 
@@ -559,7 +561,7 @@
 
   .content {
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden;
     padding: 12px;
     padding-bottom: 0;
     display: flex;
@@ -648,6 +650,9 @@
   .playlists-section {
     flex: 1;
     padding-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
 
   .playlists-header {
@@ -688,6 +693,13 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+
+  .playlists-scroll {
+    overflow-y: auto;
+    padding-right: 4px;
+    min-height: 0;
+    flex: 1;
   }
 
   .playlists-loading,
