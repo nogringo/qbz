@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import {
     HardDrive, Music, Disc3, Mic2, FolderPlus, Trash2, RefreshCw,
-    Settings, X, Play, Plus, AlertCircle, Clock, ImageDown, ListPlus
+    Settings, X, Play, AlertCircle, ImageDown, Search, LayoutGrid, List
   } from 'lucide-svelte';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackRow from '../TrackRow.svelte';
@@ -92,6 +92,8 @@
   type TabType = 'albums' | 'artists' | 'tracks';
   let activeTab = $state<TabType>('albums');
   let showSettings = $state(false);
+  let albumSearch = $state('');
+  let albumViewMode = $state<'grid' | 'list'>('grid');
 
   // Data state
   let albums = $state<LocalAlbum[]>([]);
@@ -353,7 +355,7 @@
       artist: t.artist,
       album: t.album,
       duration_secs: t.duration_secs,
-      artwork_url: t.artwork_path ? `file://${t.artwork_path}` : null,
+      artwork_url: t.artwork_path ? getArtworkUrl(t.artwork_path) : null,
       hires: (t.bit_depth && t.bit_depth > 16) || t.sample_rate > 44100,
       bit_depth: t.bit_depth ?? null,
       sample_rate: t.sample_rate ?? null,
@@ -429,6 +431,15 @@
   function getArtworkUrl(path?: string): string {
     if (!path) return '';
     return convertFileSrc(path);
+  }
+
+  function matchesAlbumSearch(album: LocalAlbum, query: string): boolean {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+    return (
+      album.title.toLowerCase().includes(needle) ||
+      album.artist.toLowerCase().includes(needle)
+    );
   }
 </script>
 
@@ -652,17 +663,90 @@
             <p class="empty-hint">Add folders and scan to build your library</p>
           </div>
         {:else}
-          <div class="album-grid">
-            {#each albums as album (album.id)}
-              <AlbumCard
-                artwork={getArtworkUrl(album.artwork_path)}
-                title={album.title}
-                artist={album.artist}
-                quality={getAlbumQualityBadge(album)}
-                onclick={() => handleAlbumClick(album)}
+          {@const filteredAlbums = albumSearch.trim()
+            ? albums.filter(album => matchesAlbumSearch(album, albumSearch))
+            : albums}
+
+          <div class="album-controls">
+            <div class="search-container">
+              <Search size={16} class="search-icon" />
+              <input
+                type="text"
+                placeholder="Search albums or artists..."
+                bind:value={albumSearch}
+                class="search-input"
               />
-            {/each}
+              {#if albumSearch}
+                <button class="clear-search" onclick={() => (albumSearch = '')}>
+                  <X size={14} />
+                </button>
+              {/if}
+            </div>
+
+            <button
+              class="control-btn icon-only"
+              onclick={() => (albumViewMode = albumViewMode === 'list' ? 'grid' : 'list')}
+              title={albumViewMode === 'list' ? 'Grid view' : 'List view'}
+            >
+              {#if albumViewMode === 'list'}
+                <LayoutGrid size={16} />
+              {:else}
+                <List size={16} />
+              {/if}
+            </button>
+
+            <span class="album-count">{filteredAlbums.length} albums</span>
           </div>
+
+          {#if filteredAlbums.length === 0}
+            <div class="empty">
+              <Disc3 size={48} />
+              <p>No albums match your search</p>
+              <p class="empty-hint">Try a different artist or album name</p>
+            </div>
+          {:else if albumViewMode === 'grid'}
+            <div class="album-grid">
+              {#each filteredAlbums as album (album.id)}
+                <AlbumCard
+                  artwork={getArtworkUrl(album.artwork_path)}
+                  title={album.title}
+                  artist={album.artist}
+                  quality={getAlbumQualityBadge(album)}
+                  onclick={() => handleAlbumClick(album)}
+                />
+              {/each}
+            </div>
+          {:else}
+            <div class="album-list">
+              {#each filteredAlbums as album (album.id)}
+                <div class="album-row" role="button" tabindex="0" onclick={() => handleAlbumClick(album)}>
+                  <div class="album-row-art">
+                    {#if album.artwork_path}
+                      <img src={getArtworkUrl(album.artwork_path)} alt={album.title} loading="lazy" decoding="async" />
+                    {:else}
+                      <div class="artwork-placeholder">
+                        <Disc3 size={28} />
+                      </div>
+                    {/if}
+                  </div>
+                  <div class="album-row-info">
+                    <div class="album-row-title">{album.title}</div>
+                    <div class="album-row-meta">
+                      <span>{album.artist}</span>
+                      {#if album.year}<span>{album.year}</span>{/if}
+                      <span>{album.track_count} tracks</span>
+                      <span>{formatTotalDuration(album.total_duration_secs)}</span>
+                    </div>
+                  </div>
+                  <div class="album-row-quality">
+                    <span class="quality-badge" class:hires={isAlbumHiRes(album)}>
+                      {getAlbumQualityBadge(album)}
+                    </span>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
         {/if}
       {:else if activeTab === 'artists'}
         {#if artists.length === 0}
@@ -1044,6 +1128,86 @@
     opacity: 0.7;
   }
 
+  /* Album Controls */
+  .album-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .search-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 8px 12px;
+    flex: 1;
+    max-width: 420px;
+  }
+
+  .search-icon {
+    color: var(--text-muted);
+  }
+
+  .search-input {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+  }
+
+  .search-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .clear-search {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+  }
+
+  .clear-search:hover {
+    color: var(--text-primary);
+  }
+
+  .control-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .control-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .control-btn.icon-only {
+    width: 36px;
+    height: 36px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .album-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
   /* Content */
   .content {
     min-height: 200px;
@@ -1094,6 +1258,92 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 24px;
+  }
+
+  /* Album List */
+  .album-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .album-row {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 150ms ease;
+  }
+
+  .album-row:hover {
+    background: var(--bg-tertiary);
+  }
+
+  .album-row-art {
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .album-row-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .album-row-info {
+    min-width: 0;
+  }
+
+  .album-row-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+  }
+
+  .album-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .album-row-meta span + span::before {
+    content: "\u2022";
+    margin: 0 8px;
+    color: var(--text-muted);
+  }
+
+  .album-row-quality {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .album-row-quality .quality-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 3px 8px;
+  }
+
+  .album-row-quality .quality-badge.hires {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border-color: transparent;
   }
 
   /* Artist Grid */
