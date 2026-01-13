@@ -553,7 +553,9 @@
     width: 280px;
     min-width: 280px;
     flex-shrink: 0;
-    background-color: var(--bg-secondary);
+    background-color: var(--bg-secondary, #1a1a1a);
+    position: relative;
+    z-index: 3;
     display: flex;
     flex-direction: column;
     height: calc(100vh - 136px); /* 104px NowPlayingBar + 32px TitleBar */
