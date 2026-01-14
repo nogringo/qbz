@@ -33,20 +33,24 @@
   --font-mono: 'JetBrains Mono', monospace;
 }
 
-/* Light Theme */
+/* Light Theme (Alucard - soft cream tones inspired by Dracula inverted) */
 [data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f5;
-  --bg-tertiary: #e8e8e8;
-  --bg-hover: #ebebeb;
+  --bg-primary: #F8F8F2;
+  --bg-secondary: #EEF0F5;
+  --bg-tertiary: #E2E5EB;
+  --bg-hover: #D8DCE5;
 
-  --text-primary: #1a1a1a;
-  --text-secondary: #444444;
-  --text-muted: #666666;
-  --text-disabled: #999999;
+  --text-primary: #282A36;
+  --text-secondary: #44475A;
+  --text-muted: #6272A4;
+  --text-disabled: #9CA3C0;
 
-  --border-subtle: #e0e0e0;
-  --border-strong: #cccccc;
+  --accent-primary: #8B5CF6;
+  --accent-hover: #7C3AED;
+  --accent-active: #6D28D9;
+
+  --border-subtle: #D8DCE5;
+  --border-strong: #C8CCD5;
 }
 
 /* OLED Theme */

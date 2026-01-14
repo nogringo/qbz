@@ -366,9 +366,9 @@
     left: 0;
     right: 0;
     height: 104px;
-    background: linear-gradient(to top, rgba(18, 18, 20, 0.98) 0%, rgba(24, 24, 28, 0.95) 100%);
+    background: var(--bg-secondary);
     backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid var(--border-subtle);
     z-index: 100;
     display: flex;
     flex-direction: column;
@@ -388,7 +388,7 @@
     font-size: 11px;
     font-family: var(--font-mono, monospace);
     font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted);
     min-width: 40px;
   }
 
@@ -412,7 +412,7 @@
   .seekbar-track {
     width: 100%;
     height: 3px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--border-subtle);
     border-radius: 2px;
     overflow: hidden;
   }
@@ -429,7 +429,7 @@
     top: 50%;
     width: 12px;
     height: 12px;
-    background: white;
+    background: var(--text-primary);
     border-radius: 50%;
     transform: translate(-50%, -50%);
     opacity: 0;
@@ -480,14 +480,14 @@
     background: transparent;
     border: none;
     border-radius: 6px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 150ms ease;
   }
 
   .control-btn:hover {
-    color: white;
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    background: var(--bg-hover);
   }
 
   .control-btn:active {
@@ -511,7 +511,7 @@
   .play-btn {
     width: 34px;
     height: 34px;
-    color: white;
+    color: var(--text-primary);
     margin: 0 4px;
   }
 
@@ -525,7 +525,7 @@
     align-items: stretch;
     gap: 12px;
     padding: 2px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--bg-tertiary);
     border-radius: 8px;
     min-width: 580px;
     flex: 1;
@@ -556,7 +556,7 @@
     width: 56px;
     height: 56px;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--bg-hover);
   }
 
   .artwork-preview {
@@ -601,7 +601,7 @@
   .song-title {
     font-size: 13px;
     font-weight: 500;
-    color: white;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -612,7 +612,7 @@
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
   }
@@ -621,7 +621,7 @@
     background: none;
     border: none;
     padding: 0;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-muted);
     font-size: 11px;
     cursor: pointer;
     transition: color 150ms ease;
@@ -631,12 +631,12 @@
   }
 
   .meta-link:hover {
-    color: white;
+    color: var(--text-primary);
     text-decoration: underline;
   }
 
   .meta-separator {
-    color: rgba(255, 255, 255, 0.3);
+    color: var(--text-disabled);
   }
 
   .quality-indicator {
@@ -656,7 +656,7 @@
 
   .empty-state {
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-disabled);
   }
 
   /* ===== Volume Control ===== */
@@ -678,7 +678,7 @@
   .volume-track {
     width: 100%;
     height: 4px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--border-subtle);
     border-radius: 2px;
     position: relative;
     overflow: visible;
@@ -697,7 +697,7 @@
     top: 50%;
     width: 14px;
     height: 14px;
-    background: white;
+    background: var(--text-primary);
     border-radius: 50%;
     transform: translate(-50%, -50%);
     opacity: 0;
