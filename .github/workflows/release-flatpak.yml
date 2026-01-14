@@ -76,9 +76,12 @@ jobs:
 
       - name: Install runtimes
         run: |
+          # Install GNOME runtime and SDK first
           flatpak install --user -y --noninteractive flathub \
             org.gnome.Platform//49 \
-            org.gnome.Sdk//49 \
+            org.gnome.Sdk//49
+          # Install SDK extensions - flatpak-builder will auto-resolve the correct version based on the SDK
+          flatpak install --user -y --noninteractive flathub \
             org.freedesktop.Sdk.Extension.node20//25.08 \
             org.freedesktop.Sdk.Extension.rust-stable//25.08
 
