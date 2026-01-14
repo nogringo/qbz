@@ -65,6 +65,7 @@
   const showFavoriteButton = $derived(showFavorite ?? !!albumId);
   const favoriteAvailable = $derived(favoriteEnabled ?? !!albumId);
   const hasOverlay = $derived(!!(showFavoriteButton || onPlay || hasMenu));
+  let menuOpen = $state(false);
 
   function handleImageError() {
     imageError = true;
@@ -159,7 +160,7 @@
 
     <!-- Action Overlay -->
     {#if hasOverlay}
-      <div class="action-overlay">
+      <div class="action-overlay" class:menu-open={menuOpen}>
         <div class="action-buttons">
           {#if showFavoriteButton}
             <button
@@ -188,6 +189,7 @@
                 onShareQobuz={onShareQobuz}
                 onShareSonglink={onShareSonglink}
                 onDownload={onDownload}
+                onOpenChange={(open) => (menuOpen = open)}
               />
             </div>
           {/if}
@@ -289,7 +291,8 @@
   }
 
   .album-card:hover .action-overlay,
-  .action-overlay:focus-within {
+  .action-overlay:focus-within,
+  .action-overlay.menu-open {
     opacity: 1;
   }
 

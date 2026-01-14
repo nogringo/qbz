@@ -16,6 +16,7 @@
     onShareQobuz?: () => void;
     onShareSonglink?: () => void;
     onDownload?: () => void;
+    onOpenChange?: (open: boolean) => void;
   }
 
   let {
@@ -23,7 +24,8 @@
     onPlayLater,
     onShareQobuz,
     onShareSonglink,
-    onDownload
+    onDownload,
+    onOpenChange
   }: Props = $props();
 
   let isOpen = $state(false);
@@ -44,6 +46,7 @@
   function closeMenu() {
     isOpen = false;
     shareOpen = false;
+    onOpenChange?.(false);
   }
 
   function handleClickOutside(event: MouseEvent) {
@@ -145,6 +148,7 @@
         e.stopPropagation();
         isOpen = !isOpen;
         shareOpen = false;
+        onOpenChange?.(isOpen);
         if (isOpen) setMenuPosition();
       }}
       aria-label="Album actions"
