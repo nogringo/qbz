@@ -1765,7 +1765,7 @@
           onTrackGoToArtist={handleArtistClick}
           onPlaylistClick={selectPlaylist}
         />
-      {:else if activeView === 'library'}
+      {:else if activeView === 'library' || activeView === 'library-album'}
         <LocalLibraryView
           onTrackPlay={handleLocalTrackPlay}
           onTrackPlayNext={queueLocalTrackNext}

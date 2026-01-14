@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import {
     HardDrive, Music, Disc3, Mic2, FolderPlus, Trash2, RefreshCw,
     Settings, X, Play, AlertCircle, ImageDown, Upload, Search, LayoutGrid, List
@@ -9,6 +9,15 @@
   import AlbumCard from '../AlbumCard.svelte';
   import TrackRow from '../TrackRow.svelte';
   import AddToPlaylistModal from '../AddToPlaylistModal.svelte';
+  import {
+    subscribe as subscribeNav,
+    selectLocalAlbum,
+    clearLocalAlbum,
+    getSelectedLocalAlbumId,
+    goBack as navGoBack,
+    navigateTo,
+    getNavigationState
+  } from '$lib/stores/navigationStore';
 
   // Backend types matching Rust models
   interface LocalTrack {
@@ -163,11 +172,69 @@
     showPlaylistModal = true;
   }
 
+  let unsubscribeNav: (() => void) | null = null;
+
   onMount(() => {
     loadLibraryData();
     loadFolders();
     checkDiscogsCredentials();
+
+    // Subscribe to navigation changes for back/forward support
+    unsubscribeNav = subscribeNav(() => {
+      const navState = getNavigationState();
+
+      // When navigating to library-album, load the album if we have an ID
+      if (navState.activeView === 'library-album' && navState.selectedLocalAlbumId) {
+        const albumId = navState.selectedLocalAlbumId;
+        // Find album in current list or load it
+        const album = albums.find(a => a.id === albumId);
+        if (album && (!selectedAlbum || selectedAlbum.id !== albumId)) {
+          loadAlbumById(albumId);
+        }
+      }
+
+      // When navigating back to library (from library-album), clear album selection
+      if (navState.activeView === 'library' && selectedAlbum) {
+        selectedAlbum = null;
+        albumTracks = [];
+      }
+    });
+
+    // Check if we should show an album on initial load (forward navigation)
+    const initialNavState = getNavigationState();
+    if (initialNavState.activeView === 'library-album' && initialNavState.selectedLocalAlbumId) {
+      loadAlbumById(initialNavState.selectedLocalAlbumId);
+    }
   });
+
+  onDestroy(() => {
+    if (unsubscribeNav) {
+      unsubscribeNav();
+    }
+  });
+
+  async function loadAlbumById(albumId: string) {
+    try {
+      // Find album in current list
+      let album = albums.find(a => a.id === albumId);
+
+      // If not found in loaded albums, we need to fetch album list first
+      if (!album) {
+        const allAlbums = await invoke<LocalAlbum[]>('library_get_albums', { limit: 1000, offset: 0 });
+        albums = allAlbums;
+        album = allAlbums.find(a => a.id === albumId);
+      }
+
+      if (album) {
+        selectedAlbum = album;
+        albumTracks = await invoke<LocalTrack[]>('library_get_album_tracks', {
+          albumGroupKey: album.id
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load album:', err);
+    }
+  }
 
   async function checkDiscogsCredentials() {
     try {
@@ -229,7 +296,17 @@
 
   function handleTabChange(tab: TabType) {
     activeTab = tab;
+
+    // If we're viewing an album, navigate back to library
+    const navState = getNavigationState();
+    if (navState.activeView === 'library-album') {
+      clearLocalAlbum();
+      navigateTo('library');
+    }
+
+    // Clear local state
     selectedAlbum = null;
+    albumTracks = [];
 
     if (tab === 'artists' && artists.length === 0) {
       loadArtists();
@@ -399,6 +476,9 @@
   }
 
   async function handleAlbumClick(album: LocalAlbum) {
+    // Use navigation store for proper back/forward support
+    selectLocalAlbum(album.id);
+    // Also load album data immediately for responsive UI
     selectedAlbum = album;
     try {
       albumTracks = await invoke<LocalTrack[]>('library_get_album_tracks', {
@@ -858,7 +938,7 @@
     {@const showDiscHeaders = albumSections.length > 1}
     <!-- Album Detail View -->
     <div class="album-detail">
-      <button class="back-btn" onclick={() => (selectedAlbum = null)}>
+      <button class="back-btn" onclick={() => { clearLocalAlbum(); navGoBack(); }}>
         <X size={20} />
         <span>Back to Library</span>
       </button>

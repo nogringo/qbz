@@ -6,7 +6,7 @@
  * fetched data, but selectedPlaylistId is managed here as it's just an ID.
  */
 
-export type ViewType = 'home' | 'search' | 'library' | 'settings' | 'album' | 'artist' | 'playlist' | 'playlist-manager' | 'favorites';
+export type ViewType = 'home' | 'search' | 'library' | 'library-album' | 'settings' | 'album' | 'artist' | 'playlist' | 'playlist-manager' | 'favorites';
 
 // Navigation state
 let activeView: ViewType = 'home';
@@ -15,6 +15,9 @@ let forwardHistory: ViewType[] = [];
 
 // Selected playlist ID (album/artist are full data objects in +page.svelte)
 let selectedPlaylistId: number | null = null;
+
+// Selected local album ID (for library-album view)
+let selectedLocalAlbumId: string | null = null;
 
 // Listeners
 const listeners = new Set<() => void>();
@@ -118,6 +121,37 @@ export function getSelectedPlaylistId(): number | null {
   return selectedPlaylistId;
 }
 
+// ============ Local Album Selection ============
+
+/**
+ * Navigate to local library album detail view
+ */
+export function selectLocalAlbum(albumId: string): void {
+  const previousId = selectedLocalAlbumId;
+  selectedLocalAlbumId = albumId;
+
+  // If already on library-album view, still notify so the component reloads with new ID
+  if (activeView === 'library-album' && previousId !== albumId) {
+    notifyListeners();
+  } else {
+    navigateTo('library-album');
+  }
+}
+
+/**
+ * Clear selected local album (called when navigating back to library)
+ */
+export function clearLocalAlbum(): void {
+  selectedLocalAlbumId = null;
+}
+
+/**
+ * Get selected local album ID
+ */
+export function getSelectedLocalAlbumId(): string | null {
+  return selectedLocalAlbumId;
+}
+
 // ============ Getters ============
 
 export function getActiveView(): ViewType {
@@ -131,6 +165,7 @@ export interface NavigationState {
   viewHistory: ViewType[];
   forwardHistory: ViewType[];
   selectedPlaylistId: number | null;
+  selectedLocalAlbumId: string | null;
   canGoBack: boolean;
   canGoForward: boolean;
 }
@@ -141,6 +176,7 @@ export function getNavigationState(): NavigationState {
     viewHistory: [...viewHistory],
     forwardHistory: [...forwardHistory],
     selectedPlaylistId,
+    selectedLocalAlbumId,
     canGoBack: viewHistory.length > 1,
     canGoForward: forwardHistory.length > 0
   };
