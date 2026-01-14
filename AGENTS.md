@@ -4,6 +4,26 @@ This file contains critical instructions for AI agents (Claude, Codex, Gemini, e
 
 ---
 
+## Commit Signatures
+
+When committing code, sign your commits with a short identifier at the end of the commit message:
+
+| Agent | Signature |
+|-------|-----------|
+| Claude | `cc` |
+| Codex | `cx` |
+| Copilot | `cp` |
+| Gemini | `gm` |
+
+Example:
+```
+fix(ui): correct button alignment
+
+cc
+```
+
+---
+
 ## CRITICAL: API Secrets in CI Workflows
 
 **DO NOT REMOVE the API secrets from the GitHub Actions workflows.**
