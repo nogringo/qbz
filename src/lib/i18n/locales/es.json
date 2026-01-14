@@ -28,7 +28,20 @@
     "madeForYou": "Hecho para Ti",
     "topPicks": "Selecciones Destacadas",
     "yourPlaylists": "Tus Listas",
-    "seeAll": "Ver Todo"
+    "seeAll": "Ver Todo",
+    "loading": "Cargando tu inicio",
+    "loadingDescription": "Construyendo recomendaciones de tu historial de escucha.",
+    "customizeHome": "Personalizar Inicio",
+    "loadError": "No se pudo cargar el Inicio",
+    "popularAlbums": "Álbumes Populares",
+    "qobuzissimes": "Qobuzissimes",
+    "editorPicks": "Selección del Editor",
+    "continueListening": "Continuar Escuchando",
+    "yourTopArtists": "Tus Artistas Favoritos",
+    "artistPlays": "{count} reproducciones",
+    "moreFromFavorites": "Más de Favoritos",
+    "startListening": "Empieza a Escuchar",
+    "startListeningDescription": "Reproduce música o agrega favoritos para activar recomendaciones."
   },
   "search": {
     "title": "Buscar",
@@ -40,10 +53,15 @@
     "noResults": "Sin resultados",
     "searching": "Buscando...",
     "recentSearches": "Búsquedas Recientes",
-    "clearHistory": "Limpiar Historial"
+    "clearHistory": "Limpiar Historial",
+    "startTyping": "Escribe para buscar en Qobuz",
+    "noAlbumsFor": "No se encontraron álbumes para \"{query}\"",
+    "noTracksFor": "No se encontraron pistas para \"{query}\"",
+    "noArtistsFor": "No se encontraron artistas para \"{query}\""
   },
   "library": {
     "title": "Biblioteca Local",
+    "browse": "Explorar Biblioteca",
     "albums": "Álbumes",
     "artists": "Artistas",
     "tracks": "Pistas",
@@ -127,7 +145,17 @@
     "playlistName": "Nombre de la Lista",
     "description": "Descripción",
     "public": "Pública",
-    "private": "Privada"
+    "private": "Privada",
+    "import": "Importar",
+    "manage": "Administrar listas",
+    "allHidden": "Todas las listas están ocultas"
+  },
+  "sort": {
+    "nameAZ": "Nombre (A-Z)",
+    "recent": "Reciente",
+    "trackCount": "# de Pistas",
+    "playCount": "Reproducciones",
+    "custom": "Personalizado"
   },
   "favorites": {
     "title": "Favoritos",
@@ -148,6 +176,7 @@
     "fetchingLyrics": "Buscando letras...",
     "shuffle": "Aleatorio",
     "repeat": "Repetir",
+    "repeatAll": "Repetir Todo",
     "repeatOne": "Repetir Una",
     "repeatOff": "No Repetir",
     "previous": "Anterior",
@@ -159,10 +188,18 @@
     "unmute": "Activar Sonido",
     "clearQueue": "Limpiar Cola",
     "queueEmpty": "La cola está vacía",
+    "queueEmptyDescription": "Busca música o explora tu biblioteca para agregar pistas.",
     "playNext": "Reproducir Siguiente",
     "addToQueue": "Agregar a la Cola",
     "removeFromQueue": "Quitar de la Cola",
-    "saveQueue": "Guardar como Lista"
+    "saveQueue": "Guardar como Lista",
+    "searchQueue": "Buscar en la cola...",
+    "noTracksMatch": "Ninguna pista coincide con \"{query}\"",
+    "noTrackPlaying": "Sin pista en reproducción",
+    "castToDevice": "Transmitir a dispositivo",
+    "castingManage": "Transmitiendo - Clic para administrar",
+    "miniPlayer": "Mini Reproductor",
+    "fullScreen": "Pantalla Completa"
   },
   "quality": {
     "mp3": "MP3 320kbps",
@@ -370,5 +407,18 @@
     "clearQueue": "¿Limpiar todas las pistas de la cola?",
     "clearCache": "¿Limpiar todos los datos en caché?",
     "logout": "¿Estás seguro de que quieres cerrar sesión?"
+  },
+  "homeSettings": {
+    "greeting": "Saludo",
+    "showGreeting": "Mostrar saludo",
+    "showGreetingDesc": "Mostrar saludo personalizado arriba",
+    "customGreeting": "Saludo personalizado",
+    "customGreetingDesc": "Usa {name} para tu nombre. Deja vacío para basado en hora.",
+    "customGreetingPlaceholder": "¡Buenas vibras, {name}!",
+    "sections": "Secciones",
+    "sectionsDesc": "Reordena con flechas. Activa/desactiva con interruptor.",
+    "moveUp": "Subir",
+    "moveDown": "Bajar",
+    "resetToDefaults": "Restablecer valores"
   }
 }

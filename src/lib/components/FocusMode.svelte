@@ -2,6 +2,7 @@
   import { SkipBack, Play, Pause, SkipForward, ChevronDown } from 'lucide-svelte';
   import LyricsLines from './lyrics/LyricsLines.svelte';
   import { startActiveLineUpdates, stopActiveLineUpdates } from '$lib/stores/lyricsStore';
+  import { t } from '$lib/i18n';
 
   interface LyricsLine {
     text: string;
@@ -135,7 +136,7 @@
     </div>
 
     <!-- Close Button -->
-    <button class="close-btn" class:visible={showControls} onclick={onClose} title="Close (Esc)">
+    <button class="close-btn" class:visible={showControls} onclick={onClose} title={$t('actions.close') + ' (Esc)'}>
       <ChevronDown size={28} />
     </button>
 
@@ -154,7 +155,7 @@
           {#if lyricsLoading}
             <div class="lyrics-state">
               <div class="spinner"></div>
-              <span>Loading lyrics...</span>
+              <span>{$t('player.fetchingLyrics')}</span>
             </div>
           {:else if lyricsError}
             <div class="lyrics-state">

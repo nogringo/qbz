@@ -5,6 +5,7 @@
   import AlbumCard from '../AlbumCard.svelte';
   import TrackMenu from '../TrackMenu.svelte';
   import { getSearchState, setSearchState, type SearchResults, type SearchTab } from '$lib/stores/searchState';
+  import { t } from '$lib/i18n';
 
   let searchInput: HTMLInputElement | null = null;
 
@@ -278,19 +279,19 @@
 <div class="search-view">
   <!-- Search Header -->
   <div class="search-header">
-    <h1>Search</h1>
+    <h1>{$t('search.title')}</h1>
     <div class="search-input-container">
       <Search size={20} class="search-icon" />
       <input
         type="text"
-        placeholder="Search for albums, tracks, or artists..."
+        placeholder={$t('search.placeholder')}
         bind:value={query}
         oninput={debounceSearch}
         class="search-input"
         bind:this={searchInput}
       />
       {#if query.trim()}
-        <button class="search-clear" onclick={clearSearch} aria-label="Clear search">
+        <button class="search-clear" onclick={clearSearch} aria-label={$t('actions.clear')}>
           <X size={18} />
         </button>
       {/if}
@@ -305,7 +306,7 @@
       onclick={() => handleTabChange('albums')}
     >
       <Disc3 size={18} />
-      <span>Albums</span>
+      <span>{$t('search.albums')}</span>
       {#if albumResults}
         <span class="count">{albumResults.total}</span>
       {/if}
@@ -316,7 +317,7 @@
       onclick={() => handleTabChange('tracks')}
     >
       <Music size={18} />
-      <span>Tracks</span>
+      <span>{$t('search.tracks')}</span>
       {#if trackResults}
         <span class="count">{trackResults.total}</span>
       {/if}
@@ -327,7 +328,7 @@
       onclick={() => handleTabChange('artists')}
     >
       <Mic2 size={18} />
-      <span>Artists</span>
+      <span>{$t('search.artists')}</span>
       {#if artistResults}
         <span class="count">{artistResults.total}</span>
       {/if}
@@ -339,21 +340,21 @@
     {#if isSearching}
       <div class="loading">
         <div class="spinner"></div>
-        <p>Searching...</p>
+        <p>{$t('search.searching')}</p>
       </div>
     {:else if searchError}
       <div class="error">
-        <p>Search failed</p>
+        <p>{$t('errors.loadFailed')}</p>
         <p class="error-detail">{searchError}</p>
       </div>
     {:else if !query.trim()}
       <div class="empty-state">
         <Search size={48} />
-        <p>Start typing to search Qobuz</p>
+        <p>{$t('search.startTyping')}</p>
       </div>
     {:else if activeTab === 'albums' && albumResults}
       {#if albumResults.items.length === 0}
-        <div class="no-results">No albums found for "{query}"</div>
+        <div class="no-results">{$t('search.noAlbumsFor', { values: { query } })}</div>
       {:else}
         <div class="albums-grid">
           {#each albumResults.items as album}
@@ -376,14 +377,14 @@
         {#if hasMoreAlbums}
           <div class="load-more-container">
             <button class="load-more-btn" onclick={loadMore} disabled={isLoadingMore}>
-              {isLoadingMore ? 'Loading...' : `Load More (${albumResults.items.length} of ${albumResults.total})`}
+              {isLoadingMore ? $t('actions.loading') : $t('artist.loadMore') + ` (${albumResults.items.length} / ${albumResults.total})`}
             </button>
           </div>
         {/if}
       {/if}
     {:else if activeTab === 'tracks' && trackResults}
       {#if trackResults.items.length === 0}
-        <div class="no-results">No tracks found for "{query}"</div>
+        <div class="no-results">{$t('search.noTracksFor', { values: { query } })}</div>
       {:else}
         <div class="tracks-list">
           {#each trackResults.items as track, index}
@@ -440,14 +441,14 @@
         {#if hasMoreTracks}
           <div class="load-more-container">
             <button class="load-more-btn" onclick={loadMore} disabled={isLoadingMore}>
-              {isLoadingMore ? 'Loading...' : `Load More (${trackResults.items.length} of ${trackResults.total})`}
+              {isLoadingMore ? $t('actions.loading') : $t('artist.loadMore') + ` (${trackResults.items.length} / ${trackResults.total})`}
             </button>
           </div>
         {/if}
       {/if}
     {:else if activeTab === 'artists' && artistResults}
       {#if artistResults.items.length === 0}
-        <div class="no-results">No artists found for "{query}"</div>
+        <div class="no-results">{$t('search.noArtistsFor', { values: { query } })}</div>
       {:else}
         <div class="artists-grid">
           {#each artistResults.items as artist}
@@ -461,7 +462,7 @@
               {/if}
               <div class="artist-name">{artist.name}</div>
               {#if artist.albums_count}
-                <div class="artist-albums">{artist.albums_count} albums</div>
+                <div class="artist-albums">{$t('library.albumCount', { values: { count: artist.albums_count } })}</div>
               {/if}
             </button>
           {/each}
@@ -469,7 +470,7 @@
         {#if hasMoreArtists}
           <div class="load-more-container">
             <button class="load-more-btn" onclick={loadMore} disabled={isLoadingMore}>
-              {isLoadingMore ? 'Loading...' : `Load More (${artistResults.items.length} of ${artistResults.total})`}
+              {isLoadingMore ? $t('actions.loading') : $t('artist.loadMore') + ` (${artistResults.items.length} / ${artistResults.total})`}
             </button>
           </div>
         {/if}

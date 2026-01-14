@@ -20,6 +20,7 @@
   } from 'lucide-svelte';
   import QualityBadge from './QualityBadge.svelte';
   import AudioOutputBadges from './AudioOutputBadges.svelte';
+  import { t } from '$lib/i18n';
 
   interface Props {
     artwork?: string;
@@ -186,16 +187,16 @@
         class="control-btn"
         class:active={isShuffle}
         onclick={onToggleShuffle}
-        title="Shuffle"
+        title={$t('player.shuffle')}
       >
         <Shuffle size={16} />
       </button>
 
-      <button class="control-btn" onclick={onSkipBack} title="Previous">
+      <button class="control-btn" onclick={onSkipBack} title={$t('player.previous')}>
         <SkipBack size={18} />
       </button>
 
-      <button class="control-btn play-btn" onclick={onTogglePlay} title={isPlaying ? 'Pause' : 'Play'}>
+      <button class="control-btn play-btn" onclick={onTogglePlay} title={isPlaying ? $t('player.pause') : $t('player.play')}>
         {#if isPlaying}
           <Pause size={20} />
         {:else}
@@ -203,7 +204,7 @@
         {/if}
       </button>
 
-      <button class="control-btn" onclick={onSkipForward} title="Next">
+      <button class="control-btn" onclick={onSkipForward} title={$t('player.next')}>
         <SkipForward size={18} />
       </button>
 
@@ -211,7 +212,7 @@
         class="control-btn"
         class:active={repeatMode !== 'off'}
         onclick={onToggleRepeat}
-        title={repeatMode === 'off' ? 'Repeat' : repeatMode === 'all' ? 'Repeat All' : 'Repeat One'}
+        title={repeatMode === 'off' ? $t('player.repeat') : repeatMode === 'all' ? $t('player.repeatAll') : $t('player.repeatOne')}
       >
         {#if repeatMode === 'one'}
           <Repeat1 size={16} />
@@ -220,7 +221,7 @@
         {/if}
       </button>
 
-      <button class="control-btn" title="Add to Playlist">
+      <button class="control-btn" title={$t('actions.addToPlaylist')}>
         <Plus size={16} />
       </button>
 
@@ -228,7 +229,7 @@
         class="control-btn"
         class:active={isFavorite}
         onclick={onToggleFavorite}
-        title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+        title={isFavorite ? $t('actions.removeFromFavorites') : $t('actions.addToFavorites')}
       >
         <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
       </button>
@@ -262,7 +263,7 @@
             <span class="song-title" title={trackTitle}>{trackTitle}</span>
             <div class="song-meta">
               {#if artist}
-                <button class="meta-link" onclick={onArtistClick} title="Go to Artist">
+                <button class="meta-link" onclick={onArtistClick} title={$t('actions.goToArtist')}>
                   {artist}
                 </button>
               {/if}
@@ -270,7 +271,7 @@
                 <span class="meta-separator">·</span>
               {/if}
               {#if album}
-                <button class="meta-link" onclick={onAlbumClick} title="Go to Album">
+                <button class="meta-link" onclick={onAlbumClick} title={$t('actions.goToAlbum')}>
                   {album}
                 </button>
               {/if}
@@ -286,7 +287,7 @@
         </div>
       {:else}
         <div class="empty-state">
-          <span>No track playing</span>
+          <span>{$t('player.noTrackPlaying')}</span>
         </div>
       {/if}
     </div>
@@ -297,7 +298,7 @@
         class="control-btn"
         class:cast-active={isCastConnected}
         onclick={onCast}
-        title={isCastConnected ? 'Casting - Click to manage' : 'Cast to device'}
+        title={isCastConnected ? $t('player.castingManage') : $t('player.castToDevice')}
       >
         <Cast size={16} />
       </button>
@@ -306,20 +307,20 @@
         class="control-btn"
         class:active={lyricsActive}
         onclick={onToggleLyrics}
-        title="Lyrics"
+        title={$t('player.lyrics')}
       >
         <Mic2 size={16} />
       </button>
 
-      <button class="control-btn" onclick={onOpenQueue} title="Queue">
+      <button class="control-btn" onclick={onOpenQueue} title={$t('player.queue')}>
         <ListMusic size={16} />
       </button>
 
-      <button class="control-btn" onclick={onOpenMiniPlayer} title="Mini Player">
+      <button class="control-btn" onclick={onOpenMiniPlayer} title={$t('player.miniPlayer')}>
         <PictureInPicture2 size={16} />
       </button>
 
-      <button class="control-btn" onclick={onOpenFullScreen} title="Full Screen">
+      <button class="control-btn" onclick={onOpenFullScreen} title={$t('player.fullScreen')}>
         <Maximize2 size={16} />
       </button>
 
@@ -328,7 +329,7 @@
         <button
           class="control-btn volume-btn"
           onclick={() => onVolumeChange?.(volume === 0 ? 70 : 0)}
-          title={volume === 0 ? 'Unmute' : 'Mute'}
+          title={volume === 0 ? $t('player.unmute') : $t('player.mute')}
         >
           {#if volume === 0}
             <VolumeX size={16} />

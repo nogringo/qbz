@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { Music, User, Loader2 } from 'lucide-svelte';
+  import { t } from '$lib/i18n';
   import HorizontalScrollRow from '../HorizontalScrollRow.svelte';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackRow from '../TrackRow.svelte';
@@ -456,8 +457,8 @@
         <div class="loading-icon">
           <Loader2 size={36} class="spinner" />
         </div>
-        <h2>Loading your home</h2>
-        <p>Building recommendations from your listening history.</p>
+        <h2>{$t('home.loading')}</h2>
+        <p>{$t('home.loadingDescription')}</p>
       </div>
     </div>
   {/if}
@@ -469,7 +470,7 @@
     {:else}
       <div></div>
     {/if}
-    <button class="settings-btn" onclick={() => isSettingsModalOpen = true} title="Customize Home">
+    <button class="settings-btn" onclick={() => isSettingsModalOpen = true} title={$t('home.customizeHome')}>
       <img src="/home-gear.svg" alt="Settings" class="settings-icon" />
     </button>
   </div>
@@ -479,22 +480,22 @@
       <div class="state-icon loading">
         <Loader2 size={36} class="spinner" />
       </div>
-      <h1>Loading your home</h1>
-      <p>Building recommendations from your listening history.</p>
+      <h1>{$t('home.loading')}</h1>
+      <p>{$t('home.loadingDescription')}</p>
     </div>
   {:else if error}
     <div class="home-state">
       <div class="state-icon">
         <Music size={36} />
       </div>
-      <h1>Could not load Home</h1>
+      <h1>{$t('home.loadError')}</h1>
       <p>{error}</p>
     </div>
   {:else if hasContent}
     <!-- Render sections in user-defined order -->
     {#each visibleSections as sectionId (sectionId)}
       {#if sectionId === 'newReleases' && newReleases.length > 0}
-        <HorizontalScrollRow title="New Releases">
+        <HorizontalScrollRow title={$t('home.newReleases')}>
           {#snippet children()}
             {#each newReleases as album}
               <AlbumCard
@@ -518,7 +519,7 @@
       {/if}
 
       {#if sectionId === 'pressAwards' && pressAwards.length > 0}
-        <HorizontalScrollRow title="Press Awards">
+        <HorizontalScrollRow title={$t('home.pressAwards')}>
           {#snippet children()}
             {#each pressAwards as album}
               <AlbumCard
@@ -542,7 +543,7 @@
       {/if}
 
       {#if sectionId === 'mostStreamed' && mostStreamed.length > 0}
-        <HorizontalScrollRow title="Popular Albums">
+        <HorizontalScrollRow title={$t('home.popularAlbums')}>
           {#snippet children()}
             {#each mostStreamed as album}
               <AlbumCard
@@ -566,7 +567,7 @@
       {/if}
 
       {#if sectionId === 'qobuzissimes' && qobuzissimes.length > 0}
-        <HorizontalScrollRow title="Qobuzissimes">
+        <HorizontalScrollRow title={$t('home.qobuzissimes')}>
           {#snippet children()}
             {#each qobuzissimes as album}
               <AlbumCard
@@ -590,7 +591,7 @@
       {/if}
 
       {#if sectionId === 'editorPicks' && editorPicks.length > 0}
-        <HorizontalScrollRow title="Editor's Picks">
+        <HorizontalScrollRow title={$t('home.editorPicks')}>
           {#snippet children()}
             {#each editorPicks as album}
               <AlbumCard
@@ -614,7 +615,7 @@
       {/if}
 
       {#if sectionId === 'recentAlbums' && recentAlbums.length > 0}
-        <HorizontalScrollRow title="Recently Played">
+        <HorizontalScrollRow title={$t('home.recentlyPlayed')}>
           {#snippet children()}
             {#each recentAlbums as album}
               <AlbumCard
@@ -640,7 +641,7 @@
       {#if sectionId === 'continueTracks' && continueTracks.length > 0}
         <div class="section">
           <div class="section-header">
-            <h2>Continue Listening</h2>
+            <h2>{$t('home.continueListening')}</h2>
           </div>
           <div class="track-list compact">
             {#each continueTracks as track, index}
@@ -667,7 +668,7 @@
       {/if}
 
       {#if sectionId === 'topArtists' && topArtists.length > 0}
-        <HorizontalScrollRow title="Your Top Artists">
+        <HorizontalScrollRow title={$t('home.yourTopArtists')}>
           {#snippet children()}
             {#each topArtists as artist}
               <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
@@ -685,7 +686,7 @@
                 {/if}
                 <div class="artist-name">{artist.name}</div>
                 {#if artist.playCount}
-                  <div class="artist-meta">{artist.playCount} plays</div>
+                  <div class="artist-meta">{$t('home.artistPlays', { values: { count: artist.playCount } })}</div>
                 {/if}
               </button>
             {/each}
@@ -695,7 +696,7 @@
       {/if}
 
       {#if sectionId === 'favoriteAlbums' && favoriteAlbums.length > 0}
-        <HorizontalScrollRow title="More From Favorites">
+        <HorizontalScrollRow title={$t('home.moreFromFavorites')}>
           {#snippet children()}
             {#each favoriteAlbums as album}
               <AlbumCard
@@ -723,8 +724,8 @@
       <div class="state-icon">
         <Music size={48} />
       </div>
-      <h1>Start Listening</h1>
-      <p>Play music or add favorites to activate recommendations.</p>
+      <h1>{$t('home.startListening')}</h1>
+      <p>{$t('home.startListeningDescription')}</p>
     </div>
   {/if}
 

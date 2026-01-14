@@ -5,6 +5,7 @@
   import { onMount } from 'svelte';
   import NavigationItem from './NavigationItem.svelte';
   import UserCard from './UserCard.svelte';
+  import { t } from '$lib/i18n';
 
   interface Playlist {
     id: number;
@@ -374,13 +375,13 @@
       }}
     >
       <Search class="search-icon" size={16} />
-      <span class="search-placeholder">Search</span>
+      <span class="search-placeholder">{$t('nav.search')}</span>
     </button>
 
     <!-- Navigation Section -->
     <nav class="nav-section">
       <NavigationItem
-        label="Home"
+        label={$t('nav.home')}
         active={activeView === 'home'}
         onclick={() => handleViewChange('home')}
       >
@@ -391,7 +392,7 @@
     <!-- Favorites Section (standalone) -->
     <nav class="nav-section">
       <NavigationItem
-        label="Favorites"
+        label={$t('nav.favorites')}
         active={activeView === 'favorites'}
         onclick={() => handleViewChange('favorites')}
       >
@@ -402,20 +403,20 @@
     <!-- Playlists Section -->
     <div class="section playlists-section">
       <div class="playlists-header">
-        <div class="section-header">Playlists</div>
+        <div class="section-header">{$t('nav.playlists')}</div>
         <div class="header-actions" bind:this={menuRef}>
-          <button class="icon-btn" onclick={onCreatePlaylist} title="New playlist">
+          <button class="icon-btn" onclick={onCreatePlaylist} title={$t('playlist.createNew')}>
             <Plus size={14} />
           </button>
           <button
             class="icon-btn"
             bind:this={triggerRef}
             onclick={(e) => { e.stopPropagation(); toggleMenu(); }}
-            title="Options"
+            title={$t('actions.more')}
           >
             <MoreHorizontal size={14} />
           </button>
-          <button class="icon-btn" onclick={() => playlistsCollapsed = !playlistsCollapsed} title={playlistsCollapsed ? "Expand" : "Collapse"}>
+          <button class="icon-btn" onclick={() => playlistsCollapsed = !playlistsCollapsed} title={playlistsCollapsed ? $t('actions.open') : $t('actions.close')}>
             {#if playlistsCollapsed}
               <ChevronDown size={14} />
             {:else}
@@ -438,7 +439,7 @@
             onmouseleave={closeSubmenuDelayed}
           >
             <ArrowUpDown size={14} />
-            <span class="menu-label">Sort by</span>
+            <span class="menu-label">{$t('library.sortBy')}</span>
             <ChevronRight size={14} class="submenu-arrow" />
           </div>
 
@@ -452,38 +453,38 @@
               onmouseleave={closeSubmenuDelayed}
             >
               <button class="menu-item" class:selected={sortOption === 'name'} onclick={() => handleSortChange('name')}>
-                Name (A-Z)
+                {$t('sort.nameAZ')}
               </button>
               <button class="menu-item" class:selected={sortOption === 'recent'} onclick={() => handleSortChange('recent')}>
-                Recent
+                {$t('sort.recent')}
               </button>
               <button class="menu-item" class:selected={sortOption === 'tracks'} onclick={() => handleSortChange('tracks')}>
-                # of Tracks
+                {$t('sort.trackCount')}
               </button>
               <button class="menu-item" class:selected={sortOption === 'playcount'} onclick={() => handleSortChange('playcount')}>
-                Play Count
+                {$t('sort.playCount')}
               </button>
               <button class="menu-item" class:selected={sortOption === 'custom'} onclick={() => handleSortChange('custom')}>
-                Custom
+                {$t('sort.custom')}
               </button>
             </div>
           {/if}
 
           <button class="menu-item" onclick={() => handleMenuAction(loadUserPlaylists)}>
             <RefreshCw size={14} />
-            <span>Refresh</span>
+            <span>{$t('actions.refresh')}</span>
           </button>
 
           <button class="menu-item" onclick={() => handleMenuAction(onImportPlaylist ?? (() => {}))}>
             <Import size={14} />
-            <span>Import</span>
+            <span>{$t('playlist.import')}</span>
           </button>
 
           <div class="menu-divider"></div>
 
           <button class="menu-item" onclick={() => handleMenuAction(onPlaylistManagerClick ?? (() => {}))}>
             <Settings size={14} />
-            <span>Manage playlists</span>
+            <span>{$t('playlist.manage')}</span>
           </button>
         </div>
       {/if}
@@ -491,7 +492,7 @@
       {#if !playlistsCollapsed}
         <div class="playlists-scroll">
           {#if playlistsLoading}
-            <div class="playlists-loading">Loading...</div>
+            <div class="playlists-loading">{$t('actions.loading')}</div>
           {:else if visiblePlaylists.length > 0}
             <nav class="playlists-nav">
               {#each visiblePlaylists as playlist (playlist.id)}
@@ -507,9 +508,9 @@
               {/each}
             </nav>
           {:else if userPlaylists.length > 0}
-            <div class="no-playlists">All playlists are hidden</div>
+            <div class="no-playlists">{$t('playlist.allHidden')}</div>
           {:else}
-            <div class="no-playlists">No playlists yet</div>
+            <div class="no-playlists">{$t('empty.noPlaylists')}</div>
           {/if}
         </div>
       {/if}
@@ -518,7 +519,7 @@
     <!-- Local Library Section -->
     <div class="section local-library-section">
       <button class="section-header-btn" onclick={() => localLibraryCollapsed = !localLibraryCollapsed}>
-        <span class="section-header">Local Library</span>
+        <span class="section-header">{$t('library.title')}</span>
         {#if localLibraryCollapsed}
           <ChevronDown size={12} />
         {:else}
@@ -527,7 +528,7 @@
       </button>
       {#if !localLibraryCollapsed}
         <NavigationItem
-          label="Browse Library"
+          label={$t('library.browse')}
           active={activeView === 'library'}
           onclick={() => handleViewChange('library')}
         >

@@ -28,7 +28,20 @@
     "madeForYou": "Made for You",
     "topPicks": "Top Picks",
     "yourPlaylists": "Your Playlists",
-    "seeAll": "See All"
+    "seeAll": "See All",
+    "loading": "Loading your home",
+    "loadingDescription": "Building recommendations from your listening history.",
+    "customizeHome": "Customize Home",
+    "loadError": "Could not load Home",
+    "popularAlbums": "Popular Albums",
+    "qobuzissimes": "Qobuzissimes",
+    "editorPicks": "Editor's Picks",
+    "continueListening": "Continue Listening",
+    "yourTopArtists": "Your Top Artists",
+    "artistPlays": "{count} plays",
+    "moreFromFavorites": "More From Favorites",
+    "startListening": "Start Listening",
+    "startListeningDescription": "Play music or add favorites to activate recommendations."
   },
   "search": {
     "title": "Search",
@@ -40,10 +53,15 @@
     "noResults": "No results found",
     "searching": "Searching...",
     "recentSearches": "Recent Searches",
-    "clearHistory": "Clear History"
+    "clearHistory": "Clear History",
+    "startTyping": "Start typing to search Qobuz",
+    "noAlbumsFor": "No albums found for \"{query}\"",
+    "noTracksFor": "No tracks found for \"{query}\"",
+    "noArtistsFor": "No artists found for \"{query}\""
   },
   "library": {
     "title": "Local Library",
+    "browse": "Browse Library",
     "albums": "Albums",
     "artists": "Artists",
     "tracks": "Tracks",
@@ -127,7 +145,17 @@
     "playlistName": "Playlist Name",
     "description": "Description",
     "public": "Public",
-    "private": "Private"
+    "private": "Private",
+    "import": "Import",
+    "manage": "Manage playlists",
+    "allHidden": "All playlists are hidden"
+  },
+  "sort": {
+    "nameAZ": "Name (A-Z)",
+    "recent": "Recent",
+    "trackCount": "# of Tracks",
+    "playCount": "Play Count",
+    "custom": "Custom"
   },
   "favorites": {
     "title": "Favorites",
@@ -148,6 +176,7 @@
     "fetchingLyrics": "Fetching lyrics...",
     "shuffle": "Shuffle",
     "repeat": "Repeat",
+    "repeatAll": "Repeat All",
     "repeatOne": "Repeat One",
     "repeatOff": "Repeat Off",
     "previous": "Previous",
@@ -159,10 +188,18 @@
     "unmute": "Unmute",
     "clearQueue": "Clear Queue",
     "queueEmpty": "Queue is empty",
+    "queueEmptyDescription": "Search for music or browse your library to add tracks.",
     "playNext": "Play Next",
     "addToQueue": "Add to Queue",
     "removeFromQueue": "Remove from Queue",
-    "saveQueue": "Save as Playlist"
+    "saveQueue": "Save as Playlist",
+    "searchQueue": "Search in queue...",
+    "noTracksMatch": "No tracks match \"{query}\"",
+    "noTrackPlaying": "No track playing",
+    "castToDevice": "Cast to device",
+    "castingManage": "Casting - Click to manage",
+    "miniPlayer": "Mini Player",
+    "fullScreen": "Full Screen"
   },
   "quality": {
     "mp3": "MP3 320kbps",
@@ -370,5 +407,18 @@
     "clearQueue": "Clear all tracks from queue?",
     "clearCache": "Clear all cached data?",
     "logout": "Are you sure you want to log out?"
+  },
+  "homeSettings": {
+    "greeting": "Greeting",
+    "showGreeting": "Show greeting",
+    "showGreetingDesc": "Display personalized greeting at top",
+    "customGreeting": "Custom greeting",
+    "customGreetingDesc": "Use {name} for your name. Leave empty for time-based.",
+    "customGreetingPlaceholder": "Good vibes, {name}!",
+    "sections": "Sections",
+    "sectionsDesc": "Reorder with arrows. Toggle visibility with switch.",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "resetToDefaults": "Reset to defaults"
   }
 }

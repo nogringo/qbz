@@ -13,6 +13,7 @@
     resetToDefaults,
     type HomeSettings
   } from '$lib/stores/homeSettingsStore';
+  import { t } from '$lib/i18n';
 
   interface Props {
     isOpen: boolean;
@@ -58,16 +59,16 @@
   }
 </script>
 
-<Modal {isOpen} {onClose} title="Customize Home">
+<Modal {isOpen} {onClose} title={$t('home.customizeHome')}>
   {#snippet children()}
     <!-- Greeting Settings -->
     <div class="settings-section">
-      <div class="section-title">Greeting</div>
+      <div class="section-title">{$t('homeSettings.greeting')}</div>
 
       <div class="setting-row">
         <div class="setting-info">
-          <span class="setting-label">Show greeting</span>
-          <span class="setting-desc">Display personalized greeting at top</span>
+          <span class="setting-label">{$t('homeSettings.showGreeting')}</span>
+          <span class="setting-desc">{$t('homeSettings.showGreetingDesc')}</span>
         </div>
         <label class="toggle">
           <input
@@ -82,13 +83,13 @@
       {#if settings.greeting.enabled}
         <div class="setting-row greeting-input-row">
           <div class="setting-info">
-            <span class="setting-label">Custom greeting</span>
-            <span class="setting-desc">Use {'{name}'} for your name. Leave empty for time-based.</span>
+            <span class="setting-label">{$t('homeSettings.customGreeting')}</span>
+            <span class="setting-desc">{$t('homeSettings.customGreetingDesc')}</span>
           </div>
           <input
             type="text"
             class="greeting-input"
-            placeholder="Good vibes, {name}!"
+            placeholder={$t('homeSettings.customGreetingPlaceholder')}
             bind:value={customGreetingInput}
             onblur={handleCustomGreetingChange}
             onkeydown={(e) => e.key === 'Enter' && handleCustomGreetingChange()}
@@ -99,8 +100,8 @@
 
     <!-- Sections Order -->
     <div class="settings-section">
-      <div class="section-title">Sections</div>
-      <p class="section-desc">Reorder with arrows. Toggle visibility with switch.</p>
+      <div class="section-title">{$t('homeSettings.sections')}</div>
+      <p class="section-desc">{$t('homeSettings.sectionsDesc')}</p>
 
       <div class="sections-list">
         {#each settings.sections as section, index (section.id)}
@@ -110,7 +111,7 @@
                 class="order-btn"
                 onclick={() => handleMoveUp(section.id)}
                 disabled={index === 0}
-                title="Move up"
+                title={$t('homeSettings.moveUp')}
               >
                 <ChevronUp size={16} />
               </button>
@@ -118,7 +119,7 @@
                 class="order-btn"
                 onclick={() => handleMoveDown(section.id)}
                 disabled={index === settings.sections.length - 1}
-                title="Move down"
+                title={$t('homeSettings.moveDown')}
               >
                 <ChevronDown size={16} />
               </button>
@@ -150,7 +151,7 @@
   {#snippet footer()}
     <button class="reset-btn" onclick={handleReset}>
       <RotateCcw size={14} />
-      Reset to defaults
+      {$t('homeSettings.resetToDefaults')}
     </button>
   {/snippet}
 </Modal>

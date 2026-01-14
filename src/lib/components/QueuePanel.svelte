@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X, GripVertical, Play, Search } from 'lucide-svelte';
   import GlassSurface from './glass/GlassSurface.svelte';
+  import { t } from '$lib/i18n';
 
   interface QueueTrack {
     id: string;
@@ -114,7 +115,7 @@
   <GlassSurface rootClassName="queue-panel" enableRipple={false} enableDistortion={false}>
     <!-- Header -->
     <div class="header">
-      <h2>Queue</h2>
+      <h2>{$t('player.queue')}</h2>
       <button class="close-btn" onclick={onClose}>
         <X size={20} />
       </button>
@@ -131,7 +132,7 @@
       <!-- Now Playing -->
       {#if currentTrack}
         <div class="section now-playing-section">
-          <div class="section-header">Now Playing</div>
+          <div class="section-header">{$t('player.nowPlaying')}</div>
           <div class="now-playing-card">
             <img src={currentTrack.artwork} alt={currentTrack.title} />
             <div class="track-info">
@@ -148,7 +149,7 @@
           <Search size={14} class="search-icon" />
           <input
             type="text"
-            placeholder="Search in queue..."
+            placeholder={$t('player.searchQueue')}
             bind:value={searchQuery}
             class="search-input"
           />
@@ -164,7 +165,7 @@
       {#if upcomingTracks.length > 0}
         <div class="section next-up-section">
           <div class="section-header">
-            Next Up ({filteredTracks.length}{searchQuery ? ` / ${upcomingTracks.length}` : ''})
+            {$t('player.upNext')} ({filteredTracks.length}{searchQuery ? ` / ${upcomingTracks.length}` : ''})
           </div>
           <div class="tracks">
             {#each filteredTracks as track, index}
@@ -212,7 +213,7 @@
               </div>
             {/each}
             {#if searchQuery && filteredTracks.length === 0}
-              <div class="no-results">No tracks match "{searchQuery}"</div>
+              <div class="no-results">{$t('player.noTracksMatch', { values: { query: searchQuery } })}</div>
             {/if}
           </div>
         </div>
@@ -222,8 +223,8 @@
       {#if upcomingTracks.length === 0 && !currentTrack}
         <div class="empty-state">
           <div class="emoji">🎵</div>
-          <div class="empty-title">Queue is empty</div>
-          <div class="empty-text">Search for music or browse your library to add tracks.</div>
+          <div class="empty-title">{$t('player.queueEmpty')}</div>
+          <div class="empty-text">{$t('player.queueEmptyDescription')}</div>
         </div>
       {/if}
     </div>
@@ -231,8 +232,8 @@
     <!-- Footer Actions -->
     {#if upcomingTracks.length > 0 || currentTrack}
       <div class="footer">
-        <button class="clear-btn" onclick={onClearQueue}>Clear Queue</button>
-        <button class="save-btn" onclick={onSaveAsPlaylist}>Save as Playlist</button>
+        <button class="clear-btn" onclick={onClearQueue}>{$t('player.clearQueue')}</button>
+        <button class="save-btn" onclick={onSaveAsPlaylist}>{$t('player.saveQueue')}</button>
       </div>
     {/if}
   </GlassSurface>
