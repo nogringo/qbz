@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import {
     ChevronRight,
     MoreHorizontal,
@@ -16,6 +16,7 @@
     onShareQobuz?: () => void;
     onShareSonglink?: () => void;
     onDownload?: () => void;
+    onOpenChange?: (open: boolean) => void;
   }
 
   let {
@@ -23,13 +24,20 @@
     onPlayLater,
     onShareQobuz,
     onShareSonglink,
-    onDownload
+    onDownload,
+    onOpenChange
   }: Props = $props();
 
   let isOpen = $state(false);
   let shareOpen = $state(false);
   let menuRef: HTMLDivElement | null = null;
   let triggerRef: HTMLButtonElement | null = null;
+  let menuEl: HTMLDivElement | null = null;
+  let shareTriggerRef: HTMLDivElement | null = null;
+  let submenuEl: HTMLDivElement | null = null;
+  let menuStyle = $state('');
+  let submenuStyle = $state('');
+  let portalTarget: HTMLElement | null = null;
 
   const hasQueue = $derived(!!(onPlayNext || onPlayLater));
   const hasShare = $derived(!!(onShareQobuz || onShareSonglink));
@@ -39,14 +47,85 @@
   function closeMenu() {
     isOpen = false;
     shareOpen = false;
+    onOpenChange?.(false);
   }
 
   function handleClickOutside(event: MouseEvent) {
-    if (menuRef && !menuRef.contains(event.target as Node)) {
-      closeMenu();
-    }
+    const target = event.target as Node;
+    if (menuRef?.contains(target)) return;
+    if (menuEl?.contains(target)) return;
+    if (submenuEl?.contains(target)) return;
+    closeMenu();
   }
 
+  onMount(() => {
+    portalTarget = document.body;
+  });
+
+  async function setMenuPosition(retries = 2) {
+    await tick();
+    if (!triggerRef || !menuEl) {
+      if (retries > 0) {
+        await tick();
+        return setMenuPosition(retries - 1);
+      }
+      return;
+    }
+
+    const triggerRect = triggerRef.getBoundingClientRect();
+    const menuRect = menuEl.getBoundingClientRect();
+    const padding = 8;
+
+    let left = triggerRect.right - menuRect.width;
+    let top = triggerRect.bottom + 6;
+
+    if (left < padding) left = padding;
+    if (left + menuRect.width > window.innerWidth - padding) {
+      left = Math.max(padding, window.innerWidth - menuRect.width - padding);
+    }
+
+    if (top + menuRect.height > window.innerHeight - padding) {
+      top = triggerRect.top - menuRect.height - 6;
+      if (top < padding) top = padding;
+    }
+
+    menuStyle = `left: ${left}px; top: ${top}px;`;
+  }
+
+  async function setSubmenuPosition(retries = 2) {
+    await tick();
+    if (!shareTriggerRef || !submenuEl) {
+      if (retries > 0) {
+        await tick();
+        return setSubmenuPosition(retries - 1);
+      }
+      return;
+    }
+
+    const triggerRect = shareTriggerRef.getBoundingClientRect();
+    const submenuRect = submenuEl.getBoundingClientRect();
+    const padding = 8;
+
+    const spaceRight = window.innerWidth - triggerRect.right;
+    const openRight = spaceRight >= submenuRect.width + padding;
+
+    let left = openRight
+      ? triggerRect.right + 6
+      : triggerRect.left - submenuRect.width - 6;
+    let top = triggerRect.top - 6;
+
+    if (left < padding) left = padding;
+    if (left + submenuRect.width > window.innerWidth - padding) {
+      left = Math.max(padding, window.innerWidth - submenuRect.width - padding);
+    }
+
+    if (top + submenuRect.height > window.innerHeight - padding) {
+      top = window.innerHeight - submenuRect.height - padding;
+    }
+    if (top < padding) top = padding;
+
+    submenuStyle = `left: ${left}px; top: ${top}px;`;
+  }
 
   function handleAction(action?: () => void) {
     if (!action) return;
@@ -56,9 +135,20 @@
 
   $effect(() => {
     if (isOpen) {
+      setMenuPosition();
       document.addEventListener('mousedown', handleClickOutside);
+      const handleResize = () => setMenuPosition();
+      const handleScroll = () => {
+        setMenuPosition();
+        if (shareOpen) setSubmenuPosition();
+      };
+
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('scroll', handleScroll, true);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
+        window.removeEventListener('resize', handleResize);
+        window.removeEventListener('scroll', handleScroll, true);
       };
     }
   });
@@ -78,76 +168,83 @@
         e.stopPropagation();
         isOpen = !isOpen;
         shareOpen = false;
+        onOpenChange?.(isOpen);
+        if (isOpen) setMenuPosition();
       }}
       aria-label="Album actions"
     >
       <MoreHorizontal size={20} color="white" />
     </button>
 
-    {#if isOpen}
-      <div class="menu">
-        {#if hasQueue}
-          {#if onPlayNext}
-            <button class="menu-item" onclick={() => handleAction(onPlayNext)}>
-              <ListPlus size={14} />
-              <span>Play next</span>
-            </button>
-          {/if}
-          {#if onPlayLater}
-            <button class="menu-item" onclick={() => handleAction(onPlayLater)}>
-              <ListEnd size={14} />
-              <span>Play later</span>
-            </button>
-          {/if}
-        {/if}
-
-        {#if hasQueue && (hasShare || hasDownload)}
-          <div class="separator"></div>
-        {/if}
-
-        {#if hasShare}
-          <div
-            class="menu-item submenu-trigger"
-            onmouseenter={() => {
-              shareOpen = true;
-            }}
-            onclick={() => {
-              shareOpen = !shareOpen;
-            }}
-          >
-            <Share2 size={14} />
-            <span>Share</span>
-            <ChevronRight size={14} class="chevron" />
-            {#if shareOpen}
-              <div class="submenu">
-                {#if onShareQobuz}
-                  <button class="menu-item" onclick={() => handleAction(onShareQobuz)}>
-                    <Link size={14} />
-                    <span>Qobuz link</span>
-                  </button>
-                {/if}
-                {#if onShareSonglink}
-                  <button class="menu-item" onclick={() => handleAction(onShareSonglink)}>
-                    <Link size={14} />
-                    <span>Song.link</span>
-                  </button>
-                {/if}
-              </div>
+    {#if isOpen && portalTarget}
+      <svelte:portal target={portalTarget}>
+        <div class="menu" bind:this={menuEl} style={menuStyle} onmousedown={(e) => e.stopPropagation()}>
+          {#if hasQueue}
+            {#if onPlayNext}
+              <button class="menu-item" onclick={() => handleAction(onPlayNext)}>
+                <ListPlus size={14} />
+                <span>Play next</span>
+              </button>
             {/if}
-          </div>
-        {/if}
+            {#if onPlayLater}
+              <button class="menu-item" onclick={() => handleAction(onPlayLater)}>
+                <ListEnd size={14} />
+                <span>Play later</span>
+              </button>
+            {/if}
+          {/if}
 
-        {#if hasShare && hasDownload}
-          <div class="separator"></div>
-        {/if}
+          {#if hasQueue && (hasShare || hasDownload)}
+            <div class="separator"></div>
+          {/if}
 
-        {#if hasDownload}
-          <button class="menu-item" onclick={() => handleAction(onDownload)}>
-            <Download size={14} />
-            <span>Download album</span>
-          </button>
-        {/if}
-      </div>
+          {#if hasShare}
+            <div
+              class="menu-item submenu-trigger"
+              bind:this={shareTriggerRef}
+              onmouseenter={() => {
+                shareOpen = true;
+                setSubmenuPosition();
+              }}
+              onclick={() => {
+                shareOpen = !shareOpen;
+                if (shareOpen) setSubmenuPosition();
+              }}
+            >
+              <Share2 size={14} />
+              <span>Share</span>
+              <ChevronRight size={14} class="chevron" />
+              {#if shareOpen}
+                <div class="submenu" bind:this={submenuEl} style={submenuStyle}>
+                  {#if onShareQobuz}
+                    <button class="menu-item" onclick={() => handleAction(onShareQobuz)}>
+                      <Link size={14} />
+                      <span>Qobuz link</span>
+                    </button>
+                  {/if}
+                  {#if onShareSonglink}
+                    <button class="menu-item" onclick={() => handleAction(onShareSonglink)}>
+                      <Link size={14} />
+                      <span>Song.link</span>
+                    </button>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          {#if hasShare && hasDownload}
+            <div class="separator"></div>
+          {/if}
+
+          {#if hasDownload}
+            <button class="menu-item" onclick={() => handleAction(onDownload)}>
+              <Download size={14} />
+              <span>Download album</span>
+            </button>
+          {/if}
+        </div>
+      </svelte:portal>
     {/if}
   </div>
 {/if}
@@ -178,9 +275,7 @@
   }
 
   .menu {
-    position: absolute;
-    right: 0;
-    top: 44px;
+    position: fixed;
     min-width: 180px;
     background-color: var(--bg-tertiary);
     border-radius: 8px;
@@ -228,9 +323,7 @@
   }
 
   .submenu {
-    position: absolute;
-    top: 0;
-    right: calc(100% + 6px);
+    position: fixed;
     min-width: 160px;
     background-color: var(--bg-tertiary);
     border-radius: 8px;
