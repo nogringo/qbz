@@ -1,6 +1,6 @@
 [package]
 name = "qbz-nix"
-version = "1.1.2"
+version = "1.1.3"
 description = "Native Qobuz client for Linux with Hi-Fi audio support"
 authors = ["blitzkriegfc"]
 edition = "2021"
