@@ -313,8 +313,7 @@
   }
 
   .overlay-btn:hover {
-    transform: scale(1.05);
-    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent-primary);
   }
 
   .overlay-btn.is-active {
@@ -353,7 +352,7 @@
   }
 
   :global(.album-card .album-menu .menu-trigger:hover) {
-    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent-primary);
   }
 
   .info {
