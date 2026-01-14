@@ -827,7 +827,13 @@
         </div>
         <div class="album-info">
           <h1>{selectedAlbum.title}</h1>
-          <p class="artist">{selectedAlbum.artist}</p>
+          {#if onQobuzArtistClick}
+            <button class="artist artist-link" type="button" onclick={() => handleLocalArtistClick(selectedAlbum?.artist)}>
+              {selectedAlbum.artist}
+            </button>
+          {:else}
+            <p class="artist">{selectedAlbum.artist}</p>
+          {/if}
           <p class="meta">
             {#if selectedAlbum.year}{selectedAlbum.year} &bull; {/if}
             {selectedAlbum.track_count} tracks &bull;
@@ -1223,7 +1229,13 @@
           {:else}
             <div class="artist-grid">
               {#each filteredArtists as artist (artist.name)}
-                <div class="artist-card">
+                <div
+                  class="artist-card"
+                  role="button"
+                  tabindex="0"
+                  onclick={() => handleLocalArtistClick(artist.name)}
+                  onkeydown={(event) => event.key === 'Enter' && handleLocalArtistClick(artist.name)}
+                >
                   <div class="artist-icon">
                     <Mic2 size={32} />
                   </div>
@@ -2261,6 +2273,20 @@
     font-size: 16px;
     color: var(--text-primary);
     margin: 0 0 8px 0;
+  }
+
+  .album-info .artist-link {
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .album-info .artist-link:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .album-info .meta {
