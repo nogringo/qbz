@@ -102,17 +102,23 @@
   );
 
   // Check if album is in favorites on mount
-  onMount(async () => {
-    try {
-      await loadAlbumFavorites();
-      isFavorite = isAlbumFavorite(album.id);
-      const unsubscribe = subscribeAlbumFavorites(() => {
+  onMount(() => {
+    let unsubscribe: (() => void) | null = null;
+    (async () => {
+      try {
+        await loadAlbumFavorites();
         isFavorite = isAlbumFavorite(album.id);
-      });
-      return unsubscribe;
-    } catch (err) {
-      console.error('Failed to check album favorite status:', err);
-    }
+        unsubscribe = subscribeAlbumFavorites(() => {
+          isFavorite = isAlbumFavorite(album.id);
+        });
+      } catch (err) {
+        console.error('Failed to check album favorite status:', err);
+      }
+    })();
+
+    return () => {
+      unsubscribe?.();
+    };
   });
 
   async function toggleFavorite() {

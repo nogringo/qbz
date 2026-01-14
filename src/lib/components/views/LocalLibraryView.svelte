@@ -402,8 +402,29 @@
   }
 
   async function handleAlbumPlayFromGrid(album: LocalAlbum) {
-    await handleAlbumClick(album);
-    await handlePlayAllAlbum();
+    const tracks = await fetchAlbumTracks(album);
+    if (!tracks.length) return;
+
+    await setQueueForAlbumTracks(tracks);
+    await handleTrackPlay(tracks[0]);
+  }
+
+  async function handleAlbumQueueNextFromGrid(album: LocalAlbum) {
+    if (!onTrackPlayNext) return;
+    const tracks = await fetchAlbumTracks(album);
+    if (!tracks.length) return;
+    for (let i = tracks.length - 1; i >= 0; i--) {
+      onTrackPlayNext(tracks[i]);
+    }
+  }
+
+  async function handleAlbumQueueLaterFromGrid(album: LocalAlbum) {
+    if (!onTrackPlayLater) return;
+    const tracks = await fetchAlbumTracks(album);
+    if (!tracks.length) return;
+    for (const track of tracks) {
+      onTrackPlayLater(track);
+    }
   }
 
   async function handleTrackPlay(track: LocalTrack) {
@@ -419,8 +440,27 @@
   async function handlePlayAllAlbum() {
     if (!selectedAlbum || albumTracks.length === 0) return;
 
-    // Build queue from album tracks
-    const queueTracks = albumTracks.map(t => ({
+    try {
+      await setQueueForAlbumTracks(albumTracks);
+      await handleTrackPlay(albumTracks[0]);
+    } catch (err) {
+      console.error('Failed to play album:', err);
+    }
+  }
+
+  async function fetchAlbumTracks(album: LocalAlbum): Promise<LocalTrack[]> {
+    try {
+      return await invoke<LocalTrack[]>('library_get_album_tracks', {
+        albumGroupKey: album.id
+      });
+    } catch (err) {
+      console.error('Failed to load album tracks:', err);
+      return [];
+    }
+  }
+
+  async function setQueueForAlbumTracks(tracks: LocalTrack[]) {
+    const queueTracks = tracks.map(t => ({
       id: t.id,
       title: t.title,
       artist: t.artist,
@@ -432,14 +472,8 @@
       sample_rate: t.sample_rate ?? null,
     }));
 
-    try {
-      await invoke('set_queue', { tracks: queueTracks, startIndex: 0 });
-      // Register these as local tracks for proper queue playback
-      onSetLocalQueue?.(albumTracks.map(t => t.id));
-      await handleTrackPlay(albumTracks[0]);
-    } catch (err) {
-      console.error('Failed to play album:', err);
-    }
+    await invoke('set_queue', { tracks: queueTracks, startIndex: 0 });
+    onSetLocalQueue?.(tracks.map(t => t.id));
   }
 
   function formatDuration(seconds: number): string {
@@ -1146,7 +1180,11 @@
                             title={album.title}
                             artist={album.artist}
                             quality={getAlbumQualityBadge(album)}
+                            showFavorite={true}
+                            favoriteEnabled={false}
                             onPlay={() => handleAlbumPlayFromGrid(album)}
+                            onPlayNext={() => handleAlbumQueueNextFromGrid(album)}
+                            onPlayLater={() => handleAlbumQueueLaterFromGrid(album)}
                             onclick={() => handleAlbumClick(album)}
                           />
                         {/each}

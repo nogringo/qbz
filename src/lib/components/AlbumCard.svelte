@@ -23,6 +23,8 @@
     onShareQobuz?: () => void;
     onShareSonglink?: () => void;
     onDownload?: () => void;
+    showFavorite?: boolean;
+    favoriteEnabled?: boolean;
   }
 
   let {
@@ -38,7 +40,9 @@
     onPlayLater,
     onShareQobuz,
     onShareSonglink,
-    onDownload
+    onDownload,
+    showFavorite,
+    favoriteEnabled
   }: Props = $props();
 
   let imageError = $state(false);
@@ -51,14 +55,16 @@
   let artistOverflow = $state(0);
   const titleOffset = $derived(titleOverflow > 0 ? `-${titleOverflow + 16}px` : '0px');
   const artistOffset = $derived(artistOverflow > 0 ? `-${artistOverflow + 16}px` : '0px');
-  const tickerSpeed = 80;
+  const tickerSpeed = 120;
   const titleDuration = $derived(titleOverflow > 0 ? `${(titleOverflow + 16) / tickerSpeed}s` : '0s');
   const artistDuration = $derived(artistOverflow > 0 ? `${(artistOverflow + 16) / tickerSpeed}s` : '0s');
 
   let favoriteFromStore = $state(false);
   const isFavorite = $derived(albumId ? favoriteFromStore : false);
   const hasMenu = $derived(!!(onPlayNext || onPlayLater || onShareQobuz || onShareSonglink || onDownload));
-  const hasOverlay = $derived(!!(albumId || onPlay || hasMenu));
+  const showFavoriteButton = $derived(showFavorite ?? !!albumId);
+  const favoriteAvailable = $derived(favoriteEnabled ?? !!albumId);
+  const hasOverlay = $derived(!!(showFavoriteButton || onPlay || hasMenu));
 
   function handleImageError() {
     imageError = true;
@@ -66,7 +72,7 @@
 
   async function handleToggleFavorite(event: MouseEvent) {
     event.stopPropagation();
-    if (!albumId) return;
+    if (!albumId || !favoriteAvailable) return;
     await toggleAlbumFavorite(albumId);
   }
 
@@ -146,11 +152,14 @@
     {#if hasOverlay}
       <div class="action-overlay">
         <div class="action-buttons">
-          {#if albumId}
+          {#if showFavoriteButton}
             <button
               class="overlay-btn"
               class:is-active={isFavorite}
+              class:disabled={!favoriteAvailable}
               type="button"
+              aria-disabled={!favoriteAvailable}
+              disabled={!favoriteAvailable}
               onclick={handleToggleFavorite}
               title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             >
@@ -305,6 +314,13 @@
 
   .overlay-btn.is-active {
     background-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .overlay-btn.disabled,
+  .overlay-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+    transform: none;
   }
 
   .overlay-menu {
