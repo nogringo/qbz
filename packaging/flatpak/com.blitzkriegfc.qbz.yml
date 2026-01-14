@@ -64,11 +64,9 @@ modules:
     buildsystem: cmake-ninja
     config-opts:
       - -DENABLE_TESTS=NO
+      - -DCMAKE_INSTALL_LIBDIR=lib
     cleanup:
       - /include
-    post-install:
-      - ls -la /app/lib/pkgconfig/ || true
-      - cat /app/lib/pkgconfig/libayatana-ido3-0.4.pc || true
     sources:
       - type: archive
         url: https://github.com/AyatanaIndicators/ayatana-ido/archive/refs/tags/0.10.4.tar.gz
@@ -80,6 +78,7 @@ modules:
       - -DENABLE_TESTS=NO
       - -DENABLE_IDO=YES
       - -DENABLE_LOADER=NO
+      - -DCMAKE_INSTALL_LIBDIR=lib
     cleanup:
       - /include
       - /lib/pkgconfig
@@ -95,6 +94,7 @@ modules:
       - -DENABLE_BINDINGS_MONO=NO
       - -DENABLE_BINDINGS_VALA=NO
       - -DENABLE_GTKDOC=NO
+      - -DCMAKE_INSTALL_LIBDIR=lib
     cleanup:
       - /include
       - /lib/pkgconfig
