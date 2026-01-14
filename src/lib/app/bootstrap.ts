@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrent } from '@tauri-apps/api/webview';
 import { goBack, goForward } from '$lib/stores/navigationStore';
 
 // ============ Theme Management ============
@@ -17,6 +18,22 @@ export function loadSavedTheme(): void {
   const savedTheme = localStorage.getItem('qbz-theme');
   if (savedTheme) {
     document.documentElement.setAttribute('data-theme', savedTheme);
+  }
+}
+
+/**
+ * Apply saved UI zoom level (Tauri webview zoom)
+ */
+export async function applySavedZoom(): Promise<void> {
+  const savedZoom = localStorage.getItem('qbz-zoom-level');
+  if (!savedZoom) return;
+  const zoom = Number.parseFloat(savedZoom);
+  if (!Number.isFinite(zoom) || zoom <= 0) return;
+
+  try {
+    await getCurrent().setZoom(zoom);
+  } catch (err) {
+    console.warn('Failed to apply saved zoom:', err);
   }
 }
 
@@ -87,6 +104,7 @@ export interface BootstrapResult {
 export function bootstrapApp(): BootstrapResult {
   // Load theme
   loadSavedTheme();
+  void applySavedZoom();
 
   // Setup mouse navigation
   const cleanupMouse = setupMouseNavigation();

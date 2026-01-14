@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { getCurrent } from '@tauri-apps/api/webview';
   import { ArrowLeft, FolderOpen, ChevronDown, ChevronRight } from 'lucide-svelte';
   import Toggle from '../Toggle.svelte';
   import Dropdown from '../Dropdown.svelte';
@@ -120,6 +121,20 @@
   let crossfade = $state(0);
   let normalizeVolume = $state(false);
 
+  // UI scale settings
+  const zoomOptions = ['80%', '90%', '100%', '110%', '125%', '150%', '175%', '200%'];
+  const zoomMap: Record<string, number> = {
+    '80%': 0.8,
+    '90%': 0.9,
+    '100%': 1,
+    '110%': 1.1,
+    '125%': 1.25,
+    '150%': 1.5,
+    '175%': 1.75,
+    '200%': 2,
+  };
+  let zoomLevel = $state('100%');
+
   // Appearance settings
   let theme = $state('Dark');
   let compactMode = $state(false);
@@ -170,6 +185,14 @@
     const savedLanguage = localStorage.getItem('qbz-language');
     if (savedLanguage) {
       language = savedLanguage;
+    }
+
+    // Load UI zoom level
+    const savedZoom = localStorage.getItem('qbz-zoom-level');
+    if (savedZoom) {
+      const parsed = Number.parseFloat(savedZoom);
+      const match = zoomOptions.find(option => Math.abs((zoomMap[option] ?? 1) - parsed) < 0.01);
+      zoomLevel = match || '100%';
     }
 
     // Load cache stats
@@ -681,6 +704,17 @@
     applyTheme(themeValue);
     localStorage.setItem('qbz-theme', themeValue);
   }
+
+  async function handleZoomChange(value: string) {
+    zoomLevel = value;
+    const zoom = zoomMap[value] ?? 1;
+    localStorage.setItem('qbz-zoom-level', String(zoom));
+    try {
+      await getCurrent().setZoom(zoom);
+    } catch (err) {
+      console.warn('Failed to set zoom:', err);
+    }
+  }
 </script>
 
 <div class="settings-view">
@@ -796,6 +830,14 @@
         value={language}
         options={['Auto', 'English', 'Español', 'Français', 'Deutsch', 'Italiano', 'Português']}
         onchange={handleLanguageChange}
+      />
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">UI Scale</span>
+      <Dropdown
+        value={zoomLevel}
+        options={zoomOptions}
+        onchange={handleZoomChange}
       />
     </div>
     <div class="setting-row last">
