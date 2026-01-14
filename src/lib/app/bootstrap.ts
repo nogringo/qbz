@@ -6,7 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrent } from '@tauri-apps/api/webview';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { goBack, goForward } from '$lib/stores/navigationStore';
 
 // ============ Theme Management ============
@@ -31,7 +31,7 @@ export async function applySavedZoom(): Promise<void> {
   if (!Number.isFinite(zoom) || zoom <= 0) return;
 
   try {
-    await getCurrent().setZoom(zoom);
+    await getCurrentWebview().setZoom(zoom);
   } catch (err) {
     console.warn('Failed to apply saved zoom:', err);
   }

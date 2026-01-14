@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { getCurrent } from '@tauri-apps/api/webview';
+  import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { ArrowLeft, FolderOpen, ChevronDown, ChevronRight } from 'lucide-svelte';
   import Toggle from '../Toggle.svelte';
   import Dropdown from '../Dropdown.svelte';
@@ -710,7 +710,7 @@
     const zoom = zoomMap[value] ?? 1;
     localStorage.setItem('qbz-zoom-level', String(zoom));
     try {
-      await getCurrent().setZoom(zoom);
+      await getCurrentWebview().setZoom(zoom);
     } catch (err) {
       console.warn('Failed to set zoom:', err);
     }
