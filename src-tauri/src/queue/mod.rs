@@ -122,7 +122,7 @@ impl QueueManager {
     /// Add a track to play next (after current index if set)
     pub fn add_track_next(&self, track: QueueTrack) {
         let mut state = self.state.lock().unwrap();
-        let insert_index = state.current_index.map(|idx| idx + 1).unwrap_or(state.tracks.len());
+        let insert_index = state.current_index.map(|idx| idx + 1).unwrap_or(0);
 
         if insert_index >= state.tracks.len() {
             state.tracks.push(track);

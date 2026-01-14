@@ -478,7 +478,7 @@
     for (let i = tracks.length - 1; i >= 0; i--) {
       const t = tracks[i];
       try {
-        await invoke('add_track_next', {
+        await invoke('add_to_queue_next', {
           track: {
             id: t.id,
             title: t.title,
