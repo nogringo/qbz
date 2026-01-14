@@ -156,6 +156,7 @@ pub enum ScanStatus {
     Idle,
     Scanning,
     Complete,
+    Cancelled,
     Error,
 }
 

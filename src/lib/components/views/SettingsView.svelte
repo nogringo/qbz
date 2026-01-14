@@ -17,10 +17,15 @@
   import { clearCache as clearLyricsCache } from '$lib/stores/lyricsStore';
   import { getDevicePrettyName } from '$lib/utils/audioDeviceNames';
   import {
-    getNotificationsEnabled,
-    setNotificationsEnabled,
-    loadNotificationsPreference
+    getToastsEnabled,
+    setToastsEnabled,
+    loadToastsPreference
   } from '$lib/stores/toastStore';
+  import {
+    getSystemNotificationsEnabled,
+    setSystemNotificationsEnabled,
+    loadSystemNotificationsPreference
+  } from '$lib/services/playbackService';
 
   interface Props {
     onBack?: () => void;
@@ -143,7 +148,8 @@
   // Appearance settings
   let theme = $state('Dark');
   let compactMode = $state(false);
-  let notificationsEnabled = $state(true);
+  let toastsEnabled = $state(true);
+  let systemNotificationsEnabled = $state(true);
   let language = $state('Auto');
 
   // Last.fm integration state
@@ -216,9 +222,11 @@
     // Load API keys state
     loadApiKeysState();
 
-    // Load notifications preference
-    loadNotificationsPreference();
-    notificationsEnabled = getNotificationsEnabled();
+    // Load notification preferences
+    loadToastsPreference();
+    toastsEnabled = getToastsEnabled();
+    loadSystemNotificationsPreference();
+    systemNotificationsEnabled = getSystemNotificationsEnabled();
   });
 
   async function loadLastfmState() {
@@ -854,9 +862,13 @@
       <span class="setting-label">Compact Mode</span>
       <Toggle enabled={compactMode} onchange={(v) => (compactMode = v)} />
     </div>
+    <div class="setting-row">
+      <span class="setting-label">In-app Toasts</span>
+      <Toggle enabled={toastsEnabled} onchange={(v) => { toastsEnabled = v; setToastsEnabled(v); }} />
+    </div>
     <div class="setting-row last">
-      <span class="setting-label">Notifications</span>
-      <Toggle enabled={notificationsEnabled} onchange={(v) => { notificationsEnabled = v; setNotificationsEnabled(v); }} />
+      <span class="setting-label">System Notifications</span>
+      <Toggle enabled={systemNotificationsEnabled} onchange={(v) => { systemNotificationsEnabled = v; setSystemNotificationsEnabled(v); }} />
     </div>
   </section>
 

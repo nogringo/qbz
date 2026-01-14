@@ -206,6 +206,33 @@ function normalizeCoverUrlForMetadata(coverUrl?: string | null): string | null {
 
 // ============ System Notifications ============
 
+let systemNotificationsEnabled = true;
+
+/**
+ * Load system notifications preference from localStorage
+ */
+export function loadSystemNotificationsPreference(): void {
+  const saved = localStorage.getItem('qbz-system-notifications-enabled');
+  if (saved !== null) {
+    systemNotificationsEnabled = saved === 'true';
+  }
+}
+
+/**
+ * Set system notifications enabled/disabled
+ */
+export function setSystemNotificationsEnabled(enabled: boolean): void {
+  systemNotificationsEnabled = enabled;
+  localStorage.setItem('qbz-system-notifications-enabled', String(enabled));
+}
+
+/**
+ * Get system notifications enabled state
+ */
+export function getSystemNotificationsEnabled(): boolean {
+  return systemNotificationsEnabled;
+}
+
 /**
  * Show system notification for track change
  */
@@ -217,6 +244,11 @@ export async function showTrackNotification(
   bitDepth?: number,
   sampleRate?: number
 ): Promise<void> {
+  // Skip if system notifications are disabled
+  if (!systemNotificationsEnabled) {
+    return;
+  }
+
   try {
     await invoke('show_track_notification', {
       title,

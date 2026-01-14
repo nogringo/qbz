@@ -350,6 +350,7 @@ pub fn run() {
             library::commands::library_get_folders,
             library::commands::library_scan,
             library::commands::library_get_scan_progress,
+            library::commands::library_stop_scan,
             library::commands::library_get_albums,
             library::commands::library_get_album_tracks,
             library::commands::library_get_artists,

@@ -79,7 +79,7 @@
   }
 
   interface ScanProgress {
-    status: 'Idle' | 'Scanning' | 'Complete' | 'Error';
+    status: 'Idle' | 'Scanning' | 'Complete' | 'Cancelled' | 'Error';
     total_files: number;
     processed_files: number;
     current_file?: string;
@@ -289,7 +289,7 @@
     const pollInterval = setInterval(async () => {
       try {
         scanProgress = await invoke<ScanProgress>('library_get_scan_progress');
-        if (scanProgress.status === 'Complete' || scanProgress.status === 'Error') {
+        if (scanProgress.status === 'Complete' || scanProgress.status === 'Cancelled' || scanProgress.status === 'Error') {
           clearInterval(pollInterval);
           scanning = false;
           await loadLibraryData();
@@ -307,6 +307,14 @@
       console.error('Scan failed:', err);
       scanning = false;
       clearInterval(pollInterval);
+    }
+  }
+
+  async function handleStopScan() {
+    try {
+      await invoke('library_stop_scan');
+    } catch (err) {
+      console.error('Failed to stop scan:', err);
     }
   }
 
@@ -981,6 +989,10 @@
           {#if scanProgress.current_file}
             <span class="current-file">{scanProgress.current_file.split('/').pop()}</span>
           {/if}
+          <button class="stop-scan-btn" onclick={handleStopScan} title="Stop scanning">
+            <X size={14} />
+            <span>Stop</span>
+          </button>
         </div>
       </div>
     {/if}
@@ -1612,6 +1624,26 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .stop-scan-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .stop-scan-btn:hover {
+    background: var(--error);
+    border-color: var(--error);
+    color: white;
   }
 
   /* Settings Panel */

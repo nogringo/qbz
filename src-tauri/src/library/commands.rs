@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -17,6 +18,7 @@ use crate::library::{
 pub struct LibraryState {
     pub db: Arc<Mutex<LibraryDatabase>>,
     pub scan_progress: Arc<Mutex<ScanProgress>>,
+    pub scan_cancel: Arc<AtomicBool>,
 }
 
 fn normalize_library_path(path: &Path) -> PathBuf {
@@ -82,7 +84,8 @@ pub async fn library_scan(state: State<'_, LibraryState>) -> Result<(), String> 
         return Err("No library folders configured".to_string());
     }
 
-    // Reset progress
+    // Reset cancel flag and progress
+    state.scan_cancel.store(false, Ordering::Relaxed);
     {
         let mut progress = state.scan_progress.lock().await;
         *progress = ScanProgress {
@@ -122,6 +125,15 @@ pub async fn library_scan(state: State<'_, LibraryState>) -> Result<(), String> 
 
         // Process CUE files first (they create multiple tracks from one file)
         for cue_path in &scan_result.cue_files {
+            // Check for cancellation
+            if state.scan_cancel.load(Ordering::Relaxed) {
+                let mut progress = state.scan_progress.lock().await;
+                progress.status = ScanStatus::Cancelled;
+                progress.current_file = None;
+                log::info!("Library scan cancelled by user");
+                return Ok(());
+            }
+
             {
                 let mut progress = state.scan_progress.lock().await;
                 progress.current_file = Some(cue_path.to_string_lossy().to_string());
@@ -157,6 +169,15 @@ pub async fn library_scan(state: State<'_, LibraryState>) -> Result<(), String> 
             .collect();
 
         for audio_path in &scan_result.audio_files {
+            // Check for cancellation
+            if state.scan_cancel.load(Ordering::Relaxed) {
+                let mut progress = state.scan_progress.lock().await;
+                progress.status = ScanStatus::Cancelled;
+                progress.current_file = None;
+                log::info!("Library scan cancelled by user");
+                return Ok(());
+            }
+
             // Skip if this file is referenced by a CUE sheet
             let canonical_path = normalize_library_path(audio_path);
             let path_str = canonical_path.to_string_lossy().to_string();
@@ -298,6 +319,13 @@ pub async fn library_get_scan_progress(
 ) -> Result<ScanProgress, String> {
     let progress = state.scan_progress.lock().await;
     Ok(progress.clone())
+}
+
+#[tauri::command]
+pub async fn library_stop_scan(state: State<'_, LibraryState>) -> Result<(), String> {
+    log::info!("Command: library_stop_scan");
+    state.scan_cancel.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 // === Queries ===

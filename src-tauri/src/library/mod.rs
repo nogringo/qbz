@@ -20,6 +20,7 @@ pub use models::*;
 pub use scanner::{LibraryScanner, ScanResult};
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -50,5 +51,6 @@ pub fn init_library_state() -> Result<LibraryState, LibraryError> {
     Ok(LibraryState {
         db: Arc::new(Mutex::new(db)),
         scan_progress: Arc::new(Mutex::new(ScanProgress::default())),
+        scan_cancel: Arc::new(AtomicBool::new(false)),
     })
 }

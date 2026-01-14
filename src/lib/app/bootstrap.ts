@@ -8,6 +8,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { goBack, goForward } from '$lib/stores/navigationStore';
+import { loadToastsPreference } from '$lib/stores/toastStore';
+import { loadSystemNotificationsPreference } from '$lib/services/playbackService';
 
 // ============ Theme Management ============
 
@@ -105,6 +107,10 @@ export function bootstrapApp(): BootstrapResult {
   // Load theme
   loadSavedTheme();
   void applySavedZoom();
+
+  // Load notification preferences
+  loadToastsPreference();
+  loadSystemNotificationsPreference();
 
   // Setup mouse navigation
   const cleanupMouse = setupMouseNavigation();

@@ -18,35 +18,43 @@ let currentToast: Toast | null = null;
 // Track buffering toast specifically so we can dismiss it
 let bufferingToastActive = false;
 
-// Global enable/disable for notifications
-let notificationsEnabled = true;
+// Global enable/disable for toasts (in-app notifications)
+let toastsEnabled = true;
 
 /**
- * Load notifications preference from localStorage
+ * Load toasts preference from localStorage
  */
-export function loadNotificationsPreference(): void {
-  const saved = localStorage.getItem('qbz-notifications-enabled');
+export function loadToastsPreference(): void {
+  const saved = localStorage.getItem('qbz-toasts-enabled');
   if (saved !== null) {
-    notificationsEnabled = saved === 'true';
+    toastsEnabled = saved === 'true';
+  } else {
+    // Migrate from old key if exists
+    const oldSaved = localStorage.getItem('qbz-notifications-enabled');
+    if (oldSaved !== null) {
+      toastsEnabled = oldSaved === 'true';
+      localStorage.setItem('qbz-toasts-enabled', oldSaved);
+      localStorage.removeItem('qbz-notifications-enabled');
+    }
   }
 }
 
 /**
- * Set notifications enabled/disabled
+ * Set toasts enabled/disabled
  */
-export function setNotificationsEnabled(enabled: boolean): void {
-  notificationsEnabled = enabled;
-  localStorage.setItem('qbz-notifications-enabled', String(enabled));
+export function setToastsEnabled(enabled: boolean): void {
+  toastsEnabled = enabled;
+  localStorage.setItem('qbz-toasts-enabled', String(enabled));
   if (!enabled) {
     hideToast();
   }
 }
 
 /**
- * Get notifications enabled state
+ * Get toasts enabled state
  */
-export function getNotificationsEnabled(): boolean {
-  return notificationsEnabled;
+export function getToastsEnabled(): boolean {
+  return toastsEnabled;
 }
 
 // Auto-hide timeout
@@ -76,8 +84,8 @@ export function isBufferingActive(): boolean {
  * @param duration How long to show the toast in ms (default: varies by type)
  */
 export function showToast(message: string, type: ToastType = 'info', duration?: number): void {
-  // Skip if notifications are disabled (except errors which are always shown)
-  if (!notificationsEnabled && type !== 'error') {
+  // Skip if toasts are disabled (except errors which are always shown)
+  if (!toastsEnabled && type !== 'error') {
     return;
   }
 
