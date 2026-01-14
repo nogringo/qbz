@@ -292,26 +292,26 @@
 
   .menu {
     position: fixed;
-    min-width: 180px;
+    min-width: 160px;
     background-color: var(--bg-tertiary);
     border-radius: 8px;
-    padding: 4px 0;
+    padding: 2px 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 30000;
   }
 
   .menu-item {
     width: 100%;
-    padding: 10px 14px;
+    padding: 8px 12px;
     background: none;
     border: none;
     color: var(--text-secondary);
     text-align: left;
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     transition: background-color 150ms ease, color 150ms ease;
   }
 
@@ -340,10 +340,10 @@
 
   .submenu {
     position: fixed;
-    min-width: 160px;
+    min-width: 150px;
     background-color: var(--bg-tertiary);
     border-radius: 8px;
-    padding: 4px 0;
+    padding: 2px 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 30001;
   }

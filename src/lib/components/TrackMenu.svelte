@@ -297,10 +297,10 @@
 
   .menu {
     position: fixed;
-    min-width: 176px;
+    min-width: 160px;
     background-color: var(--bg-tertiary);
     border-radius: 8px;
-    padding: 4px 0;
+    padding: 2px 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 10000;
   }
@@ -316,7 +316,7 @@
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     transition: background-color 150ms ease, color 150ms ease;
   }
 
@@ -345,10 +345,10 @@
 
   .submenu {
     position: fixed;
-    min-width: 176px;
+    min-width: 150px;
     background-color: var(--bg-tertiary);
     border-radius: 8px;
-    padding: 4px 0;
+    padding: 2px 0;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 10001;
   }
