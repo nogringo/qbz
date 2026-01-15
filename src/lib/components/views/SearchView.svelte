@@ -1027,7 +1027,8 @@
     padding: 10px 16px;
     background: none;
     border: none;
-    border-radius: 8px;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
     color: var(--text-muted);
     font-size: 14px;
     font-weight: 500;
@@ -1037,17 +1038,16 @@
 
   .tab:hover {
     color: var(--text-primary);
-    background-color: var(--bg-tertiary);
   }
 
   .tab.active {
     color: var(--text-primary);
-    background-color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
   }
 
   .tab .count {
     padding: 2px 8px;
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: var(--bg-tertiary);
     border-radius: 12px;
     font-size: 12px;
   }
@@ -1311,7 +1311,7 @@
 
   .top-section {
     display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-columns: 176px minmax(0, 1fr);
     gap: 18px;
     align-items: start;
   }
@@ -1403,7 +1403,7 @@
 
   .carousel-btn:disabled {
     opacity: 0.3;
-    cursor: not-allowed;
+    cursor: default;
   }
 
   .view-all-link {
