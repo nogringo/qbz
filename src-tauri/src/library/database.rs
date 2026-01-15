@@ -431,7 +431,7 @@ impl LibraryDatabase {
                     ELSE MIN(artist)
                 END as artist,
                 MIN(year) as year,
-                MAX(artwork_path) as artwork,
+                MAX(CASE WHEN artwork_path IS NOT NULL THEN artwork_path END) as artwork,
                 COUNT(*) as track_count,
                 SUM(duration_secs) as total_duration,
                 MAX(format) as format,
@@ -468,7 +468,7 @@ impl LibraryDatabase {
                     ELSE MIN(artist)
                 END as artist,
                 MIN(year) as year,
-                MAX(artwork_path) as artwork,
+                MAX(CASE WHEN artwork_path IS NOT NULL THEN artwork_path END) as artwork,
                 COUNT(*) as track_count,
                 SUM(duration_secs) as total_duration,
                 MAX(format) as format,
@@ -511,7 +511,7 @@ impl LibraryDatabase {
                 let artist: String = row.get(2)?;
                 let artwork_path: Option<String> = row.get(4)?;
                 
-                log::debug!("Album grouping {}: artwork_path = {:?}", group_key, artwork_path);
+                log::info!("Album {} by {}: artwork_path = {:?}", album, artist, artwork_path);
                 
                 Ok(LocalAlbum {
                     id: group_key.clone(),

@@ -18,7 +18,7 @@ impl ApiCacheState {
     pub fn new() -> Result<Self, String> {
         let data_dir = dirs::data_dir()
             .ok_or("Could not determine data directory")?
-            .join("qbz-nix")
+            .join("qbz")
             .join("cache");
 
         std::fs::create_dir_all(&data_dir)

@@ -16,7 +16,7 @@ impl Default for DownloadSettings {
     fn default() -> Self {
         let default_root = dirs::cache_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("qbz-nix")
+            .join("qbz")
             .join("audio")
             .to_string_lossy()
             .to_string();
@@ -36,7 +36,7 @@ impl DownloadSettingsStore {
     pub fn new() -> Result<Self, String> {
         let data_dir = dirs::data_dir()
             .ok_or("Could not determine data directory")?
-            .join("qbz-nix");
+            .join("qbz");
 
         std::fs::create_dir_all(&data_dir)
             .map_err(|e| format!("Failed to create data directory: {}", e))?;

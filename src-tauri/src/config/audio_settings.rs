@@ -22,7 +22,7 @@ impl AudioSettingsStore {
     pub fn new() -> Result<Self, String> {
         let data_dir = dirs::data_dir()
             .ok_or("Could not determine data directory")?
-            .join("qbz-nix");
+            .join("qbz");
 
         std::fs::create_dir_all(&data_dir)
             .map_err(|e| format!("Failed to create data directory: {}", e))?;

@@ -129,7 +129,7 @@ impl DownloadCacheState {
     pub fn new() -> Result<Self, String> {
         let cache_dir = dirs::cache_dir()
             .ok_or("Could not determine cache directory")?
-            .join("qbz-nix")
+            .join("qbz")
             .join("audio");
 
         // Create directories

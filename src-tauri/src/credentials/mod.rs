@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-const SERVICE_NAME: &str = "qbz-nix";
+const SERVICE_NAME: &str = "qbz";
 const QOBUZ_CREDENTIALS_KEY: &str = "qobuz-credentials";
 const FALLBACK_FILE_NAME: &str = ".qbz-auth";
 
@@ -27,7 +27,7 @@ pub struct QobuzCredentials {
 
 /// Get the fallback credentials file path
 fn get_fallback_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|p| p.join("qbz-nix").join(FALLBACK_FILE_NAME))
+    dirs::config_dir().map(|p| p.join("qbz").join(FALLBACK_FILE_NAME))
 }
 
 /// Simple XOR obfuscation (not secure, but avoids plain text)

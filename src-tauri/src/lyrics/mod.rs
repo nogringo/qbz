@@ -58,7 +58,7 @@ impl LyricsState {
     pub fn new() -> Result<Self, String> {
         let cache_dir = dirs::cache_dir()
             .ok_or("Could not determine cache directory")?
-            .join("qbz-nix")
+            .join("qbz")
             .join("lyrics");
 
         std::fs::create_dir_all(&cache_dir)
