@@ -113,7 +113,7 @@ function isUnofficialRelease(album: QobuzAlbum): boolean {
   const broadcastPatterns = /\b(fm broadcasts?|radio broadcasts?|broadcasts?|bootleg|unofficial|pirate)\b/;
 
   // Interview albums, spoken word that isn't the artist's music
-  const nonMusicPatterns = /\b(interview|speaks|talking|in their own words)\b/;
+  const nonMusicPatterns = /\b(interviews?|speaks|talking|in their own words|the interviews?|memories:?\s*the)\b/;
 
   // Podcasts, radio shows, reports (single long track, episodic naming)
   const podcastPatterns = /\b(episode|report|podcast|show|program|special)\s*\d+|\b(episode|report)\b/i;
@@ -160,8 +160,12 @@ function isLiveAlbum(album: QobuzAlbum): boolean {
   // Genre explicitly says live
   if (genre.includes('live')) return true;
 
-  // Common live album patterns
-  const livePatterns = /\blive\b|\blive at\b|\blive in\b|\bin concert\b|\bunplugged\b|\bmtv unplugged\b|\bacoustic live\b|\balive\b/;
+  // Common live album patterns (English)
+  const livePatterns = /\blive\b|\blive at\b|\blive in\b|\bin concert\b|\bunplugged\b|\bmtv unplugged\b|\bacoustic live\b|\balive\b|\bon stage\b/;
+
+  // Live album patterns in other languages
+  // Spanish: "en vivo", "en directo" | Portuguese: "ao vivo" | Italian: "dal vivo" | French: "en direct"
+  const liveMultilang = /\b(en vivo|en directo|ao vivo|dal vivo|en direct)\b/i;
 
   // Tour recordings (but not "tour edition" which is a studio album variant)
   const tourPatterns = /\b(tour|on tour)\b(?!.*\bedition\b)/;
@@ -170,6 +174,7 @@ function isLiveAlbum(album: QobuzAlbum): boolean {
   const isStudioVariant = /\b(remaster|deluxe|anniversary|expanded)\b/.test(title);
 
   if (livePatterns.test(title)) return true;
+  if (liveMultilang.test(title)) return true;
   if (tourPatterns.test(title) && !isStudioVariant) return true;
 
   // City/Location + Year pattern (e.g., "Seattle 1989", "Tokyo 1986", "Dallas, Texas 1989")
