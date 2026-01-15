@@ -244,6 +244,23 @@ TIDAL_API_CLIENT_SECRET=your_client_secret
 > **Note:** All integrations are optional. The application will work without them, but the corresponding features will be disabled.
 </details>
 
+### Data Migration
+
+If you've used QBZ before version 1.1.6, your data was stored under `qbz-nix` directories. The application now uses unified `qbz` paths. To migrate your existing data:
+
+```bash
+# Migrate cache (downloads, artwork, etc.)
+mv ~/.cache/qbz-nix ~/.cache/qbz
+
+# Migrate config (credentials)
+mv ~/.config/qbz-nix ~/.config/qbz
+
+# Migrate data (library database, settings)
+mv ~/.local/share/qbz-nix ~/.local/share/qbz
+```
+
+If you run both development and production builds, they now share the same data directories.
+
 ## Project Structure
 
 ```
