@@ -821,6 +821,29 @@ pub async fn library_set_album_artwork(
     Ok(cached_path)
 }
 
+/// Search for artists on Discogs
+#[tauri::command]
+pub async fn discogs_search_artist(
+    query: String,
+    api_keys: State<'_, ApiKeysState>,
+) -> Result<crate::discogs::SearchResponse, String> {
+    log::info!("Command: discogs_search_artist query={}", query);
+
+    // Get user-provided credentials if available
+    let keys = api_keys.lock().await;
+    let discogs = DiscogsClient::with_user_credentials(
+        keys.discogs.client_id.clone(),
+        keys.discogs.client_secret.clone(),
+    );
+    drop(keys);
+
+    if !discogs.has_credentials() {
+        return Err("Discogs credentials not configured".to_string());
+    }
+
+    discogs.search_artist(&query).await
+}
+
 // === Album Settings ===
 
 #[tauri::command]

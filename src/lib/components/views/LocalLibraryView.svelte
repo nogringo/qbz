@@ -268,11 +268,12 @@
     loading = true;
     try {
       artists = await invoke<LocalArtist[]>('library_get_artists');
-      // Fetch Qobuz artist images in background (best-effort) if enabled
+      // Load cached artist images from database
+      await loadCachedArtistImages();
+      // Fetch missing images in background if enabled
       const fetchEnabled = localStorage.getItem('qbz-fetch-artist-images') !== 'false';
       if (fetchEnabled) {
-        const artistNames = artists.map(a => a.name);
-        fetchArtistImages(artistNames);
+        fetchMissingArtistImages();
       }
     } catch (err) {
       console.error('Failed to load artists:', err);
@@ -933,14 +934,41 @@
   }
 
   /**
-   * Fetch artist images from Qobuz for local artists.
-   * Does a best-effort match and caches images by artist name.
+   * Load cached artist images from database.
    */
-  async function fetchArtistImages(artistNames: string[]): Promise<void> {
+  async function loadCachedArtistImages(): Promise<void> {
+    try {
+      const artistNames = artists.map(a => a.name);
+      const cachedImages = await invoke<Array<{
+        artist_name: string;
+        image_url: string | null;
+        source: string | null;
+        custom_image_path: string | null;
+      }>>('library_get_artist_images', { artistNames });
+
+      for (const cached of cachedImages) {
+        const imageUrl = cached.custom_image_path
+          ? convertFileSrc(cached.custom_image_path)
+          : cached.image_url;
+        if (imageUrl) {
+          artistImages.set(cached.artist_name, imageUrl);
+        }
+      }
+      // Trigger re-render
+      artistImages = new Map(artistImages);
+    } catch (err) {
+      console.debug('Failed to load cached artist images:', err);
+    }
+  }
+
+  /**
+   * Fetch missing artist images from Qobuz and Discogs (fallback).
+   */
+  async function fetchMissingArtistImages(): Promise<void> {
     // Filter out artists we already have images for and "Various Artists"
-    const toFetch = artistNames.filter(name => {
-      const normalized = normalizeArtistName(name);
-      return normalized !== 'various artists' && !artistImages.has(name);
+    const toFetch = artists.filter(artist => {
+      const normalized = normalizeArtistName(artist.name);
+      return normalized !== 'various artists' && !artistImages.has(artist.name);
     });
 
     if (toFetch.length === 0) return;
@@ -949,29 +977,60 @@
     const batchSize = 10;
     for (let i = 0; i < toFetch.length; i += batchSize) {
       const batch = toFetch.slice(i, i + batchSize);
-      const promises = batch.map(async (name) => {
+      const promises = batch.map(async (artist) => {
+        const name = artist.name;
         try {
+          // Try Qobuz first
           const results = await invoke<SearchResults<ArtistSearchResult>>('search_artists', {
             query: name.trim(),
             limit: 3,
             offset: 0
           });
 
-          if (!results.items.length) return;
+          if (results.items.length > 0) {
+            const normalizedQuery = normalizeArtistName(name);
+            const exactMatch = results.items.find(
+              item => normalizeArtistName(item.name) === normalizedQuery
+            );
+            const match = exactMatch ?? results.items[0];
+            const imageUrl = match.image?.large || match.image?.thumbnail || match.image?.small;
+            
+            if (imageUrl) {
+              // Cache in database
+              await invoke('library_cache_artist_image', {
+                artistName: name,
+                imageUrl,
+                source: 'qobuz'
+              });
+              artistImages.set(name, imageUrl);
+              return;
+            }
+          }
 
-          const normalizedQuery = normalizeArtistName(name);
-          const exactMatch = results.items.find(
-            artist => normalizeArtistName(artist.name) === normalizedQuery
-          );
-          const match = exactMatch ?? results.items[0];
-
-          // Get the best available image
-          const imageUrl = match.image?.large || match.image?.thumbnail || match.image?.small;
-          if (imageUrl) {
-            artistImages.set(name, imageUrl);
+          // Fallback to Discogs if Qobuz failed and Discogs is available
+          if (hasDiscogsCredentials) {
+            try {
+              const discogsResults = await invoke<any>('discogs_search_artist', {
+                query: name.trim()
+              });
+              
+              if (discogsResults && discogsResults.results && discogsResults.results.length > 0) {
+                const imageUrl = discogsResults.results[0].thumb || discogsResults.results[0].cover_image;
+                if (imageUrl && !imageUrl.includes('spacer.gif')) {
+                  // Cache in database
+                  await invoke('library_cache_artist_image', {
+                    artistName: name,
+                    imageUrl,
+                    source: 'discogs'
+                  });
+                  artistImages.set(name, imageUrl);
+                }
+              }
+            } catch (discogsErr) {
+              console.debug('Discogs fallback failed for artist:', name, discogsErr);
+            }
           }
         } catch (err) {
-          // Silently fail for individual artists - it's best-effort
           console.debug('Failed to fetch image for artist:', name, err);
         }
       });
@@ -980,6 +1039,14 @@
       // Update state to trigger re-render
       artistImages = new Map(artistImages);
     }
+  }
+
+  /**
+   * Legacy function - kept for compatibility but now calls new implementation.
+   * @deprecated Use fetchMissingArtistImages() instead
+   */
+  async function fetchArtistImages(artistNames: string[]): Promise<void> {
+    await fetchMissingArtistImages();
   }
 
   function handleLocalAlbumLink(track: LocalTrack) {

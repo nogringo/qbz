@@ -383,6 +383,7 @@ pub fn run() {
             library::commands::playlist_increment_play_count,
             // Discogs artwork commands
             library::commands::discogs_has_credentials,
+            library::commands::discogs_search_artist,
             library::commands::library_fetch_missing_artwork,
             library::commands::library_fetch_album_artwork,
             library::commands::library_set_album_artwork,

@@ -16,19 +16,19 @@ pub struct DiscogsClient {
 }
 
 /// Search result from Discogs API
-#[derive(Debug, Deserialize)]
-struct SearchResponse {
-    results: Vec<SearchResult>,
+#[derive(Debug, Deserialize, serde::Serialize, Clone)]
+pub struct SearchResponse {
+    pub results: Vec<SearchResult>,
 }
 
-#[derive(Debug, Deserialize)]
-struct SearchResult {
-    id: u64,
-    cover_image: Option<String>,
-    thumb: Option<String>,
-    title: String,
+#[derive(Debug, Deserialize, serde::Serialize, Clone)]
+pub struct SearchResult {
+    pub id: u64,
+    pub cover_image: Option<String>,
+    pub thumb: Option<String>,
+    pub title: String,
     #[serde(rename = "type")]
-    result_type: String,
+    pub result_type: String,
 }
 
 // Compile-time embedded credentials (from build environment)
@@ -152,6 +152,37 @@ impl DiscogsClient {
 
         log::debug!("No Discogs cover found for {} - {}", artist, album);
         None
+    }
+
+    /// Search for artists and return search results
+    pub async fn search_artist(&self, query: &str) -> Result<SearchResponse, String> {
+        if !self.has_credentials() {
+            return Err("Discogs credentials not configured".to_string());
+        }
+
+        let key = self.consumer_key.as_ref().unwrap();
+        let secret = self.consumer_secret.as_ref().unwrap();
+
+        let url = format!(
+            "https://api.discogs.com/database/search?q={}&type=artist&key={}&secret={}",
+            urlencoding::encode(query),
+            key,
+            secret
+        );
+
+        log::debug!("Searching Discogs for artist: {}", query);
+
+        let response = self.client.get(&url).send().await
+            .map_err(|e| format!("Failed to search Discogs: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Discogs search failed with status: {}", response.status()));
+        }
+
+        let search: SearchResponse = response.json().await
+            .map_err(|e| format!("Failed to parse Discogs response: {}", e))?;
+
+        Ok(search)
     }
 
     /// Download an image to the cache directory
