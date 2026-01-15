@@ -1311,7 +1311,7 @@
 
   .top-section {
     display: grid;
-    grid-template-columns: minmax(140px, 1fr) minmax(0, 3fr);
+    grid-template-columns: minmax(90px, 1fr) minmax(0, 4fr);
     gap: 24px;
     align-items: start;
   }
@@ -1329,13 +1329,14 @@
 
   .most-popular .section-header {
     width: 100%;
+    margin-bottom: 16px;
   }
 
   .most-popular h3 {
     font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 16px;
+    margin-bottom: 0;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1510,7 +1511,7 @@
     align-items: center;
     justify-content: center;
     background-color: var(--bg-secondary);
-    border: 2px dashed var(--bg-tertiary);
+    border: 2px solid var(--bg-tertiary);
     border-radius: 8px;
     cursor: pointer;
     transition: all 150ms ease;
@@ -1538,10 +1539,12 @@
   .view-more-info {
     width: 160px;
     padding: 0 4px;
+    text-align: center;
   }
 
   .view-more-text {
-    font-size: 12px;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--text-muted);
     line-height: 1.3;
     display: block;
