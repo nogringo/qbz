@@ -8,20 +8,29 @@
   import { t } from '$lib/i18n';
 
   let searchInput: HTMLInputElement | null = null;
-  let albumsCarouselRef: HTMLDivElement | null = null;
   let albumsCarouselContainer: HTMLDivElement | null = null;
-  let currentPage = $state(0);
+  let artistsCarouselContainer: HTMLDivElement | null = null;
+  let currentAlbumPage = $state(0);
+  let currentArtistPage = $state(0);
   let albumsPerPage = $state(5);
-  let totalPages = $derived(allResults ? Math.ceil(allResults.albums.items.length / albumsPerPage) : 0);
+  let artistsPerPage = $state(5);
+  let totalAlbumPages = $derived(allResults ? Math.ceil(allResults.albums.items.length / albumsPerPage) : 0);
+  let totalArtistPages = $derived(allResults ? Math.ceil(allResults.artists.items.length / artistsPerPage) : 0);
 
   onMount(async () => {
     console.log('SearchView mounted!');
     await tick();
     searchInput?.focus();
     calculateAlbumsPerPage();
-    window.addEventListener('resize', calculateAlbumsPerPage);
-    return () => window.removeEventListener('resize', calculateAlbumsPerPage);
+    calculateArtistsPerPage();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   });
+
+  function handleResize() {
+    calculateAlbumsPerPage();
+    calculateArtistsPerPage();
+  }
 
   function calculateAlbumsPerPage() {
     if (!albumsCarouselContainer) return;
@@ -30,7 +39,17 @@
     const cardWidth = 160;
     const cols = Math.floor((containerWidth + gap) / (cardWidth + gap));
     albumsPerPage = Math.max(2, cols);
-    console.log(`Container width: ${containerWidth}px, Albums per page: ${albumsPerPage}`);
+    console.log(`Albums - Container width: ${containerWidth}px, Albums per page: ${albumsPerPage}`);
+  }
+
+  function calculateArtistsPerPage() {
+    if (!artistsCarouselContainer) return;
+    const containerWidth = artistsCarouselContainer.clientWidth;
+    const gap = 16;
+    const cardWidth = 160;
+    const cols = Math.floor((containerWidth + gap) / (cardWidth + gap));
+    artistsPerPage = Math.max(2, cols);
+    console.log(`Artists - Container width: ${containerWidth}px, Artists per page: ${artistsPerPage}`);
   }
 
   // Track which images have failed to load
@@ -175,8 +194,12 @@
 
   $effect(() => {
     if (allResults) {
-      currentPage = 0;
-      setTimeout(() => calculateAlbumsPerPage(), 100);
+      currentAlbumPage = 0;
+      currentArtistPage = 0;
+      setTimeout(() => {
+        calculateAlbumsPerPage();
+        calculateArtistsPerPage();
+      }, 100);
     }
   });
 
@@ -358,18 +381,35 @@
 
   function scrollAlbumsCarousel(direction: 'left' | 'right') {
     if (direction === 'left') {
-      currentPage = Math.max(0, currentPage - 1);
+      currentAlbumPage = Math.max(0, currentAlbumPage - 1);
     } else {
-      currentPage = Math.min(totalPages - 1, currentPage + 1);
+      currentAlbumPage = Math.min(totalAlbumPages - 1, currentAlbumPage + 1);
     }
   }
 
-  let canScrollLeft = $derived(currentPage > 0);
-  let canScrollRight = $derived(currentPage < totalPages - 1);
+  function scrollArtistsCarousel(direction: 'left' | 'right') {
+    if (direction === 'left') {
+      currentArtistPage = Math.max(0, currentArtistPage - 1);
+    } else {
+      currentArtistPage = Math.min(totalArtistPages - 1, currentArtistPage + 1);
+    }
+  }
+
+  let canScrollAlbumsLeft = $derived(currentAlbumPage > 0);
+  let canScrollAlbumsRight = $derived(currentAlbumPage < totalAlbumPages - 1);
+  let canScrollArtistsLeft = $derived(currentArtistPage > 0);
+  let canScrollArtistsRight = $derived(currentArtistPage < totalArtistPages - 1);
   
   let visibleAlbums = $derived(
-    allResults ? allResults.albums.items.slice(currentPage * albumsPerPage, (currentPage + 1) * albumsPerPage) : []
+    allResults ? allResults.albums.items.slice(currentAlbumPage * albumsPerPage, (currentAlbumPage + 1) * albumsPerPage) : []
   );
+
+  let visibleArtists = $derived(
+    allResults ? allResults.artists.items.slice(currentArtistPage * artistsPerPage, (currentArtistPage + 1) * artistsPerPage) : []
+  );
+
+  let showAlbumsViewMore = $derived(allResults ? allResults.albums.total > 30 : false);
+  let showArtistsViewMore = $derived(allResults ? allResults.artists.total > 12 : false);
 </script>
 
 <div class="search-view">
@@ -513,26 +553,54 @@
           <div class="artists-section">
             <div class="section-header">
               <h3>Artists</h3>
-              <button class="view-all-link" onclick={() => handleTabChange('artists')}>
-                View all ({allResults.artists.total})
-              </button>
-            </div>
-            <div class="artists-grid-compact">
-              {#each allResults.artists.items as artist}
-                <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
-                  {#if failedArtistImages.has(artist.id) || !getArtistImage(artist)}
-                    <div class="artist-image-placeholder">
-                      <User size={40} />
-                    </div>
-                  {:else}
-                    <img src={getArtistImage(artist)} alt={artist.name} class="artist-image" onerror={() => handleArtistImageError(artist.id)} />
-                  {/if}
-                  <div class="artist-name">{artist.name}</div>
-                  {#if artist.albums_count}
-                    <div class="artist-albums">{$t('library.albumCount', { values: { count: artist.albums_count } })}</div>
-                  {/if}
+              <div class="carousel-controls">
+                <button 
+                  class="carousel-btn" 
+                  onclick={() => scrollArtistsCarousel('left')} 
+                  disabled={!canScrollArtistsLeft}
+                  aria-label="Previous artists"
+                >
+                  <ChevronLeft size={20} />
                 </button>
-              {/each}
+                <button 
+                  class="carousel-btn" 
+                  onclick={() => scrollArtistsCarousel('right')} 
+                  disabled={!canScrollArtistsRight}
+                  aria-label="Next artists"
+                >
+                  <ChevronRight size={20} />
+                </button>
+                <button class="view-all-link" onclick={() => handleTabChange('artists')}>
+                  View all ({allResults.artists.total})
+                </button>
+              </div>
+            </div>
+            <div class="artists-carousel-wrapper" bind:this={artistsCarouselContainer}>
+              <div class="artists-carousel">
+                {#each visibleArtists as artist}
+                  <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
+                    {#if failedArtistImages.has(artist.id) || !getArtistImage(artist)}
+                      <div class="artist-image-placeholder">
+                        <User size={40} />
+                      </div>
+                    {:else}
+                      <img src={getArtistImage(artist)} alt={artist.name} class="artist-image" onerror={() => handleArtistImageError(artist.id)} />
+                    {/if}
+                    <div class="artist-name">{artist.name}</div>
+                    {#if artist.albums_count}
+                      <div class="artist-albums">{$t('library.albumCount', { values: { count: artist.albums_count } })}</div>
+                    {/if}
+                  </button>
+                {/each}
+                {#if showArtistsViewMore}
+                  <button class="view-more-card" onclick={() => handleTabChange('artists')}>
+                    <div class="view-more-content">
+                      <span>View more</span>
+                      <ChevronRight size={24} />
+                    </div>
+                  </button>
+                {/if}
+              </div>
             </div>
           </div>
         </div>
@@ -548,7 +616,7 @@
                   <button 
                     class="carousel-btn" 
                     onclick={() => scrollAlbumsCarousel('left')} 
-                    disabled={!canScrollLeft}
+                    disabled={!canScrollAlbumsLeft}
                     aria-label="Previous albums"
                   >
                     <ChevronLeft size={20} />
@@ -556,7 +624,7 @@
                   <button 
                     class="carousel-btn" 
                     onclick={() => scrollAlbumsCarousel('right')} 
-                    disabled={!canScrollRight}
+                    disabled={!canScrollAlbumsRight}
                     aria-label="Next albums"
                   >
                     <ChevronRight size={20} />
@@ -590,6 +658,16 @@
                       />
                     </div>
                   {/each}
+                  {#if showAlbumsViewMore}
+                    <div class="album-card-wrapper">
+                      <button class="view-more-card" onclick={() => handleTabChange('albums')}>
+                        <div class="view-more-content">
+                          <span>View more</span>
+                          <ChevronRight size={24} />
+                        </div>
+                      </button>
+                    </div>
+                  {/if}
                 </div>
               </div>
             </div>
@@ -1293,10 +1371,20 @@
   .artists-grid-compact {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 24px;
+    gap: 16px;
     overflow-y: auto;
     max-height: 400px;
     padding-right: 8px;
+  }
+
+  .artists-carousel-wrapper {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .artists-carousel {
+    display: flex;
+    gap: 16px;
   }
 
   .artists-grid-compact .artist-card {
@@ -1352,6 +1440,41 @@
 
   .album-card-wrapper {
     min-width: 160px;
+    flex-shrink: 0;
+  }
+
+  .view-more-card {
+    width: 160px;
+    min-width: 160px;
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-secondary);
+    border: 2px dashed var(--bg-tertiary);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 150ms ease;
+    flex-shrink: 0;
+  }
+
+  .view-more-card:hover {
+    background-color: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+  }
+
+  .view-more-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .view-more-card:hover .view-more-content {
+    color: var(--accent-primary);
   }
 
   .tracks-section {
