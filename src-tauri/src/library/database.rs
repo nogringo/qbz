@@ -1456,15 +1456,29 @@ impl LibraryDatabase {
         bit_depth: Option<u32>,
         sample_rate: Option<f64>,
     ) -> Result<(), LibraryError> {
+        use std::time::SystemTime;
+        
+        // Get file size if file exists
+        let file_size_bytes = std::fs::metadata(file_path)
+            .map(|m| m.len() as i64)
+            .unwrap_or(0);
+        
+        // Get current timestamp
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        
         self.conn.execute(
             r#"
             INSERT INTO local_tracks (
                 file_path, title, artist, album, album_artist,
                 track_number, disc_number, year, duration_secs,
                 format, bit_depth, sample_rate, channels,
+                file_size_bytes, last_modified, indexed_at,
                 album_group_key, album_group_title,
                 source, qobuz_track_id
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, 'qobuz_download', ?16)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, 'qobuz_download', ?19)
             "#,
             params![
                 file_path,
@@ -1478,8 +1492,11 @@ impl LibraryDatabase {
                 duration_secs as i64,
                 "flac",
                 bit_depth.map(|v| v as i64),
-                sample_rate,
+                sample_rate.unwrap_or(44100.0) as i64,
                 2, // Assume stereo
+                file_size_bytes,
+                now,
+                now,
                 album_group_key,
                 album_group_title,
                 track_id as i64,

@@ -41,7 +41,22 @@ async fn post_process_track(
     // 4. Organize file into artist/album structure
     let new_path = organize_download(track_id, current_path, download_root, &metadata)?;
     
-    // 5. ALWAYS insert into local library DB (visibility controlled by toggle)
+    // 5. Extract audio properties from FLAC file
+    use lofty::AudioFile;
+    let (bit_depth, sample_rate) = match lofty::read_from_path(&new_path) {
+        Ok(tagged_file) => {
+            let properties = tagged_file.properties();
+            let bit_depth = properties.bit_depth().map(|bd| bd as u32);
+            let sample_rate = properties.sample_rate().map(|sr| sr as f64);
+            (bit_depth, sample_rate)
+        }
+        Err(e) => {
+            log::warn!("Failed to read audio properties for track {}: {}", track_id, e);
+            (None, None)
+        }
+    };
+    
+    // 6. ALWAYS insert into local library DB (visibility controlled by toggle)
     let lib_guard = library_db.lock().await;
     
     // Generate album_group_key: album|album_artist
@@ -61,8 +76,8 @@ async fn post_process_track(
         &new_path,
         &album_group_key,
         &metadata.album,
-        None, // bit_depth not in CompleteTrackMetadata
-        None, // sample_rate not in CompleteTrackMetadata
+        bit_depth,
+        sample_rate,
     ) {
         Ok(_) => log::info!("Track {} inserted to local library DB with group key: {}", track_id, album_group_key),
         Err(e) => log::error!("Failed to insert track {} to library DB: {}", track_id, e),
