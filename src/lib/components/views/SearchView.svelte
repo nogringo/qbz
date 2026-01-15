@@ -1312,7 +1312,7 @@
   .top-section {
     display: grid;
     grid-template-columns: 180px minmax(0, 1fr);
-    gap: 24px;
+    gap: 18px;
     align-items: start;
   }
 
@@ -1333,13 +1333,13 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 16px;
+    min-height: 32px;
   }
 
   .most-popular h3 {
     font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
-    margin: 0;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1439,7 +1439,7 @@
 
   .artists-carousel {
     display: flex;
-    gap: 16px;
+    gap: 15px;
   }
 
   .artists-grid-compact .artist-card {
