@@ -20,8 +20,10 @@ async fn post_process_track(
     current_path: &str,
     download_root: &str,
     qobuz_client: &crate::api::QobuzClient,
+    show_in_library: bool,
+    library_db: Option<Arc<tokio::sync::Mutex<crate::library::database::LibraryDatabase>>>,
 ) -> Result<String, String> {
-    log::info!("Post-processing track {}", track_id);
+    log::info!("Post-processing track {} (show_in_library: {})", track_id, show_in_library);
 
     // 1. Fetch complete metadata from Qobuz
     let metadata = fetch_complete_metadata(track_id, qobuz_client).await?;
@@ -39,6 +41,26 @@ async fn post_process_track(
     
     // 4. Organize file into artist/album structure
     let new_path = organize_download(track_id, current_path, download_root, &metadata)?;
+    
+    // 5. Insert into local library if enabled
+    if show_in_library {
+        if let Some(lib_db) = library_db {
+            let lib_guard = lib_db.lock().await;
+            match lib_guard.insert_qobuz_download_direct(
+                track_id,
+                &metadata.title,
+                &metadata.artist,
+                Some(&metadata.album),
+                metadata.duration_secs,
+                &new_path,
+                None, // bit_depth not in CompleteTrackMetadata
+                None, // sample_rate not in CompleteTrackMetadata
+            ) {
+                Ok(_) => log::info!("Track {} added to local library", track_id),
+                Err(e) => log::error!("Failed to add track {} to library: {}", track_id, e),
+            }
+        }
+    }
     
     log::info!("Track {} organized to: {}", track_id, new_path);
     Ok(new_path)
@@ -58,6 +80,7 @@ pub async fn download_track(
     sample_rate: Option<f64>,
     state: State<'_, AppState>,
     cache_state: State<'_, DownloadCacheState>,
+    library_state: State<'_, crate::library::commands::LibraryState>,
     app_handle: AppHandle,
 ) -> Result<(), String> {
     log::info!("Command: download_track {} - {} by {}", track_id, title, artist);
@@ -89,6 +112,7 @@ pub async fn download_track(
     let downloader = cache_state.downloader.clone();
     let db = cache_state.db.clone();
     let download_root = cache_state.get_cache_path();
+    let library_db = library_state.db.clone();
     let app = app_handle.clone();
     let semaphore = cache_state.download_semaphore.clone();
 
@@ -168,9 +192,19 @@ pub async fn download_track(
                 // Post-processing: metadata, tagging, artwork, organization
                 log::info!("Starting post-processing for track {}", track_id);
                 
+                // Check if we should add to library (hardcoded to false for now - will be from settings)
+                let show_in_library = false; // TODO: Get from settings
+                
                 let file_path_str = file_path.to_string_lossy().to_string();
                 let qobuz_client = client.lock().await;
-                match post_process_track(track_id, &file_path_str, &download_root, &*qobuz_client).await {
+                match post_process_track(
+                    track_id,
+                    &file_path_str,
+                    &download_root,
+                    &*qobuz_client,
+                    show_in_library,
+                    Some(library_db.clone()),
+                ).await {
                     Ok(new_path) => {
                         // Update database with new path
                         let db_guard = db.lock().await;
