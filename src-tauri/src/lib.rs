@@ -270,6 +270,7 @@ pub fn run() {
             commands::search_albums,
             commands::search_tracks,
             commands::search_artists,
+            commands::search_all,
             commands::get_album,
             commands::get_featured_albums,
             commands::get_track,

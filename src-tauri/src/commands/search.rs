@@ -5,6 +5,14 @@ use tauri::State;
 use crate::api::{Album, Artist, ArtistAlbums, SearchResultsPage, Track};
 use crate::api_cache::ApiCacheState;
 use crate::AppState;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchAllResults {
+    pub albums: SearchResultsPage<Album>,
+    pub tracks: SearchResultsPage<Track>,
+    pub artists: SearchResultsPage<Artist>,
+}
 
 #[tauri::command]
 pub async fn search_albums(
@@ -46,6 +54,26 @@ pub async fn search_artists(
         .search_artists(&query, limit.unwrap_or(20), offset.unwrap_or(0))
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn search_all(
+    query: String,
+    state: State<'_, AppState>,
+) -> Result<SearchAllResults, String> {
+    let client = state.client.lock().await;
+    
+    let (albums_result, tracks_result, artists_result) = tokio::join!(
+        client.search_albums(&query, 30, 0),
+        client.search_tracks(&query, 8, 0),
+        client.search_artists(&query, 12, 0)
+    );
+
+    Ok(SearchAllResults {
+        albums: albums_result.map_err(|e| e.to_string())?,
+        tracks: tracks_result.map_err(|e| e.to_string())?,
+        artists: artists_result.map_err(|e| e.to_string())?,
+    })
 }
 
 #[tauri::command]

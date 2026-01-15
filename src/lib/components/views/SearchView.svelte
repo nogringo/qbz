@@ -1,19 +1,56 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { Search, Disc3, Music, Mic2, User, X } from 'lucide-svelte';
+  import { Search, Disc3, Music, Mic2, User, X, ChevronLeft, ChevronRight, Crown } from 'lucide-svelte';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackMenu from '../TrackMenu.svelte';
-  import { getSearchState, setSearchState, type SearchResults, type SearchTab } from '$lib/stores/searchState';
+  import { getSearchState, setSearchState, type SearchResults, type SearchAllResults, type SearchTab } from '$lib/stores/searchState';
   import { t } from '$lib/i18n';
 
   let searchInput: HTMLInputElement | null = null;
+  let albumsCarouselContainer: HTMLDivElement | null = null;
+  let artistsCarouselContainer: HTMLDivElement | null = null;
+  let currentAlbumPage = $state(0);
+  let currentArtistPage = $state(0);
+  let albumsPerPage = $state(5);
+  let artistsPerPage = $state(5);
+  let totalAlbumPages = $derived(allResults ? Math.ceil(allResults.albums.items.length / albumsPerPage) : 0);
+  let totalArtistPages = $derived(allResults ? Math.ceil(allResults.artists.items.length / artistsPerPage) : 0);
 
   onMount(async () => {
     console.log('SearchView mounted!');
     await tick();
     searchInput?.focus();
+    calculateAlbumsPerPage();
+    calculateArtistsPerPage();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   });
+
+  function handleResize() {
+    calculateAlbumsPerPage();
+    calculateArtistsPerPage();
+  }
+
+  function calculateAlbumsPerPage() {
+    if (!albumsCarouselContainer) return;
+    const containerWidth = albumsCarouselContainer.clientWidth;
+    const gap = 16;
+    const cardWidth = 160;
+    const cols = Math.floor((containerWidth + gap) / (cardWidth + gap));
+    albumsPerPage = Math.max(2, cols);
+    console.log(`Albums - Container width: ${containerWidth}px, Albums per page: ${albumsPerPage}`);
+  }
+
+  function calculateArtistsPerPage() {
+    if (!artistsCarouselContainer) return;
+    const containerWidth = artistsCarouselContainer.clientWidth;
+    const gap = 16;
+    const cardWidth = 160;
+    const cols = Math.floor((containerWidth + gap) / (cardWidth + gap));
+    artistsPerPage = Math.max(2, cols);
+    console.log(`Artists - Container width: ${containerWidth}px, Artists per page: ${artistsPerPage}`);
+  }
 
   // Track which images have failed to load
   let failedTrackImages = $state<Set<number>>(new Set());
@@ -112,13 +149,14 @@
   const cachedState = getSearchState<Album, Track, Artist>();
 
   let query = $state(cachedState.query ?? '');
-  let activeTab = $state<SearchTab>(cachedState.activeTab ?? 'albums');
+  let activeTab = $state<SearchTab>(cachedState.activeTab ?? 'all');
   let isSearching = $state(false);
   let searchError = $state<string | null>(null);
 
   let albumResults = $state<SearchResults<Album> | null>(cachedState.albumResults ?? null);
   let trackResults = $state<SearchResults<Track> | null>(cachedState.trackResults ?? null);
   let artistResults = $state<SearchResults<Artist> | null>(cachedState.artistResults ?? null);
+  let allResults = $state<SearchAllResults<Album, Track, Artist> | null>(cachedState.allResults ?? null);
 
   let searchTimeout: ReturnType<typeof setTimeout> | null = null;
   let isLoadingMore = $state(false);
@@ -151,7 +189,19 @@
     albumResults = null;
     trackResults = null;
     artistResults = null;
+    allResults = null;
   }
+
+  $effect(() => {
+    if (allResults) {
+      currentAlbumPage = 0;
+      currentArtistPage = 0;
+      setTimeout(() => {
+        calculateAlbumsPerPage();
+        calculateArtistsPerPage();
+      }, 100);
+    }
+  });
 
   $effect(() => {
     setSearchState<Album, Track, Artist>({
@@ -159,7 +209,8 @@
       activeTab,
       albumResults,
       trackResults,
-      artistResults
+      artistResults,
+      allResults
     });
   });
 
@@ -204,7 +255,15 @@
 
     try {
       // Search based on active tab - reset to first page
-      if (activeTab === 'albums') {
+      if (activeTab === 'all') {
+        allResults = await invoke<SearchAllResults<Album, Track, Artist>>('search_all', {
+          query: query.trim()
+        });
+        console.log('All results:', allResults);
+        if (allResults && allResults.albums.items) {
+          await loadAllAlbumDownloadStatuses(allResults.albums.items);
+        }
+      } else if (activeTab === 'albums') {
         albumResults = await invoke<SearchResults<Album>>('search_albums', {
           query: query.trim(),
           limit: PAGE_SIZE,
@@ -319,6 +378,59 @@
   function getArtistImage(artist: Artist): string {
     return artist.image?.large || artist.image?.thumbnail || artist.image?.small || '';
   }
+
+  function scrollAlbumsCarousel(direction: 'left' | 'right') {
+    if (direction === 'left') {
+      currentAlbumPage = Math.max(0, currentAlbumPage - 1);
+    } else {
+      currentAlbumPage = Math.min(totalAlbumPagesWithViewMore - 1, currentAlbumPage + 1);
+    }
+  }
+
+  function scrollArtistsCarousel(direction: 'left' | 'right') {
+    if (direction === 'left') {
+      currentArtistPage = Math.max(0, currentArtistPage - 1);
+    } else {
+      currentArtistPage = Math.min(totalArtistPagesWithViewMore - 1, currentArtistPage + 1);
+    }
+  }
+
+  let canScrollAlbumsLeft = $derived(currentAlbumPage > 0);
+  let canScrollAlbumsRight = $derived(currentAlbumPage < totalAlbumPagesWithViewMore - 1);
+  let canScrollArtistsLeft = $derived(currentArtistPage > 0);
+  let canScrollArtistsRight = $derived(currentArtistPage < totalArtistPagesWithViewMore - 1);
+
+  let showAlbumsViewMore = $derived(allResults ? allResults.albums.total > 30 : false);
+  let showArtistsViewMore = $derived(allResults ? allResults.artists.total > 12 : false);
+  
+  let albumsWithViewMore = $derived(() => {
+    if (!allResults) return [];
+    const albums = [...allResults.albums.items];
+    if (showAlbumsViewMore) {
+      albums.push({ id: 'view-more', isViewMore: true } as any);
+    }
+    return albums;
+  });
+
+  let artistsWithViewMore = $derived(() => {
+    if (!allResults) return [];
+    const artists = [...allResults.artists.items];
+    if (showArtistsViewMore) {
+      artists.push({ id: 'view-more', isViewMore: true } as any);
+    }
+    return artists;
+  });
+
+  let totalAlbumPagesWithViewMore = $derived(albumsWithViewMore().length > 0 ? Math.ceil(albumsWithViewMore().length / albumsPerPage) : 0);
+  let totalArtistPagesWithViewMore = $derived(artistsWithViewMore().length > 0 ? Math.ceil(artistsWithViewMore().length / artistsPerPage) : 0);
+  
+  let visibleAlbums = $derived(
+    albumsWithViewMore().slice(currentAlbumPage * albumsPerPage, (currentAlbumPage + 1) * albumsPerPage)
+  );
+
+  let visibleArtists = $derived(
+    artistsWithViewMore().slice(currentArtistPage * artistsPerPage, (currentArtistPage + 1) * artistsPerPage)
+  );
 </script>
 
 <div class="search-view">
@@ -347,6 +459,14 @@
   <div class="tabs">
     <button
       class="tab"
+      class:active={activeTab === 'all'}
+      onclick={() => handleTabChange('all')}
+    >
+      <Search size={18} />
+      <span>All</span>
+    </button>
+    <button
+      class="tab"
       class:active={activeTab === 'albums'}
       onclick={() => handleTabChange('albums')}
     >
@@ -354,6 +474,8 @@
       <span>{$t('search.albums')}</span>
       {#if albumResults}
         <span class="count">{albumResults.total}</span>
+      {:else if allResults}
+        <span class="count">{allResults.albums.total}</span>
       {/if}
     </button>
     <button
@@ -365,6 +487,8 @@
       <span>{$t('search.tracks')}</span>
       {#if trackResults}
         <span class="count">{trackResults.total}</span>
+      {:else if allResults}
+        <span class="count">{allResults.tracks.total}</span>
       {/if}
     </button>
     <button
@@ -376,6 +500,8 @@
       <span>{$t('search.artists')}</span>
       {#if artistResults}
         <span class="count">{artistResults.total}</span>
+      {:else if allResults}
+        <span class="count">{allResults.artists.total}</span>
       {/if}
     </button>
   </div>
@@ -396,6 +522,269 @@
       <div class="empty-state">
         <Search size={48} />
         <p>{$t('search.startTyping')}</p>
+      </div>
+    {:else if activeTab === 'all' && allResults}
+      <!-- Unified Results View -->
+      <div class="unified-results">
+        <!-- Most Popular + Artists Section -->
+        <div class="top-section">
+          <div class="most-popular">
+            <div class="section-header">
+              <h3><Crown size={18} color="gold" /> Most Popular</h3>
+            </div>
+            <div class="most-popular-wrapper">
+              {#if allResults.artists.items.length > 0}
+              <button class="artist-card most-popular-card" onclick={() => onArtistClick?.(allResults.artists.items[0].id)}>
+                {#if failedArtistImages.has(allResults.artists.items[0].id) || !getArtistImage(allResults.artists.items[0])}
+                  <div class="artist-image-placeholder">
+                    <User size={40} />
+                  </div>
+                {:else}
+                  <img 
+                    src={getArtistImage(allResults.artists.items[0])} 
+                    alt={allResults.artists.items[0].name} 
+                    class="artist-image" 
+                    onerror={() => handleArtistImageError(allResults.artists.items[0].id)} 
+                  />
+                {/if}
+                <div class="artist-name">{allResults.artists.items[0].name}</div>
+                {#if allResults.artists.items[0].albums_count}
+                  <div class="artist-albums">{$t('library.albumCount', { values: { count: allResults.artists.items[0].albums_count } })}</div>
+                {/if}
+              </button>
+            {:else if allResults.albums.items.length > 0}
+              <AlbumCard
+                albumId={allResults.albums.items[0].id}
+                artwork={getAlbumArtwork(allResults.albums.items[0])}
+                title={allResults.albums.items[0].title}
+                artist={allResults.albums.items[0].artist?.name || 'Unknown Artist'}
+                quality={getQualityLabel(allResults.albums.items[0])}
+                onPlay={onAlbumPlay ? () => onAlbumPlay(allResults.albums.items[0].id) : undefined}
+                onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(allResults.albums.items[0].id) : undefined}
+                onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(allResults.albums.items[0].id) : undefined}
+                onShareQobuz={onAlbumShareQobuz ? () => onAlbumShareQobuz(allResults.albums.items[0].id) : undefined}
+                onShareSonglink={onAlbumShareSonglink ? () => onAlbumShareSonglink(allResults.albums.items[0].id) : undefined}
+                onDownload={onAlbumDownload ? () => onAlbumDownload(allResults.albums.items[0].id) : undefined}
+                isAlbumFullyDownloaded={isAlbumDownloaded(allResults.albums.items[0].id)}
+                onOpenContainingFolder={onOpenAlbumFolder ? () => onOpenAlbumFolder(allResults.albums.items[0].id) : undefined}
+                onReDownloadAlbum={onReDownloadAlbum ? () => onReDownloadAlbum(allResults.albums.items[0].id) : undefined}
+                {downloadStateVersion}
+                onclick={() => { onAlbumClick?.(allResults.albums.items[0].id); loadAlbumDownloadStatus(allResults.albums.items[0].id); }}
+              />
+            {/if}
+            </div>
+          </div>
+
+          <div class="artists-section">
+            <div class="section-header">
+              <h3>Artists</h3>
+              <div class="carousel-controls">
+                <button 
+                  class="carousel-btn" 
+                  onclick={() => scrollArtistsCarousel('left')} 
+                  disabled={!canScrollArtistsLeft}
+                  aria-label="Previous artists"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button 
+                  class="carousel-btn" 
+                  onclick={() => scrollArtistsCarousel('right')} 
+                  disabled={!canScrollArtistsRight}
+                  aria-label="Next artists"
+                >
+                  <ChevronRight size={20} />
+                </button>
+                <button class="view-all-link" onclick={() => handleTabChange('artists')}>
+                  View all ({allResults.artists.total})
+                </button>
+              </div>
+            </div>
+            <div class="artists-carousel-wrapper" bind:this={artistsCarouselContainer}>
+              <div class="artists-carousel">
+                {#each visibleArtists as artist}
+                  {#if artist.isViewMore}
+                    <div class="view-more-card">
+                      <button class="view-more-cover" onclick={() => handleTabChange('artists')}>
+                        <div class="view-more-label">
+                          <span>View more</span>
+                          <ChevronRight size={20} />
+                        </div>
+                      </button>
+                      <div class="view-more-info">
+                        <span class="view-more-text">{allResults.artists.total - 12} more artists to discover</span>
+                      </div>
+                    </div>
+                  {:else}
+                    <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
+                      {#if failedArtistImages.has(artist.id) || !getArtistImage(artist)}
+                        <div class="artist-image-placeholder">
+                          <User size={40} />
+                        </div>
+                      {:else}
+                        <img src={getArtistImage(artist)} alt={artist.name} class="artist-image" onerror={() => handleArtistImageError(artist.id)} />
+                      {/if}
+                      <div class="artist-name">{artist.name}</div>
+                      {#if artist.albums_count}
+                        <div class="artist-albums">{$t('library.albumCount', { values: { count: artist.albums_count } })}</div>
+                      {/if}
+                    </button>
+                  {/if}
+                {/each}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Albums + Tracks Section (50/50) -->
+        <div class="bottom-section">
+          <!-- Albums Carousel with Navigation -->
+          {#if allResults.albums.items.length > 0}
+            <div class="albums-section">
+              <div class="section-header">
+                <h3>Albums</h3>
+                <div class="carousel-controls">
+                  <button 
+                    class="carousel-btn" 
+                    onclick={() => scrollAlbumsCarousel('left')} 
+                    disabled={!canScrollAlbumsLeft}
+                    aria-label="Previous albums"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button 
+                    class="carousel-btn" 
+                    onclick={() => scrollAlbumsCarousel('right')} 
+                    disabled={!canScrollAlbumsRight}
+                    aria-label="Next albums"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                  <button class="view-all-link" onclick={() => handleTabChange('albums')}>
+                    View all ({allResults.albums.total})
+                  </button>
+                </div>
+              </div>
+              <div class="albums-carousel-wrapper" bind:this={albumsCarouselContainer}>
+                <div class="albums-carousel">
+                  {#each visibleAlbums as album}
+                    {#if album.isViewMore}
+                      <div class="album-card-wrapper">
+                        <div class="view-more-card">
+                          <button class="view-more-cover" onclick={() => handleTabChange('albums')}>
+                            <div class="view-more-label">
+                              <span>View more</span>
+                              <ChevronRight size={20} />
+                            </div>
+                          </button>
+                          <div class="view-more-info">
+                            <span class="view-more-text">{allResults.albums.total - 30} more albums to discover</span>
+                          </div>
+                        </div>
+                      </div>
+                    {:else}
+                      <div class="album-card-wrapper">
+                        <AlbumCard
+                          albumId={album.id}
+                          artwork={getAlbumArtwork(album)}
+                          title={album.title}
+                          artist={album.artist?.name || 'Unknown Artist'}
+                          quality={getQualityLabel(album)}
+                          onPlay={onAlbumPlay ? () => onAlbumPlay(album.id) : undefined}
+                          onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(album.id) : undefined}
+                          onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(album.id) : undefined}
+                          onShareQobuz={onAlbumShareQobuz ? () => onAlbumShareQobuz(album.id) : undefined}
+                          onShareSonglink={onAlbumShareSonglink ? () => onAlbumShareSonglink(album.id) : undefined}
+                          onDownload={onAlbumDownload ? () => onAlbumDownload(album.id) : undefined}
+                          isAlbumFullyDownloaded={isAlbumDownloaded(album.id)}
+                          onOpenContainingFolder={onOpenAlbumFolder ? () => onOpenAlbumFolder(album.id) : undefined}
+                          onReDownloadAlbum={onReDownloadAlbum ? () => onReDownloadAlbum(album.id) : undefined}
+                          {downloadStateVersion}
+                          onclick={() => { onAlbumClick?.(album.id); loadAlbumDownloadStatus(album.id); }}
+                        />
+                      </div>
+                    {/if}
+                  {/each}
+                </div>
+              </div>
+            </div>
+          {/if}
+
+          <!-- Tracks Section -->
+          {#if allResults.tracks.items.length > 0}
+            <div class="tracks-section">
+              <div class="section-header">
+                <h3>Tracks</h3>
+                <button class="view-all-link" onclick={() => handleTabChange('tracks')}>
+                  View all ({allResults.tracks.total})
+                </button>
+              </div>
+              <div class="tracks-list-compact">
+                {#each allResults.tracks.items.slice(0, 6) as track, index}
+                  <div
+                    class="track-row"
+                    role="button"
+                    tabindex="0"
+                    onclick={() => onTrackPlay?.(track)}
+                    onkeydown={(e) => e.key === 'Enter' && onTrackPlay?.(track)}
+                  >
+                    <div class="track-number">{index + 1}</div>
+                    {#if failedTrackImages.has(track.id) || !getTrackArtwork(track)}
+                      <div class="track-artwork-placeholder">
+                        <Music size={20} />
+                      </div>
+                    {:else}
+                      <div class="track-artwork-container">
+                        <img src={getTrackArtwork(track)} alt={track.title} class="track-artwork" onerror={() => handleTrackImageError(track.id)} />
+                        <button 
+                          class="track-play-overlay"
+                          onclick={(e) => { e.stopPropagation(); onTrackPlay?.(track); }}
+                          aria-label="Play track"
+                        >
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                            <path d="M8 5v14l11-7z"/>
+                          </svg>
+                        </button>
+                      </div>
+                    {/if}
+                    <div class="track-info">
+                      <div class="track-title">{track.title}</div>
+                      {#if track.performer?.id && onTrackGoToArtist}
+                        <button
+                          class="track-artist track-link"
+                          type="button"
+                          onclick={(event) => {
+                            event.stopPropagation();
+                            onTrackGoToArtist?.(track.performer!.id!);
+                          }}
+                        >
+                          {track.performer?.name || 'Unknown Artist'}
+                        </button>
+                      {:else}
+                        <div class="track-artist">{track.performer?.name || 'Unknown Artist'}</div>
+                      {/if}
+                    </div>
+                    <div class="track-quality">{getQualityLabel(track)}</div>
+                    <div class="track-duration">{formatDuration(track.duration)}</div>
+                    <div class="track-actions">
+                      <TrackMenu
+                        onPlayNow={() => onTrackPlay?.(track)}
+                        onPlayNext={onTrackPlayNext ? () => onTrackPlayNext(track) : undefined}
+                        onPlayLater={onTrackPlayLater ? () => onTrackPlayLater(track) : undefined}
+                        onAddFavorite={onTrackAddFavorite ? () => onTrackAddFavorite(track.id) : undefined}
+                        onAddToPlaylist={onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined}
+                        onShareQobuz={onTrackShareQobuz ? () => onTrackShareQobuz(track.id) : undefined}
+                        onShareSonglink={onTrackShareSonglink ? () => onTrackShareSonglink(track) : undefined}
+                        onGoToAlbum={track.album?.id && onTrackGoToAlbum ? (() => { const albumId = track.album!.id!; return () => onTrackGoToAlbum(albumId); })() : undefined}
+                        onGoToArtist={track.performer?.id && onTrackGoToArtist ? (() => { const artistId = track.performer!.id!; return () => onTrackGoToArtist(artistId); })() : undefined}
+                      />
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        </div>
       </div>
     {:else if activeTab === 'albums' && albumResults}
       {#if albumResults.items.length === 0}
@@ -533,7 +922,7 @@
     width: 100%;
     height: 100%;
     padding: 24px;
-    padding-right: 8px;
+    padding-right: 24px;
     padding-bottom: 100px;
     overflow-y: auto;
   }
@@ -638,7 +1027,8 @@
     padding: 10px 16px;
     background: none;
     border: none;
-    border-radius: 8px;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
     color: var(--text-muted);
     font-size: 14px;
     font-weight: 500;
@@ -648,17 +1038,16 @@
 
   .tab:hover {
     color: var(--text-primary);
-    background-color: var(--bg-tertiary);
   }
 
   .tab.active {
     color: var(--text-primary);
-    background-color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
   }
 
   .tab .count {
     padding: 2px 8px;
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: var(--bg-tertiary);
     border-radius: 12px;
     font-size: 12px;
   }
@@ -834,6 +1223,8 @@
     border-radius: 12px;
     cursor: pointer;
     transition: background-color 150ms ease;
+    width: 160px;
+    height: 220px;
   }
 
   .artist-card:hover {
@@ -843,14 +1234,17 @@
   .artist-image {
     width: 120px;
     height: 120px;
+    min-height: 120px;
     border-radius: 50%;
     object-fit: cover;
     margin-bottom: 12px;
+    flex-shrink: 0;
   }
 
   .artist-image-placeholder {
     width: 120px;
     height: 120px;
+    min-height: 120px;
     border-radius: 50%;
     margin-bottom: 12px;
     display: flex;
@@ -858,6 +1252,7 @@
     justify-content: center;
     background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
     color: var(--text-muted);
+    flex-shrink: 0;
   }
 
   .artist-name {
@@ -865,6 +1260,13 @@
     font-weight: 500;
     color: var(--text-primary);
     margin-bottom: 4px;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.3;
   }
 
   .artist-albums {
@@ -898,5 +1300,313 @@
   .load-more-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  /* Unified Results View Styles */
+  .unified-results {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .top-section {
+    display: grid;
+    grid-template-columns: 176px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .most-popular {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .most-popular-wrapper {
+    display: flex;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .most-popular .section-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    min-height: 32px;
+  }
+
+  .most-popular h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+
+
+  .artist-card {
+    width: 160px;
+    height: 220px;
+  }
+
+  .most-popular-card {
+    width: 160px;
+    height: 220px;
+  }
+
+  .most-popular-card .artist-image,
+  .most-popular-card .artist-image-placeholder {
+    width: 120px;
+    height: 120px;
+    min-height: 120px;
+  }
+
+  .artists-section h3, .section-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .carousel-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .carousel-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background-color: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .carousel-btn:hover:not(:disabled) {
+    background-color: var(--bg-tertiary);
+  }
+
+  .carousel-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .view-all-link {
+    background: none;
+    border: none;
+    color: var(--accent-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 150ms ease;
+  }
+
+  .view-all-link:hover {
+    background-color: var(--bg-tertiary);
+    text-decoration: underline;
+  }
+
+  .artists-grid-compact {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+    overflow-y: auto;
+    max-height: 400px;
+    padding-right: 8px;
+  }
+
+  .artists-carousel-wrapper {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .artists-carousel {
+    display: flex;
+    gap: 15px;
+  }
+
+  .artists-grid-compact .artist-card {
+    width: 160px;
+    height: 220px;
+  }
+
+  .artists-grid-compact .artist-image,
+  .artists-grid-compact .artist-image-placeholder {
+    width: 120px;
+    height: 120px;
+    min-height: 120px;
+  }
+
+  .artists-grid-compact::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .artists-grid-compact::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .artists-grid-compact::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+  }
+
+  .artists-grid-compact::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+
+  .bottom-section {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .albums-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .albums-carousel-wrapper {
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .albums-carousel {
+    display: flex;
+    gap: 16px;
+  }
+
+  .album-card-wrapper {
+    min-width: 160px;
+    flex-shrink: 0;
+  }
+
+  .view-more-card {
+    width: 160px;
+    min-width: 160px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .view-more-cover {
+    width: 160px;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--bg-tertiary);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .view-more-cover:hover {
+    background-color: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+  }
+
+  .view-more-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .view-more-cover:hover .view-more-label {
+    color: var(--accent-primary);
+  }
+
+  .view-more-info {
+    width: 160px;
+    padding: 0 4px;
+    text-align: center;
+  }
+
+  .view-more-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+    line-height: 1.3;
+    display: block;
+  }
+
+  .tracks-section {
+    width: 100%;
+  }
+
+  .tracks-list-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .track-artwork-container {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .track-play-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    cursor: pointer;
+    transition: background 150ms ease;
+  }
+
+  .track-row:hover .track-play-overlay {
+    display: flex;
+  }
+
+  .track-play-overlay:hover {
+    background: rgba(0, 0, 0, 0.75);
+  }
+
+  @media (max-width: 1024px) {
+    .top-section {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+
+    .bottom-section {
+      gap: 24px;
+    }
+
+    .artists-grid-compact {
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      max-height: 300px;
+    }
   }
 </style>

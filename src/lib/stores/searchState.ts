@@ -1,4 +1,4 @@
-export type SearchTab = 'albums' | 'tracks' | 'artists';
+export type SearchTab = 'all' | 'albums' | 'tracks' | 'artists';
 
 export interface SearchResults<T> {
   items: T[];
@@ -7,20 +7,28 @@ export interface SearchResults<T> {
   limit: number;
 }
 
+export interface SearchAllResults<Album, Track, Artist> {
+  albums: SearchResults<Album>;
+  tracks: SearchResults<Track>;
+  artists: SearchResults<Artist>;
+}
+
 export interface SearchState<Album, Track, Artist> {
   query: string;
   activeTab: SearchTab;
   albumResults: SearchResults<Album> | null;
   trackResults: SearchResults<Track> | null;
   artistResults: SearchResults<Artist> | null;
+  allResults: SearchAllResults<Album, Track, Artist> | null;
 }
 
 let searchState: SearchState<unknown, unknown, unknown> = {
   query: '',
-  activeTab: 'albums',
+  activeTab: 'all',
   albumResults: null,
   trackResults: null,
   artistResults: null,
+  allResults: null,
 };
 
 export function getSearchState<Album, Track, Artist>(): SearchState<Album, Track, Artist> {
