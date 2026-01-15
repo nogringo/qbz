@@ -525,8 +525,33 @@ pub async fn playlist_set_artwork(
 ) -> Result<(), String> {
     log::info!("Command: playlist_set_artwork {}", playlist_id);
 
+    let final_path = if let Some(source_path) = artwork_path {
+        // Copy image to persistent location
+        let artwork_dir = get_artwork_cache_dir();
+        let source = Path::new(&source_path);
+        
+        if !source.exists() {
+            return Err(format!("Source image does not exist: {}", source_path));
+        }
+
+        let extension = source
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("jpg");
+        let filename = format!("playlist_{}_{}.{}", playlist_id, chrono::Utc::now().timestamp(), extension);
+        let dest_path = artwork_dir.join(filename);
+
+        fs::copy(source, &dest_path)
+            .map_err(|e| format!("Failed to copy artwork: {}", e))?;
+        
+        log::info!("Copied playlist artwork to: {}", dest_path.display());
+        Some(dest_path.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
     let db = state.db.lock().await;
-    db.update_playlist_artwork(playlist_id, artwork_path.as_deref())
+    db.update_playlist_artwork(playlist_id, final_path.as_deref())
         .map_err(|e| e.to_string())
 }
 
@@ -1027,7 +1052,34 @@ pub async fn library_set_custom_artist_image(
     custom_image_path: String,
     state: State<'_, LibraryState>,
 ) -> Result<(), String> {
+    // Copy image to persistent location
+    let artwork_dir = get_artwork_cache_dir();
+    let source = Path::new(&custom_image_path);
+    
+    if !source.exists() {
+        return Err(format!("Source image does not exist: {}", custom_image_path));
+    }
+
+    let extension = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("jpg");
+    
+    // Use artist name hash for filename to avoid filesystem issues with special characters
+    use md5::{Md5, Digest};
+    let mut hasher = Md5::new();
+    hasher.update(artist_name.as_bytes());
+    let artist_hash = format!("{:x}", hasher.finalize());
+    
+    let filename = format!("artist_custom_{}_{}.{}", artist_hash, chrono::Utc::now().timestamp(), extension);
+    let dest_path = artwork_dir.join(filename);
+
+    fs::copy(source, &dest_path)
+        .map_err(|e| format!("Failed to copy artwork: {}", e))?;
+    
+    log::info!("Copied artist artwork for '{}' to: {}", artist_name, dest_path.display());
+
     let db = state.db.lock().await;
-    db.cache_artist_image(&artist_name, None, "custom", Some(&custom_image_path))
+    db.cache_artist_image(&artist_name, None, "custom", Some(&dest_path.to_string_lossy()))
         .map_err(|e| e.to_string())
 }
