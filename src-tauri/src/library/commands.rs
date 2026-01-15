@@ -339,16 +339,15 @@ pub async fn library_get_albums(
     log::info!("Command: library_get_albums");
 
     // Get download settings to check if we should include Qobuz downloads
-    let _include_qobuz = download_settings_state
+    let include_qobuz = download_settings_state
         .lock()
         .map_err(|e| format!("Failed to lock download settings: {}", e))?
         .get_settings()
         .map(|s| s.show_in_library)
         .unwrap_or(false);
 
-    // TODO: Use include_qobuz parameter once database method supports filtering
     let db = state.db.lock().await;
-    db.get_albums(include_hidden.unwrap_or(false))
+    db.get_albums_with_filter(include_hidden.unwrap_or(false), include_qobuz)
         .map_err(|e| e.to_string())
 }
 

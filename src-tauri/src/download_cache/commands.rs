@@ -20,10 +20,9 @@ async fn post_process_track(
     current_path: &str,
     download_root: &str,
     qobuz_client: &crate::api::QobuzClient,
-    show_in_library: bool,
-    library_db: Option<Arc<tokio::sync::Mutex<crate::library::database::LibraryDatabase>>>,
+    library_db: Arc<tokio::sync::Mutex<crate::library::database::LibraryDatabase>>,
 ) -> Result<String, String> {
-    log::info!("Post-processing track {} (show_in_library: {})", track_id, show_in_library);
+    log::info!("Post-processing track {}", track_id);
 
     // 1. Fetch complete metadata from Qobuz
     let metadata = fetch_complete_metadata(track_id, qobuz_client).await?;
@@ -42,24 +41,20 @@ async fn post_process_track(
     // 4. Organize file into artist/album structure
     let new_path = organize_download(track_id, current_path, download_root, &metadata)?;
     
-    // 5. Insert into local library if enabled
-    if show_in_library {
-        if let Some(lib_db) = library_db {
-            let lib_guard = lib_db.lock().await;
-            match lib_guard.insert_qobuz_download_direct(
-                track_id,
-                &metadata.title,
-                &metadata.artist,
-                Some(&metadata.album),
-                metadata.duration_secs,
-                &new_path,
-                None, // bit_depth not in CompleteTrackMetadata
-                None, // sample_rate not in CompleteTrackMetadata
-            ) {
-                Ok(_) => log::info!("Track {} added to local library", track_id),
-                Err(e) => log::error!("Failed to add track {} to library: {}", track_id, e),
-            }
-        }
+    // 5. ALWAYS insert into local library DB (visibility controlled by toggle)
+    let lib_guard = library_db.lock().await;
+    match lib_guard.insert_qobuz_download_direct(
+        track_id,
+        &metadata.title,
+        &metadata.artist,
+        Some(&metadata.album),
+        metadata.duration_secs,
+        &new_path,
+        None, // bit_depth not in CompleteTrackMetadata
+        None, // sample_rate not in CompleteTrackMetadata
+    ) {
+        Ok(_) => log::info!("Track {} inserted to local library DB", track_id),
+        Err(e) => log::error!("Failed to insert track {} to library DB: {}", track_id, e),
     }
     
     log::info!("Track {} organized to: {}", track_id, new_path);
@@ -192,9 +187,6 @@ pub async fn download_track(
                 // Post-processing: metadata, tagging, artwork, organization
                 log::info!("Starting post-processing for track {}", track_id);
                 
-                // Check if we should add to library (hardcoded to false for now - will be from settings)
-                let show_in_library = false; // TODO: Get from settings
-                
                 let file_path_str = file_path.to_string_lossy().to_string();
                 let qobuz_client = client.lock().await;
                 match post_process_track(
@@ -202,8 +194,7 @@ pub async fn download_track(
                     &file_path_str,
                     &download_root,
                     &*qobuz_client,
-                    show_in_library,
-                    Some(library_db.clone()),
+                    library_db.clone(),
                 ).await {
                     Ok(new_path) => {
                         // Update database with new path

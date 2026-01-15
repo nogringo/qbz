@@ -405,8 +405,24 @@ impl LibraryDatabase {
 
     /// Get all albums with optional hidden filter
     pub fn get_albums(&self, include_hidden: bool) -> Result<Vec<LocalAlbum>, LibraryError> {
+        self.get_albums_with_filter(include_hidden, true)
+    }
+
+    /// Get all albums with optional filters for hidden and Qobuz downloads
+    pub fn get_albums_with_filter(
+        &self,
+        include_hidden: bool,
+        include_qobuz_downloads: bool,
+    ) -> Result<Vec<LocalAlbum>, LibraryError> {
+        let source_filter = if include_qobuz_downloads {
+            ""
+        } else {
+            "AND (source IS NULL OR source != 'qobuz_download')"
+        };
+
         let query = if include_hidden {
-            r#"
+            format!(
+                r#"
             SELECT
                 group_key,
                 MIN(title) as title,
@@ -434,12 +450,16 @@ impl LibraryDatabase {
                     bit_depth,
                     sample_rate
                 FROM local_tracks
+                WHERE 1=1 {}
             )
             GROUP BY group_key
             ORDER BY artist, title
-            "#
+            "#,
+                source_filter
+            )
         } else {
-            r#"
+            format!(
+                r#"
             SELECT
                 group_key,
                 MIN(title) as title,
@@ -467,13 +487,16 @@ impl LibraryDatabase {
                     bit_depth,
                     sample_rate
                 FROM local_tracks
+                WHERE 1=1 {}
             )
             WHERE group_key NOT IN (
                 SELECT album_group_key FROM album_settings WHERE hidden = 1
             )
             GROUP BY group_key
             ORDER BY artist, title
-            "#
+            "#,
+                source_filter
+            )
         };
 
         let mut stmt = self
