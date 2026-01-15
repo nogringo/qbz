@@ -383,7 +383,7 @@
     if (direction === 'left') {
       currentAlbumPage = Math.max(0, currentAlbumPage - 1);
     } else {
-      currentAlbumPage = Math.min(totalAlbumPages - 1, currentAlbumPage + 1);
+      currentAlbumPage = Math.min(totalAlbumPagesWithViewMore - 1, currentAlbumPage + 1);
     }
   }
 
@@ -391,25 +391,46 @@
     if (direction === 'left') {
       currentArtistPage = Math.max(0, currentArtistPage - 1);
     } else {
-      currentArtistPage = Math.min(totalArtistPages - 1, currentArtistPage + 1);
+      currentArtistPage = Math.min(totalArtistPagesWithViewMore - 1, currentArtistPage + 1);
     }
   }
 
   let canScrollAlbumsLeft = $derived(currentAlbumPage > 0);
-  let canScrollAlbumsRight = $derived(currentAlbumPage < totalAlbumPages - 1);
+  let canScrollAlbumsRight = $derived(currentAlbumPage < totalAlbumPagesWithViewMore - 1);
   let canScrollArtistsLeft = $derived(currentArtistPage > 0);
-  let canScrollArtistsRight = $derived(currentArtistPage < totalArtistPages - 1);
-  
-  let visibleAlbums = $derived(
-    allResults ? allResults.albums.items.slice(currentAlbumPage * albumsPerPage, (currentAlbumPage + 1) * albumsPerPage) : []
-  );
-
-  let visibleArtists = $derived(
-    allResults ? allResults.artists.items.slice(currentArtistPage * artistsPerPage, (currentArtistPage + 1) * artistsPerPage) : []
-  );
+  let canScrollArtistsRight = $derived(currentArtistPage < totalArtistPagesWithViewMore - 1);
 
   let showAlbumsViewMore = $derived(allResults ? allResults.albums.total > 30 : false);
   let showArtistsViewMore = $derived(allResults ? allResults.artists.total > 12 : false);
+  
+  let albumsWithViewMore = $derived(() => {
+    if (!allResults) return [];
+    const albums = [...allResults.albums.items];
+    if (showAlbumsViewMore) {
+      albums.push({ id: 'view-more', isViewMore: true } as any);
+    }
+    return albums;
+  });
+
+  let artistsWithViewMore = $derived(() => {
+    if (!allResults) return [];
+    const artists = [...allResults.artists.items];
+    if (showArtistsViewMore) {
+      artists.push({ id: 'view-more', isViewMore: true } as any);
+    }
+    return artists;
+  });
+
+  let totalAlbumPagesWithViewMore = $derived(albumsWithViewMore().length > 0 ? Math.ceil(albumsWithViewMore().length / albumsPerPage) : 0);
+  let totalArtistPagesWithViewMore = $derived(artistsWithViewMore().length > 0 ? Math.ceil(artistsWithViewMore().length / artistsPerPage) : 0);
+  
+  let visibleAlbums = $derived(
+    albumsWithViewMore().slice(currentAlbumPage * albumsPerPage, (currentAlbumPage + 1) * albumsPerPage)
+  );
+
+  let visibleArtists = $derived(
+    artistsWithViewMore().slice(currentArtistPage * artistsPerPage, (currentArtistPage + 1) * artistsPerPage)
+  );
 </script>
 
 <div class="search-view">
@@ -578,28 +599,29 @@
             <div class="artists-carousel-wrapper" bind:this={artistsCarouselContainer}>
               <div class="artists-carousel">
                 {#each visibleArtists as artist}
-                  <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
-                    {#if failedArtistImages.has(artist.id) || !getArtistImage(artist)}
-                      <div class="artist-image-placeholder">
-                        <User size={40} />
+                  {#if artist.isViewMore}
+                    <button class="view-more-card" onclick={() => handleTabChange('artists')}>
+                      <div class="view-more-content">
+                        <span>View more</span>
+                        <ChevronRight size={24} />
                       </div>
-                    {:else}
-                      <img src={getArtistImage(artist)} alt={artist.name} class="artist-image" onerror={() => handleArtistImageError(artist.id)} />
-                    {/if}
-                    <div class="artist-name">{artist.name}</div>
-                    {#if artist.albums_count}
-                      <div class="artist-albums">{$t('library.albumCount', { values: { count: artist.albums_count } })}</div>
-                    {/if}
-                  </button>
+                    </button>
+                  {:else}
+                    <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
+                      {#if failedArtistImages.has(artist.id) || !getArtistImage(artist)}
+                        <div class="artist-image-placeholder">
+                          <User size={40} />
+                        </div>
+                      {:else}
+                        <img src={getArtistImage(artist)} alt={artist.name} class="artist-image" onerror={() => handleArtistImageError(artist.id)} />
+                      {/if}
+                      <div class="artist-name">{artist.name}</div>
+                      {#if artist.albums_count}
+                        <div class="artist-albums">{$t('library.albumCount', { values: { count: artist.albums_count } })}</div>
+                      {/if}
+                    </button>
+                  {/if}
                 {/each}
-                {#if showArtistsViewMore}
-                  <button class="view-more-card" onclick={() => handleTabChange('artists')}>
-                    <div class="view-more-content">
-                      <span>View more</span>
-                      <ChevronRight size={24} />
-                    </div>
-                  </button>
-                {/if}
               </div>
             </div>
           </div>
@@ -637,37 +659,38 @@
               <div class="albums-carousel-wrapper" bind:this={albumsCarouselContainer}>
                 <div class="albums-carousel">
                   {#each visibleAlbums as album}
-                    <div class="album-card-wrapper">
-                      <AlbumCard
-                        albumId={album.id}
-                        artwork={getAlbumArtwork(album)}
-                        title={album.title}
-                        artist={album.artist?.name || 'Unknown Artist'}
-                        quality={getQualityLabel(album)}
-                        onPlay={onAlbumPlay ? () => onAlbumPlay(album.id) : undefined}
-                        onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(album.id) : undefined}
-                        onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(album.id) : undefined}
-                        onShareQobuz={onAlbumShareQobuz ? () => onAlbumShareQobuz(album.id) : undefined}
-                        onShareSonglink={onAlbumShareSonglink ? () => onAlbumShareSonglink(album.id) : undefined}
-                        onDownload={onAlbumDownload ? () => onAlbumDownload(album.id) : undefined}
-                        isAlbumFullyDownloaded={isAlbumDownloaded(album.id)}
-                        onOpenContainingFolder={onOpenAlbumFolder ? () => onOpenAlbumFolder(album.id) : undefined}
-                        onReDownloadAlbum={onReDownloadAlbum ? () => onReDownloadAlbum(album.id) : undefined}
-                        {downloadStateVersion}
-                        onclick={() => { onAlbumClick?.(album.id); loadAlbumDownloadStatus(album.id); }}
-                      />
-                    </div>
+                    {#if album.isViewMore}
+                      <div class="album-card-wrapper">
+                        <button class="view-more-card" onclick={() => handleTabChange('albums')}>
+                          <div class="view-more-content">
+                            <span>View more</span>
+                            <ChevronRight size={24} />
+                          </div>
+                        </button>
+                      </div>
+                    {:else}
+                      <div class="album-card-wrapper">
+                        <AlbumCard
+                          albumId={album.id}
+                          artwork={getAlbumArtwork(album)}
+                          title={album.title}
+                          artist={album.artist?.name || 'Unknown Artist'}
+                          quality={getQualityLabel(album)}
+                          onPlay={onAlbumPlay ? () => onAlbumPlay(album.id) : undefined}
+                          onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(album.id) : undefined}
+                          onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(album.id) : undefined}
+                          onShareQobuz={onAlbumShareQobuz ? () => onAlbumShareQobuz(album.id) : undefined}
+                          onShareSonglink={onAlbumShareSonglink ? () => onAlbumShareSonglink(album.id) : undefined}
+                          onDownload={onAlbumDownload ? () => onAlbumDownload(album.id) : undefined}
+                          isAlbumFullyDownloaded={isAlbumDownloaded(album.id)}
+                          onOpenContainingFolder={onOpenAlbumFolder ? () => onOpenAlbumFolder(album.id) : undefined}
+                          onReDownloadAlbum={onReDownloadAlbum ? () => onReDownloadAlbum(album.id) : undefined}
+                          {downloadStateVersion}
+                          onclick={() => { onAlbumClick?.(album.id); loadAlbumDownloadStatus(album.id); }}
+                        />
+                      </div>
+                    {/if}
                   {/each}
-                  {#if showAlbumsViewMore}
-                    <div class="album-card-wrapper">
-                      <button class="view-more-card" onclick={() => handleTabChange('albums')}>
-                        <div class="view-more-content">
-                          <span>View more</span>
-                          <ChevronRight size={24} />
-                        </div>
-                      </button>
-                    </div>
-                  {/if}
                 </div>
               </div>
             </div>
@@ -1279,6 +1302,12 @@
     align-items: start;
   }
 
+  .most-popular {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
   .most-popular h3 {
     font-size: 16px;
     font-weight: 600;
@@ -1287,6 +1316,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    align-self: flex-start;
+    width: 100%;
   }
 
 
@@ -1335,15 +1366,14 @@
     height: 32px;
     border: none;
     border-radius: 6px;
-    background-color: var(--bg-tertiary);
+    background-color: transparent;
     color: var(--text-primary);
     cursor: pointer;
     transition: all 150ms ease;
   }
 
   .carousel-btn:hover:not(:disabled) {
-    background-color: var(--accent-primary);
-    color: white;
+    background-color: var(--bg-tertiary);
   }
 
   .carousel-btn:disabled {
