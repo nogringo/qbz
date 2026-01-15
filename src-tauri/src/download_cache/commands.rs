@@ -460,9 +460,11 @@ pub async fn open_album_folder(
     }
 
     // Get the first track's path and extract the album directory
-    let first_track = &album_tracks[0];
-    let track_path = std::path::Path::new(&first_track.file_path);
+    let first_track_id = album_tracks[0].track_id;
+    let file_path = db.get_file_path(first_track_id)?
+        .ok_or_else(|| "Track file path not found".to_string())?;
     
+    let track_path = std::path::Path::new(&file_path);
     let album_dir = track_path
         .parent()
         .ok_or_else(|| "Could not determine album folder".to_string())?;
