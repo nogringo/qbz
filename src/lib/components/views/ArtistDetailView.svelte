@@ -126,6 +126,7 @@
     try {
       const isDownloaded = await checkAlbumFullyDownloaded(albumId);
       albumDownloadStatuses.set(albumId, isDownloaded);
+      albumDownloadStatuses = albumDownloadStatuses;
       return isDownloaded;
     } catch {
       return false;

@@ -171,6 +171,7 @@
     try {
       const isDownloaded = await checkAlbumFullyDownloaded(albumId);
       albumDownloadStatuses.set(albumId, isDownloaded);
+      albumDownloadStatuses = albumDownloadStatuses;
       return isDownloaded;
     } catch {
       return false;
@@ -186,6 +187,12 @@
     void downloadStateVersion;
     return albumDownloadStatuses.get(albumId) || false;
   }
+
+  $effect(() => {
+    if (downloadStateVersion !== undefined && albumResults) {
+      loadAllAlbumDownloadStatuses(albumResults.items);
+    }
+  });
 
   async function performSearch() {
     if (!query.trim()) return;
