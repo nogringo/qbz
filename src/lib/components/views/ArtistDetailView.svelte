@@ -236,13 +236,13 @@
       // Search for tracks by artist name
       const results = await invoke<SearchResults>('search_tracks', {
         query: artist.name,
-        limit: 10,
+        limit: 30,
         offset: 0
       });
       // Filter to only include tracks by this artist
       topTracks = results.items.filter(track =>
         track.performer?.name?.toLowerCase() === artist.name.toLowerCase()
-      ).slice(0, 5);
+      ).slice(0, 20);
     } catch (err) {
       console.error('Failed to load top tracks:', err);
     } finally {
@@ -335,14 +335,14 @@
     imageError = true;
   }
 
-  // Get biography text (prefer summary, fall back to content)
+  // Get biography text (prefer content for full text, fall back to summary)
   let bioText = $derived(
-    artist.biography?.summary || artist.biography?.content || null
+    artist.biography?.content || artist.biography?.summary || null
   );
 
   // Truncate bio for collapsed view
   let truncatedBio = $derived(
-    bioText && bioText.length > 500 ? bioText.slice(0, 500) + '...' : bioText
+    bioText && bioText.length > 800 ? bioText.slice(0, 800) + '...' : bioText
   );
 
   let hasMoreAlbums = $derived(!!onLoadMore && artist.albumsFetched < artist.totalAlbums);

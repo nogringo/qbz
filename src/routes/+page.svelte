@@ -364,7 +364,7 @@
     try {
       const result = await invoke<ArtistAlbumsResponse>('get_artist_albums', {
         artistId: selectedArtist.id,
-        limit: 50,
+        limit: 200,
         offset
       });
 
