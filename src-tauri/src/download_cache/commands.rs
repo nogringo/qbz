@@ -480,3 +480,66 @@ pub async fn move_downloads_to_path(
     let old_path = cache_state.cache_dir.to_string_lossy().to_string();
     super::path_validator::move_downloads_to_new_path(&old_path, &new_path)
 }
+
+/// Detect legacy downloads (numeric FLAC files)
+#[tauri::command]
+pub async fn detect_legacy_downloads(
+    cache_state: State<'_, DownloadCacheState>,
+) -> Result<super::MigrationStatus, String> {
+    log::info!("Command: detect_legacy_downloads");
+    
+    let tracks_dir = cache_state.cache_dir.join("tracks");
+    
+    match super::detect_legacy_downloads(&tracks_dir) {
+        Ok(track_ids) => {
+            Ok(super::MigrationStatus {
+                has_legacy_files: !track_ids.is_empty(),
+                total_tracks: track_ids.len(),
+                ..Default::default()
+            })
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Start migration of legacy downloads
+#[tauri::command]
+pub async fn start_legacy_migration(
+    state: State<'_, AppState>,
+    cache_state: State<'_, DownloadCacheState>,
+    library_state: State<'_, crate::library::commands::LibraryState>,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    log::info!("Command: start_legacy_migration");
+    
+    let tracks_dir = cache_state.cache_dir.join("tracks");
+    let track_ids = super::detect_legacy_downloads(&tracks_dir)?;
+    
+    if track_ids.is_empty() {
+        return Err("No legacy downloads found".to_string());
+    }
+    
+    let download_root = cache_state.get_cache_path();
+    let qobuz_client = state.client.clone();
+    let library_db = library_state.db.clone();
+    let app_progress = app_handle.clone();
+    let app_complete = app_handle.clone();
+    
+    // Spawn migration task
+    tokio::spawn(async move {
+        let status = super::migrate_legacy_downloads(
+            track_ids,
+            tracks_dir,
+            download_root,
+            qobuz_client,
+            library_db,
+            move |status| {
+                let _ = app_progress.emit("migration:progress", status);
+            },
+        ).await;
+        
+        let _ = app_complete.emit("migration:complete", status);
+    });
+    
+    Ok(())
+}

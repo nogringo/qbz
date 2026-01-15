@@ -445,6 +445,8 @@ pub fn run() {
             download_cache::commands::check_download_root_mounted,
             download_cache::commands::validate_download_path,
             download_cache::commands::move_downloads_to_path,
+            download_cache::commands::detect_legacy_downloads,
+            download_cache::commands::start_legacy_migration,
             // Lyrics commands
             lyrics::commands::lyrics_get,
             lyrics::commands::lyrics_clear_cache,

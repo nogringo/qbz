@@ -11,6 +11,7 @@ pub mod db;
 pub mod downloader;
 pub mod path_validator;
 pub mod metadata;
+pub mod migration;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,6 +22,7 @@ pub use db::DownloadCacheDb;
 pub use downloader::Downloader;
 pub use path_validator::{is_download_root_available, validate_path, PathStatus};
 pub use metadata::{CompleteTrackMetadata, sanitize_filename};
+pub use migration::{MigrationStatus, MigrationError, detect_legacy_downloads, migrate_legacy_downloads};
 
 /// Download status for a cached track
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
