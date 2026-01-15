@@ -68,42 +68,138 @@ export function formatAlbumQuality(
 type ArtistAlbumSummary = ArtistDetail['albums'][number];
 type ArtistPlaylistSummary = ArtistDetail['playlists'][number];
 
+/**
+ * Check if album belongs to a different artist (should go to Others)
+ * This catches albums that appear in an artist's discography but are actually by someone else
+ */
+function isDifferentArtist(album: QobuzAlbum, mainArtistId: number | undefined): boolean {
+  if (!mainArtistId || !album.artist?.id) return false;
+
+  // If the album's primary artist ID doesn't match the artist we're viewing
+  return album.artist.id !== mainArtistId;
+}
+
+/**
+ * Check if this is an unofficial/bootleg release (should go to Others)
+ */
+function isUnofficialRelease(album: QobuzAlbum): boolean {
+  const title = album.title?.toLowerCase() ?? '';
+  const label = album.label?.name?.toLowerCase() ?? '';
+
+  // FM Broadcasts, radio recordings, bootlegs
+  const broadcastPatterns = /\b(fm broadcast|radio broadcast|broadcast|bootleg|unofficial|pirate)\b/;
+
+  // Interview albums, spoken word that isn't the artist's music
+  const nonMusicPatterns = /\b(interview|speaks|talking|in their own words)\b/;
+
+  // Labels known for unofficial releases
+  const bootlegLabels = /\b(leftfield media|purple pyramid|cleopatra|laser media)\b/;
+
+  return broadcastPatterns.test(title) ||
+         nonMusicPatterns.test(title) ||
+         bootlegLabels.test(label);
+}
+
+/**
+ * Check if this is a compilation/greatest hits (should go to Others)
+ */
+function isCompilationAlbum(album: QobuzAlbum): boolean {
+  const title = album.title?.toLowerCase() ?? '';
+
+  // Greatest hits, best of, anthologies
+  const compilationPatterns = /\b(greatest hits|best of|anthology|the very best|essential|definitive collection|gold|platinum|hits collection|complete collection|hit collection)\b/;
+
+  // Tribute albums, cover albums (not by the original artist)
+  const tributePatterns = /\b(tribute to|tribute|covers?|as made famous|karaoke)\b/;
+
+  // Various artists compilations
+  const variousPatterns = /\b(various artists|v\.?a\.?|original soundtrack|ost)\b/;
+
+  return compilationPatterns.test(title) ||
+         tributePatterns.test(title) ||
+         variousPatterns.test(title);
+}
+
+/**
+ * Check if this is a live album (legitimate live recordings)
+ */
+function isLiveAlbum(album: QobuzAlbum): boolean {
+  const title = album.title?.toLowerCase() ?? '';
+  const genre = album.genre?.name?.toLowerCase() ?? '';
+
+  // Don't classify FM broadcasts as live - they go to Others
+  if (/\b(fm broadcast|radio broadcast|broadcast)\b/.test(title)) {
+    return false;
+  }
+
+  // Genre explicitly says live
+  if (genre.includes('live')) return true;
+
+  // Common live album patterns
+  const livePatterns = /\blive\b|\blive at\b|\blive in\b|\bin concert\b|\bunplugged\b|\bmtv unplugged\b|\bacoustic live\b/;
+
+  // Tour recordings (but not "tour edition" which is a studio album variant)
+  const tourPatterns = /\b(tour|on tour)\b(?!.*\bedition\b)/;
+
+  // Location + year pattern common in live albums (e.g., "Dallas 1989", "Tokyo 1986")
+  // But exclude if it also says "remaster" or "deluxe" which indicates studio album
+  const locationYearPattern = /\b[A-Z][a-z]+\s*(19|20)\d{2}\b/;
+  const isStudioVariant = /\b(remaster|deluxe|anniversary|expanded)\b/.test(title);
+
+  if (livePatterns.test(title)) return true;
+  if (tourPatterns.test(title) && !isStudioVariant) return true;
+  if (locationYearPattern.test(album.title ?? '') && !isStudioVariant && /\blive\b/.test(title)) return true;
+
+  return false;
+}
+
+/**
+ * Check if this is an EP or Single
+ * More conservative than before - only if explicitly marked or very short
+ */
 function isEpOrSingle(album: QobuzAlbum): boolean {
   const trackCount = album.tracks_count ?? 0;
   const duration = album.duration ?? 0;
   const title = album.title?.toLowerCase() ?? '';
 
-  if (trackCount > 0 && trackCount <= 8) return true;
-  if (duration > 0 && duration <= 1800) return true;
-  if (/\b(ep|single)\b/.test(title)) return true;
+  // Explicitly marked as EP or Single in title
+  if (/\b(- ep|\.ep|\(ep\)|- single|\(single\)|single)\b/.test(title)) return true;
+  if (/\bep\s*$/.test(title)) return true; // Ends with "EP"
+
+  // Very short releases: 1-3 tracks OR under 15 minutes
+  // This is more conservative - 8 tracks could be a full album
+  if (trackCount > 0 && trackCount <= 3) return true;
+  if (duration > 0 && duration <= 900) return true; // 15 minutes
+
+  // 4-6 tracks AND under 25 minutes = likely EP
+  if (trackCount >= 4 && trackCount <= 6 && duration > 0 && duration <= 1500) return true;
 
   return false;
 }
 
-function isLiveAlbum(album: QobuzAlbum): boolean {
+/**
+ * Check if this should remain in main Discography (studio albums)
+ * Deluxe editions, remasters, anniversary editions of studio albums stay here
+ */
+function isStudioAlbum(album: QobuzAlbum): boolean {
   const title = album.title?.toLowerCase() ?? '';
-  const genre = album.genre?.name?.toLowerCase() ?? '';
+  const trackCount = album.tracks_count ?? 0;
+  const duration = album.duration ?? 0;
 
-  if (genre.includes('live')) return true;
+  // Deluxe, remastered, anniversary editions are studio albums
+  const studioVariantPatterns = /\b(deluxe|remaster|anniversary|expanded|special edition|collector|box set)\b/;
 
-  // More comprehensive live album patterns
-  return /\blive\b|\blive at\b|\blive in\b|\ben concert\b|\bin concert\b|\bconcert\b|\bunplugged\b|\bsessions?\b|\btour\b|\b(19|20)\d{2}\b.*\blive|\bconcerts?\b|\broadcast\b|\bfm broadcast\b/.test(title);
-}
+  // If it has these patterns and reasonable length, it's a studio album
+  if (studioVariantPatterns.test(title)) {
+    // Box sets with many tracks are still studio albums
+    if (trackCount >= 8 || duration >= 2400) return true; // 40+ minutes
+  }
 
-function isOtherAlbum(album: QobuzAlbum): boolean {
-  const title = album.title?.toLowerCase() ?? '';
-  const label = album.label?.name?.toLowerCase() ?? '';
-  
-  // Greatest hits, compilations, bootlegs, broadcasts, tributes
-  const isCompilation = /\b(greatest hits|best of|anthology|collection|box set|essentials|retrospective|very best|compilation|tribute|cover)\b/.test(title);
-  
-  // Broadcasts, bootlegs, unofficial releases
-  const isBroadcastOrBootleg = /\b(broadcast|fm broadcast|radio|bootleg|unofficial|interview|rarities|outtakes|demos|sessions|rehearsal|soundcheck)\b/.test(title);
-  
-  // Soundtrack, various artists
-  const isVariousOrSoundtrack = /\b(soundtrack|ost|various artists|va)\b/.test(title) || /\b(various|va)\b/.test(label);
-  
-  return isCompilation || isBroadcastOrBootleg || isVariousOrSoundtrack;
+  // Standard album: 8+ tracks or 30+ minutes
+  if (trackCount >= 8) return true;
+  if (duration >= 1800) return true; // 30 minutes
+
+  return false;
 }
 
 function toArtistAlbumSummary(album: QobuzAlbum): ArtistAlbumSummary {
@@ -206,6 +302,46 @@ export function convertQobuzAlbum(album: QobuzAlbum): AlbumDetail {
 }
 
 /**
+ * Categorize an album into the appropriate section
+ * Priority order matters - check most specific categories first
+ */
+function categorizeAlbum(album: QobuzAlbum, mainArtistId: number): 'others' | 'live' | 'eps' | 'albums' {
+  // 1. Different artist -> Others (highest priority)
+  if (isDifferentArtist(album, mainArtistId)) {
+    return 'others';
+  }
+
+  // 2. Unofficial releases (broadcasts, bootlegs) -> Others
+  if (isUnofficialRelease(album)) {
+    return 'others';
+  }
+
+  // 3. Compilations (greatest hits, tributes) -> Others
+  if (isCompilationAlbum(album)) {
+    return 'others';
+  }
+
+  // 4. Live albums -> Live
+  if (isLiveAlbum(album)) {
+    return 'live';
+  }
+
+  // 5. Check if it's a studio album first (deluxe, remasters, long albums)
+  // This prevents deluxe editions from being classified as EPs
+  if (isStudioAlbum(album)) {
+    return 'albums';
+  }
+
+  // 6. EPs and Singles (only if not already classified as studio album)
+  if (isEpOrSingle(album)) {
+    return 'eps';
+  }
+
+  // 7. Default: treat as studio album
+  return 'albums';
+}
+
+/**
  * Convert Qobuz API artist response to UI ArtistDetail model
  */
 export function convertQobuzArtist(artist: QobuzArtist): ArtistDetail {
@@ -220,14 +356,22 @@ export function convertQobuzArtist(artist: QobuzArtist): ArtistDetail {
 
   for (const album of albumItems) {
     const summary = toArtistAlbumSummary(album);
-    if (isLiveAlbum(album)) {
-      liveAlbums.push(summary);
-    } else if (isEpOrSingle(album)) {
-      epsSingles.push(summary);
-    } else if (isOtherAlbum(album)) {
-      others.push(summary);
-    } else {
-      albums.push(summary);
+    const category = categorizeAlbum(album, artist.id);
+
+    switch (category) {
+      case 'live':
+        liveAlbums.push(summary);
+        break;
+      case 'eps':
+        epsSingles.push(summary);
+        break;
+      case 'others':
+        others.push(summary);
+        break;
+      case 'albums':
+      default:
+        albums.push(summary);
+        break;
     }
   }
 
@@ -268,24 +412,34 @@ export function appendArtistAlbums(
 
   for (const album of newAlbums) {
     const summary = toArtistAlbumSummary(album);
-    if (isLiveAlbum(album)) {
-      if (!existingLiveIds.has(summary.id)) {
-        liveAlbums.push(summary);
-        existingLiveIds.add(summary.id);
-      }
-    } else if (isEpOrSingle(album)) {
-      if (!existingEpIds.has(summary.id)) {
-        epsSingles.push(summary);
-        existingEpIds.add(summary.id);
-      }
-    } else if (isOtherAlbum(album)) {
-      if (!existingOtherIds.has(summary.id)) {
-        others.push(summary);
-        existingOtherIds.add(summary.id);
-      }
-    } else if (!existingAlbumIds.has(summary.id)) {
-      albums.push(summary);
-      existingAlbumIds.add(summary.id);
+    const category = categorizeAlbum(album, artist.id);
+
+    switch (category) {
+      case 'live':
+        if (!existingLiveIds.has(summary.id)) {
+          liveAlbums.push(summary);
+          existingLiveIds.add(summary.id);
+        }
+        break;
+      case 'eps':
+        if (!existingEpIds.has(summary.id)) {
+          epsSingles.push(summary);
+          existingEpIds.add(summary.id);
+        }
+        break;
+      case 'others':
+        if (!existingOtherIds.has(summary.id)) {
+          others.push(summary);
+          existingOtherIds.add(summary.id);
+        }
+        break;
+      case 'albums':
+      default:
+        if (!existingAlbumIds.has(summary.id)) {
+          albums.push(summary);
+          existingAlbumIds.add(summary.id);
+        }
+        break;
     }
   }
 
