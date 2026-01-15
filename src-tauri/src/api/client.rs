@@ -19,6 +19,7 @@ pub struct QobuzClient {
     tokens: Arc<RwLock<Option<BundleTokens>>>,
     session: Arc<RwLock<Option<UserSession>>>,
     validated_secret: Arc<RwLock<Option<String>>>,
+    locale: Arc<RwLock<String>>,
 }
 
 impl QobuzClient {
@@ -34,6 +35,7 @@ impl QobuzClient {
             tokens: Arc::new(RwLock::new(None)),
             session: Arc::new(RwLock::new(None)),
             validated_secret: Arc::new(RwLock::new(None)),
+            locale: Arc::new(RwLock::new("en".to_string())),
         })
     }
 
@@ -42,6 +44,16 @@ impl QobuzClient {
         let tokens = extract_bundle_tokens(&self.http).await?;
         *self.tokens.write().await = Some(tokens);
         Ok(())
+    }
+
+    /// Set the locale for API requests
+    pub async fn set_locale(&self, locale: String) {
+        *self.locale.write().await = locale;
+    }
+
+    /// Get the current locale
+    async fn locale(&self) -> String {
+        self.locale.read().await.clone()
     }
 
     /// Get app ID
@@ -327,9 +339,11 @@ impl QobuzClient {
         offset: Option<u32>,
     ) -> Result<Artist> {
         let url = endpoints::build_url(paths::ARTIST_GET);
+        let locale = self.locale().await;
         let mut query = vec![
             ("artist_id", artist_id.to_string()),
             ("extra", "albums,tracks_appears_on,playlists".to_string()),
+            ("lang", locale),
         ];
         if let Some(l) = limit {
             query.push(("limit", l.to_string()));
@@ -360,7 +374,11 @@ impl QobuzClient {
         offset: Option<u32>,
     ) -> Result<Artist> {
         let url = endpoints::build_url(paths::ARTIST_GET);
-        let mut query = vec![("artist_id", artist_id.to_string())];
+        let locale = self.locale().await;
+        let mut query = vec![
+            ("artist_id", artist_id.to_string()),
+            ("lang", locale),
+        ];
         if with_albums {
             query.push(("extra", "albums".to_string()));
         }

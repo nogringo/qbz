@@ -141,3 +141,11 @@ pub async fn auto_login(state: State<'_, AppState>) -> Result<LoginResponse, Str
         }
     }
 }
+
+#[tauri::command]
+pub async fn set_api_locale(locale: String, state: State<'_, AppState>) -> Result<(), String> {
+    log::info!("Command: set_api_locale {}", locale);
+    let client = state.client.lock().await;
+    client.set_locale(locale).await;
+    Ok(())
+}

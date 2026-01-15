@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { init, register, getLocaleFromNavigator, locale } from 'svelte-i18n';
+import { invoke } from '@tauri-apps/api/core';
 
 // Register locales
 register('en', () => import('./locales/en.json'));
@@ -7,10 +8,18 @@ register('es', () => import('./locales/es.json'));
 
 // Initialize i18n
 export function initI18n() {
+  const initialLocale = browser ? getStoredLocale() || getLocaleFromNavigator() : 'en';
   init({
     fallbackLocale: 'en',
-    initialLocale: browser ? getStoredLocale() || getLocaleFromNavigator() : 'en',
+    initialLocale,
   });
+
+  // Set the API locale to match
+  if (browser) {
+    invoke('set_api_locale', { locale: initialLocale }).catch((err) => {
+      console.warn('Failed to set API locale:', err);
+    });
+  }
 }
 
 // Get stored locale from localStorage
@@ -20,9 +29,15 @@ function getStoredLocale(): string | null {
 }
 
 // Set and persist locale
-export function setLocale(newLocale: string) {
+export async function setLocale(newLocale: string) {
   if (browser) {
     localStorage.setItem('qbz-locale', newLocale);
+    // Also update the API client locale
+    try {
+      await invoke('set_api_locale', { locale: newLocale });
+    } catch (err) {
+      console.warn('Failed to update API locale:', err);
+    }
   }
   locale.set(newLocale);
 }

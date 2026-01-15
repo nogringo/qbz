@@ -260,6 +260,7 @@ pub fn run() {
             commands::logout,
             commands::is_logged_in,
             commands::get_user_info,
+            commands::set_api_locale,
             // Credential persistence commands
             commands::has_saved_credentials,
             commands::save_credentials,

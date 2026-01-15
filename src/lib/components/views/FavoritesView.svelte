@@ -879,7 +879,7 @@
                       onRemoveDownload={onTrackRemoveDownload ? () => onTrackRemoveDownload(track.id) : undefined}
                       menuActions={{
                         onPlayNow: () => handleTrackClick(track, globalIndex),
-                        onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(displayTrack) : undefined}
+                        onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(displayTrack) : undefined,
                         onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(displayTrack) : undefined,
                         onAddToPlaylist: onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined,
                         onShareQobuz: onTrackShareQobuz ? () => onTrackShareQobuz(track.id) : undefined,

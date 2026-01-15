@@ -468,9 +468,9 @@
       <!-- Biography -->
       {#if bioText}
         <div class="biography">
-          <p class="bio-text">
-            {bioExpanded ? bioText : truncatedBio}
-          </p>
+          <div class="bio-text">
+            {@html bioExpanded ? bioText : truncatedBio}
+          </div>
           {#if bioText.length > 300}
             <button class="bio-toggle" onclick={() => bioExpanded = !bioExpanded}>
               {#if bioExpanded}
