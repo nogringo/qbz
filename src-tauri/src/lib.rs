@@ -137,6 +137,9 @@ pub fn run() {
     // Initialize audio settings state
     let audio_settings_state = config::audio_settings::AudioSettingsState::new()
         .expect("Failed to initialize audio settings");
+    // Initialize download settings state
+    let download_settings_state = config::download_settings::create_download_settings_state()
+        .expect("Failed to initialize download settings");
     // Initialize API keys state (for user-provided credentials)
     let api_keys_state = api_keys::create_api_keys_state();
 
@@ -248,6 +251,7 @@ pub fn run() {
         .manage(api_cache_state)
         .manage(session_store_state)
         .manage(audio_settings_state)
+        .manage(download_settings_state)
         .manage(api_keys_state)
         .invoke_handler(tauri::generate_handler![
             // Auth commands
@@ -459,6 +463,11 @@ pub fn run() {
             config::audio_settings::set_audio_exclusive_mode,
             config::audio_settings::set_audio_dac_passthrough,
             config::audio_settings::set_audio_sample_rate,
+            // Download settings commands
+            config::download_settings::get_download_settings,
+            config::download_settings::set_download_root,
+            config::download_settings::set_show_downloads_in_library,
+            config::download_settings::validate_download_root,
             // API keys commands (user-provided credentials)
             api_keys::set_spotify_credentials,
             api_keys::clear_spotify_credentials,

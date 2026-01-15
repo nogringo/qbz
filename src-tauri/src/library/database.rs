@@ -127,6 +127,26 @@ impl LibraryDatabase {
 
     /// Run schema migrations for existing databases
     fn run_migrations(&self) -> Result<(), LibraryError> {
+        // Migration: Add qobuz download tracking fields
+        let has_source: bool = self.conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('local_tracks') WHERE name = 'source'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .map(|count| count > 0)
+            .unwrap_or(false);
+
+        if !has_source {
+            log::info!("Running migration: adding source and qobuz_track_id to local_tracks");
+            self.conn.execute_batch(
+                "ALTER TABLE local_tracks ADD COLUMN source TEXT DEFAULT 'user';
+                 ALTER TABLE local_tracks ADD COLUMN qobuz_track_id INTEGER;
+                 CREATE INDEX IF NOT EXISTS idx_tracks_source ON local_tracks(source);
+                 CREATE INDEX IF NOT EXISTS idx_tracks_qobuz_id ON local_tracks(qobuz_track_id);"
+            ).map_err(|e| LibraryError::Database(format!("Migration failed: {}", e)))?;
+        }
+
         // Check if playlist_settings has the 'hidden' column (added in v2)
         let has_hidden: bool = self.conn
             .query_row(
