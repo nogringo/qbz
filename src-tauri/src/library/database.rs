@@ -118,6 +118,18 @@ impl LibraryDatabase {
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             );
+
+            -- Artist images cache (Qobuz/Discogs images and custom uploads)
+            CREATE TABLE IF NOT EXISTS artist_images (
+                artist_name TEXT PRIMARY KEY,
+                image_url TEXT,
+                source TEXT NOT NULL,
+                custom_image_path TEXT,
+                fetched_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_artist_images_fetched ON artist_images(fetched_at);
         "#,
             )
             .map_err(|e| LibraryError::Database(format!("Failed to create schema: {}", e)))?;
@@ -1534,5 +1546,48 @@ impl LibraryDatabase {
         )
         .map_err(|e| LibraryError::Database(format!("Failed to remove all Qobuz downloads: {}", e)))?;
         Ok(count)
+    }
+
+    // === Artist Images Management ===
+
+    /// Get cached artist image
+    pub fn get_artist_image(&self, artist_name: &str) -> Result<Option<crate::library::commands::ArtistImageInfo>, LibraryError> {
+        let result = self.conn.query_row(
+            "SELECT artist_name, image_url, source, custom_image_path FROM artist_images WHERE artist_name = ?1",
+            params![artist_name],
+            |row| {
+                Ok(crate::library::commands::ArtistImageInfo {
+                    artist_name: row.get(0)?,
+                    image_url: row.get(1)?,
+                    source: row.get(2)?,
+                    custom_image_path: row.get(3)?,
+                })
+            }
+        ).optional()
+        .map_err(|e| LibraryError::Database(format!("Failed to get artist image: {}", e)))?;
+        Ok(result)
+    }
+
+    /// Cache artist image
+    pub fn cache_artist_image(
+        &self,
+        artist_name: &str,
+        image_url: Option<&str>,
+        source: &str,
+        custom_image_path: Option<&str>,
+    ) -> Result<(), LibraryError> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO artist_images 
+             (artist_name, image_url, source, custom_image_path, fetched_at, updated_at) 
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![artist_name, image_url, source, custom_image_path, now, now],
+        )
+        .map_err(|e| LibraryError::Database(format!("Failed to cache artist image: {}", e)))?;
+        Ok(())
     }
 }

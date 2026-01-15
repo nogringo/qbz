@@ -63,9 +63,11 @@ impl ApiCache {
                 CREATE INDEX IF NOT EXISTS idx_cached_albums_fetched ON cached_albums(fetched_at);
 
                 CREATE TABLE IF NOT EXISTS cached_artists (
-                    artist_id INTEGER PRIMARY KEY,
+                    artist_id INTEGER NOT NULL,
+                    locale TEXT NOT NULL,
                     data TEXT NOT NULL,
-                    fetched_at INTEGER NOT NULL
+                    fetched_at INTEGER NOT NULL,
+                    PRIMARY KEY (artist_id, locale)
                 );
                 CREATE INDEX IF NOT EXISTS idx_cached_artists_fetched ON cached_artists(fetched_at);
 
@@ -165,15 +167,15 @@ impl ApiCache {
     // ============ Artist Cache ============
 
     /// Get a cached artist if it exists and hasn't expired
-    pub fn get_artist(&self, artist_id: u64, ttl_secs: Option<i64>) -> Result<Option<String>, String> {
+    pub fn get_artist(&self, artist_id: u64, locale: &str, ttl_secs: Option<i64>) -> Result<Option<String>, String> {
         let ttl = ttl_secs.unwrap_or(DEFAULT_TTL_SECS);
         let min_fetched_at = Self::current_timestamp() - ttl;
 
         let result: Option<String> = self
             .conn
             .query_row(
-                "SELECT data FROM cached_artists WHERE artist_id = ? AND fetched_at > ?",
-                params![artist_id, min_fetched_at],
+                "SELECT data FROM cached_artists WHERE artist_id = ? AND locale = ? AND fetched_at > ?",
+                params![artist_id, locale, min_fetched_at],
                 |row| row.get(0),
             )
             .optional()
@@ -183,12 +185,12 @@ impl ApiCache {
     }
 
     /// Cache an artist response
-    pub fn set_artist(&self, artist_id: u64, data: &str) -> Result<(), String> {
+    pub fn set_artist(&self, artist_id: u64, locale: &str, data: &str) -> Result<(), String> {
         let fetched_at = Self::current_timestamp();
         self.conn
             .execute(
-                "INSERT OR REPLACE INTO cached_artists (artist_id, data, fetched_at) VALUES (?, ?, ?)",
-                params![artist_id, data, fetched_at],
+                "INSERT OR REPLACE INTO cached_artists (artist_id, locale, data, fetched_at) VALUES (?, ?, ?, ?)",
+                params![artist_id, locale, data, fetched_at],
             )
             .map_err(|e| format!("Failed to cache artist: {}", e))?;
         Ok(())

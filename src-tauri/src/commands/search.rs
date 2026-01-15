@@ -137,18 +137,24 @@ pub async fn get_artist(
 ) -> Result<Artist, String> {
     log::info!("Command: get_artist {}", artist_id);
 
+    // Get current locale
+    let locale = {
+        let client = state.client.lock().await;
+        client.get_locale().await
+    };
+
     // Check cache first
     {
         let cache = cache_state.cache.lock().await;
-        if let Some(cached_data) = cache.get_artist(artist_id, None)? {
-            log::debug!("Cache hit for artist {}", artist_id);
+        if let Some(cached_data) = cache.get_artist(artist_id, &locale, None)? {
+            log::debug!("Cache hit for artist {} (locale: {})", artist_id, locale);
             return serde_json::from_str(&cached_data)
                 .map_err(|e| format!("Failed to parse cached artist: {}", e));
         }
     }
 
     // Cache miss - fetch from API
-    log::debug!("Cache miss for artist {}, fetching from API", artist_id);
+    log::debug!("Cache miss for artist {} (locale: {}), fetching from API", artist_id, locale);
     let client = state.client.lock().await;
     let artist = client
         .get_artist(artist_id, true)
@@ -160,7 +166,7 @@ pub async fn get_artist(
         let cache = cache_state.cache.lock().await;
         let json = serde_json::to_string(&artist)
             .map_err(|e| format!("Failed to serialize artist: {}", e))?;
-        cache.set_artist(artist_id, &json)?;
+        cache.set_artist(artist_id, &locale, &json)?;
     }
 
     Ok(artist)

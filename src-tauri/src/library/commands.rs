@@ -947,3 +947,64 @@ pub async fn library_backfill_downloads(
 
     Ok(report)
 }
+
+// === Artist Images Management ===
+
+#[derive(serde::Serialize)]
+pub struct ArtistImageInfo {
+    pub artist_name: String,
+    pub image_url: Option<String>,
+    pub source: Option<String>,
+    pub custom_image_path: Option<String>,
+}
+
+/// Get cached artist image
+#[tauri::command]
+pub async fn library_get_artist_image(
+    artist_name: String,
+    state: State<'_, LibraryState>,
+) -> Result<Option<ArtistImageInfo>, String> {
+    let db = state.db.lock().await;
+    db.get_artist_image(&artist_name).map_err(|e| e.to_string())
+}
+
+/// Get multiple artist images at once
+#[tauri::command]
+pub async fn library_get_artist_images(
+    artist_names: Vec<String>,
+    state: State<'_, LibraryState>,
+) -> Result<Vec<ArtistImageInfo>, String> {
+    let db = state.db.lock().await;
+    let mut results = Vec::new();
+    for name in artist_names {
+        if let Ok(Some(info)) = db.get_artist_image(&name) {
+            results.push(info);
+        }
+    }
+    Ok(results)
+}
+
+/// Cache artist image from Qobuz
+#[tauri::command]
+pub async fn library_cache_artist_image(
+    artist_name: String,
+    image_url: String,
+    source: String,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    let db = state.db.lock().await;
+    db.cache_artist_image(&artist_name, Some(&image_url), &source, None)
+        .map_err(|e| e.to_string())
+}
+
+/// Set custom artist image
+#[tauri::command]
+pub async fn library_set_custom_artist_image(
+    artist_name: String,
+    custom_image_path: String,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    let db = state.db.lock().await;
+    db.cache_artist_image(&artist_name, None, "custom", Some(&custom_image_path))
+        .map_err(|e| e.to_string())
+}

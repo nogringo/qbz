@@ -51,7 +51,12 @@ impl QobuzClient {
         *self.locale.write().await = locale;
     }
 
-    /// Get the current locale
+    /// Get the current locale (public for cache key generation)
+    pub async fn get_locale(&self) -> String {
+        self.locale.read().await.clone()
+    }
+
+    /// Get the current locale (internal use)
     async fn locale(&self) -> String {
         self.locale.read().await.clone()
     }
