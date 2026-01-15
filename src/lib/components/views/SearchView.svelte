@@ -529,8 +529,11 @@
         <!-- Most Popular + Artists Section -->
         <div class="top-section">
           <div class="most-popular">
-            <h3><Crown size={18} color="gold" /> Most Popular</h3>
-            {#if allResults.artists.items.length > 0}
+            <div class="section-header">
+              <h3><Crown size={18} color="gold" /> Most Popular</h3>
+            </div>
+            <div class="most-popular-wrapper">
+              {#if allResults.artists.items.length > 0}
               <button class="artist-card most-popular-card" onclick={() => onArtistClick?.(allResults.artists.items[0].id)}>
                 {#if failedArtistImages.has(allResults.artists.items[0].id) || !getArtistImage(allResults.artists.items[0])}
                   <div class="artist-image-placeholder">
@@ -569,6 +572,7 @@
                 onclick={() => { onAlbumClick?.(allResults.albums.items[0].id); loadAlbumDownloadStatus(allResults.albums.items[0].id); }}
               />
             {/if}
+            </div>
           </div>
 
           <div class="artists-section">
@@ -600,12 +604,17 @@
               <div class="artists-carousel">
                 {#each visibleArtists as artist}
                   {#if artist.isViewMore}
-                    <button class="view-more-card" onclick={() => handleTabChange('artists')}>
-                      <div class="view-more-content">
-                        <span>View more</span>
-                        <ChevronRight size={24} />
+                    <div class="view-more-card">
+                      <button class="view-more-cover" onclick={() => handleTabChange('artists')}>
+                        <div class="view-more-label">
+                          <span>View more</span>
+                          <ChevronRight size={20} />
+                        </div>
+                      </button>
+                      <div class="view-more-info">
+                        <span class="view-more-text">{allResults.artists.total - 12} more artists to discover</span>
                       </div>
-                    </button>
+                    </div>
                   {:else}
                     <button class="artist-card" onclick={() => onArtistClick?.(artist.id)}>
                       {#if failedArtistImages.has(artist.id) || !getArtistImage(artist)}
@@ -661,12 +670,17 @@
                   {#each visibleAlbums as album}
                     {#if album.isViewMore}
                       <div class="album-card-wrapper">
-                        <button class="view-more-card" onclick={() => handleTabChange('albums')}>
-                          <div class="view-more-content">
-                            <span>View more</span>
-                            <ChevronRight size={24} />
+                        <div class="view-more-card">
+                          <button class="view-more-cover" onclick={() => handleTabChange('albums')}>
+                            <div class="view-more-label">
+                              <span>View more</span>
+                              <ChevronRight size={20} />
+                            </div>
+                          </button>
+                          <div class="view-more-info">
+                            <span class="view-more-text">{allResults.albums.total - 30} more albums to discover</span>
                           </div>
-                        </button>
+                        </div>
                       </div>
                     {:else}
                       <div class="album-card-wrapper">
@@ -1305,7 +1319,16 @@
   .most-popular {
     display: flex;
     flex-direction: column;
-    align-items: center;
+  }
+
+  .most-popular-wrapper {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .most-popular .section-header {
+    width: 100%;
   }
 
   .most-popular h3 {
@@ -1316,8 +1339,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    align-self: flex-start;
-    width: 100%;
   }
 
 
@@ -1476,35 +1497,54 @@
   .view-more-card {
     width: 160px;
     min-width: 160px;
-    height: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .view-more-cover {
+    width: 160px;
+    height: 160px;
     display: flex;
     align-items: center;
     justify-content: center;
     background-color: var(--bg-secondary);
     border: 2px dashed var(--bg-tertiary);
-    border-radius: 12px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 150ms ease;
-    flex-shrink: 0;
   }
 
-  .view-more-card:hover {
+  .view-more-cover:hover {
     background-color: var(--bg-tertiary);
     border-color: var(--accent-primary);
   }
 
-  .view-more-content {
+  .view-more-label {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     color: var(--text-muted);
     font-size: 14px;
     font-weight: 500;
   }
 
-  .view-more-card:hover .view-more-content {
+  .view-more-cover:hover .view-more-label {
     color: var(--accent-primary);
+  }
+
+  .view-more-info {
+    width: 160px;
+    padding: 0 4px;
+  }
+
+  .view-more-text {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.3;
+    display: block;
   }
 
   .tracks-section {
