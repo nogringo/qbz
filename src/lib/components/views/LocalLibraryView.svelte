@@ -164,6 +164,9 @@
   let editingAlbumTitle = $state('');
   let editingAlbumHidden = $state(false);
 
+  // Folder selection state
+  let selectedFolders = $state<Set<string>>(new Set());
+
   async function handleAddToPlaylist(playlistId: number) {
     if (!selectedTrackForPlaylist) return;
 
@@ -356,11 +359,42 @@
 
     try {
       await invoke('library_remove_folder', { path });
+      selectedFolders.delete(path);
+      selectedFolders = new Set(selectedFolders);
       await loadFolders();
       await loadLibraryData();
     } catch (err) {
       console.error('Failed to remove folder:', err);
       alert(`Failed to remove folder: ${err}`);
+    }
+  }
+
+  function toggleFolderSelection(folder: string) {
+    if (selectedFolders.has(folder)) {
+      selectedFolders.delete(folder);
+    } else {
+      selectedFolders.add(folder);
+    }
+    selectedFolders = new Set(selectedFolders);
+  }
+
+  async function handleRemoveSelectedFolders() {
+    if (selectedFolders.size === 0) return;
+    
+    const count = selectedFolders.size;
+    if (!confirm(`Remove ${count} selected folder${count > 1 ? 's' : ''}? This will remove all indexed tracks from these folders.`)) return;
+
+    try {
+      for (const folder of selectedFolders) {
+        await invoke('library_remove_folder', { path: folder });
+      }
+      selectedFolders.clear();
+      selectedFolders = new Set(selectedFolders);
+      await loadFolders();
+      await loadLibraryData();
+    } catch (err) {
+      console.error('Failed to remove folders:', err);
+      alert(`Failed to remove folders: ${err}`);
     }
   }
 
@@ -1221,10 +1255,19 @@
       <div class="settings-panel">
         <div class="settings-header">
           <h3>Library Folders</h3>
-          <button class="add-folder-btn" onclick={handleAddFolder}>
-            <FolderPlus size={16} />
-            <span>Add Folder</span>
-          </button>
+          <div class="folder-actions">
+            <button class="icon-btn" onclick={handleAddFolder} title="Add folder">
+              <FolderPlus size={16} />
+            </button>
+            <button 
+              class="icon-btn" 
+              onclick={handleRemoveSelectedFolders} 
+              disabled={selectedFolders.size === 0}
+              title="Remove selected folders"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
         </div>
 
         {#if folders.length === 0}
@@ -1232,13 +1275,17 @@
             <p>No folders added yet. Add a folder to start building your library.</p>
           </div>
         {:else}
-          <div class="folder-list">
+          <div class="folder-table">
             {#each folders as folder}
-              <div class="folder-item">
+              <div class="folder-row" class:selected={selectedFolders.has(folder)}>
+                <label class="folder-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selectedFolders.has(folder)}
+                    onchange={() => toggleFolderSelection(folder)}
+                  />
+                </label>
                 <span class="folder-path">{folder}</span>
-                <button class="remove-btn" onclick={() => handleRemoveFolder(folder)} title="Remove folder">
-                  <Trash2 size={14} />
-                </button>
               </div>
             {/each}
           </div>
@@ -1997,22 +2044,95 @@
     margin: 0;
   }
 
-  .add-folder-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    background: var(--accent-primary);
-    color: white;
-    border: none;
+  .no-folders {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    background: var(--bg-tertiary);
     border-radius: 8px;
-    font-size: 13px;
-    cursor: pointer;
-    transition: background 150ms ease;
   }
 
-  .add-folder-btn:hover {
-    background: var(--accent-hover);
+  .folder-table {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid var(--bg-tertiary);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+  }
+
+  .folder-table::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .folder-table::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .folder-table::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+  }
+
+  .folder-table::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+
+  .folder-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--bg-tertiary);
+    transition: background 150ms ease;
+    cursor: pointer;
+    min-height: 36px;
+  }
+
+  .folder-row:last-child {
+    border-bottom: none;
+  }
+
+  .folder-row:hover {
+    background: var(--bg-tertiary);
+  }
+
+  .folder-row.selected {
+    background: rgba(59, 130, 246, 0.15);
+  }
+
+  .folder-row.selected:hover {
+    background: rgba(59, 130, 246, 0.2);
+  }
+
+  .folder-checkbox {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    margin: 0;
+  }
+
+  .folder-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent-primary);
+    cursor: pointer;
+    margin: 0;
+  }
+
+  .folder-path {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-primary);
+    font-family: var(--font-mono, 'Courier New', monospace);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .folder-actions {
+    display: flex;
+    gap: 8px;
   }
 
   .no-folders {
@@ -2041,19 +2161,6 @@
     font-size: 13px;
     color: var(--text-primary);
     font-family: var(--font-mono);
-  }
-
-  .remove-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 4px;
-    transition: color 150ms ease;
-  }
-
-  .remove-btn:hover {
-    color: #ef4444;
   }
 
   .settings-actions {
