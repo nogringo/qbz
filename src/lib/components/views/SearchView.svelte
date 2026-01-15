@@ -9,25 +9,28 @@
 
   let searchInput: HTMLInputElement | null = null;
   let albumsCarouselRef: HTMLDivElement | null = null;
-  let albumsScrollPosition = $state(0);
-  let carouselColumns = $state(3);
+  let albumsCarouselContainer: HTMLDivElement | null = null;
+  let currentPage = $state(0);
+  let albumsPerPage = $state(5);
+  let totalPages = $derived(allResults ? Math.ceil(allResults.albums.items.length / albumsPerPage) : 0);
 
   onMount(async () => {
     console.log('SearchView mounted!');
     await tick();
     searchInput?.focus();
-    calculateCarouselColumns();
-    window.addEventListener('resize', calculateCarouselColumns);
-    return () => window.removeEventListener('resize', calculateCarouselColumns);
+    calculateAlbumsPerPage();
+    window.addEventListener('resize', calculateAlbumsPerPage);
+    return () => window.removeEventListener('resize', calculateAlbumsPerPage);
   });
 
-  function calculateCarouselColumns() {
-    if (!albumsCarouselRef?.parentElement) return;
-    const containerWidth = albumsCarouselRef.parentElement.clientWidth;
+  function calculateAlbumsPerPage() {
+    if (!albumsCarouselContainer) return;
+    const containerWidth = albumsCarouselContainer.clientWidth;
     const gap = 16;
-    const minCardWidth = 160;
-    const cols = Math.floor((containerWidth + gap) / (minCardWidth + gap));
-    carouselColumns = Math.max(2, cols);
+    const cardWidth = 160;
+    const cols = Math.floor((containerWidth + gap) / (cardWidth + gap));
+    albumsPerPage = Math.max(2, cols);
+    console.log(`Container width: ${containerWidth}px, Albums per page: ${albumsPerPage}`);
   }
 
   // Track which images have failed to load
@@ -172,7 +175,8 @@
 
   $effect(() => {
     if (allResults) {
-      setTimeout(() => calculateCarouselColumns(), 100);
+      currentPage = 0;
+      setTimeout(() => calculateAlbumsPerPage(), 100);
     }
   });
 
@@ -353,29 +357,18 @@
   }
 
   function scrollAlbumsCarousel(direction: 'left' | 'right') {
-    if (!albumsCarouselRef) return;
-    
-    const containerWidth = albumsCarouselRef.parentElement?.clientWidth || 0;
-    const gap = 16;
-    const cardWidth = Math.floor((containerWidth - ((carouselColumns - 1) * gap)) / carouselColumns);
-    const scrollAmount = (cardWidth + gap) * carouselColumns;
-    
     if (direction === 'left') {
-      albumsScrollPosition = Math.max(0, albumsScrollPosition - scrollAmount);
+      currentPage = Math.max(0, currentPage - 1);
     } else {
-      const maxScroll = albumsCarouselRef.scrollWidth - albumsCarouselRef.clientWidth;
-      albumsScrollPosition = Math.min(maxScroll, albumsScrollPosition + scrollAmount);
+      currentPage = Math.min(totalPages - 1, currentPage + 1);
     }
-    
-    albumsCarouselRef.scrollTo({
-      left: albumsScrollPosition,
-      behavior: 'smooth'
-    });
   }
 
-  let canScrollLeft = $derived(albumsScrollPosition > 0);
-  let canScrollRight = $derived(
-    albumsCarouselRef ? albumsScrollPosition < albumsCarouselRef.scrollWidth - albumsCarouselRef.clientWidth - 1 : false
+  let canScrollLeft = $derived(currentPage > 0);
+  let canScrollRight = $derived(currentPage < totalPages - 1);
+  
+  let visibleAlbums = $derived(
+    allResults ? allResults.albums.items.slice(currentPage * albumsPerPage, (currentPage + 1) * albumsPerPage) : []
   );
 </script>
 
@@ -475,25 +468,7 @@
         <!-- Most Popular + Artists Section -->
         <div class="top-section">
           <div class="most-popular">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id="crown-shimmer" x1="0%" y1="0%" x2="200%" y2="0%">
-                    <stop offset="0%" style="stop-color:gold;stop-opacity:1">
-                      <animate attributeName="stop-color" values="gold;#ffd700;gold" dur="2s" repeatCount="indefinite" />
-                    </stop>
-                    <stop offset="50%" style="stop-color:#ffd700;stop-opacity:1">
-                      <animate attributeName="stop-color" values="#ffd700;gold;#ffd700" dur="2s" repeatCount="indefinite" />
-                    </stop>
-                    <stop offset="100%" style="stop-color:gold;stop-opacity:1">
-                      <animate attributeName="stop-color" values="gold;#ffd700;gold" dur="2s" repeatCount="indefinite" />
-                    </stop>
-                  </linearGradient>
-                </defs>
-                <path d="M2 20h20v-4H2v4zm2-10v4h16v-4h-3l-4-4L9 10H4zm9-9.95L7 8V2H5.5v4.5L11 0l5.5 6.5V2H15v6l-4-7.95z" fill="url(#crown-shimmer)" />
-              </svg>
-              Most Popular
-            </h3>
+            <h3><Crown size={18} color="gold" /> Most Popular</h3>
             {#if allResults.artists.items.length > 0}
               <button class="artist-card most-popular-card" onclick={() => onArtistClick?.(allResults.artists.items[0].id)}>
                 {#if failedArtistImages.has(allResults.artists.items[0].id) || !getArtistImage(allResults.artists.items[0])}
@@ -1223,19 +1198,7 @@
     gap: 8px;
   }
 
-  .most-popular h3 :global(svg) {
-    color: gold;
-  }
 
-  .most-popular h3 :global(svg path) {
-    fill: url(#crown-shimmer);
-  }
-
-  @keyframes crown-shimmer {
-    0% { stop-color: gold; }
-    50% { stop-color: #ffd700; }
-    100% { stop-color: gold; }
-  }
 
   .artist-card {
     width: 160px;
@@ -1363,11 +1326,8 @@
 
   .albums-carousel {
     display: grid;
-    grid-template-rows: 1fr;
-    grid-auto-flow: column;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 160px));
     gap: 16px;
-    overflow-x: hidden;
-    scroll-behavior: smooth;
   }
 
   .album-card-wrapper {
