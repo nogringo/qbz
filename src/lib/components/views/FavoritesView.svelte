@@ -129,6 +129,11 @@
     }
   }
 
+  async function loadAllAlbumDownloadStatuses(albums: { id: string }[]) {
+    if (!checkAlbumFullyDownloaded || albums.length === 0) return;
+    await Promise.all(albums.map(album => loadAlbumDownloadStatus(album.id)));
+  }
+
   function isAlbumDownloaded(albumId: string): boolean {
     void downloadStateVersion;
     return albumDownloadStatuses.get(albumId) || false;
@@ -284,6 +289,7 @@
         favoriteTracks = items as FavoriteTrack[];
       } else if (type === 'albums') {
         favoriteAlbums = items as FavoriteAlbum[];
+        await loadAllAlbumDownloadStatuses(favoriteAlbums);
       } else if (type === 'artists') {
         favoriteArtists = items as FavoriteArtist[];
       }

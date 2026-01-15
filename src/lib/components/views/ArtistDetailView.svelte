@@ -132,6 +132,11 @@
     }
   }
 
+  async function loadAllAlbumDownloadStatuses(albums: { id: string }[]) {
+    if (!checkAlbumFullyDownloaded || albums.length === 0) return;
+    await Promise.all(albums.map(album => loadAlbumDownloadStatus(album.id)));
+  }
+
   function isAlbumDownloaded(albumId: string): boolean {
     void downloadStateVersion;
     return albumDownloadStatuses.get(albumId) || false;
@@ -159,7 +164,18 @@
     loadTopTracks();
     loadSimilarArtists();
     checkFavoriteStatus();
+    loadArtistAlbumDownloadStatuses();
   });
+
+  async function loadArtistAlbumDownloadStatuses() {
+    const allAlbums = [
+      ...artist.albums,
+      ...artist.epsSingles,
+      ...artist.liveAlbums,
+      ...artist.compilations
+    ];
+    await loadAllAlbumDownloadStatuses(allAlbums);
+  }
 
   async function checkFavoriteStatus() {
     try {

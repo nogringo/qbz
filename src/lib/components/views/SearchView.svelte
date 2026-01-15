@@ -177,6 +177,11 @@
     }
   }
 
+  async function loadAllAlbumDownloadStatuses(albums: { id: string }[]) {
+    if (!checkAlbumFullyDownloaded || albums.length === 0) return;
+    await Promise.all(albums.map(album => loadAlbumDownloadStatus(album.id)));
+  }
+
   function isAlbumDownloaded(albumId: string): boolean {
     void downloadStateVersion;
     return albumDownloadStatuses.get(albumId) || false;
@@ -197,6 +202,9 @@
           offset: 0
         });
         console.log('Album results:', albumResults);
+        if (albumResults && albumResults.items) {
+          await loadAllAlbumDownloadStatuses(albumResults.items);
+        }
       } else if (activeTab === 'tracks') {
         trackResults = await invoke<SearchResults<Track>>('search_tracks', {
           query: query.trim(),
@@ -233,6 +241,7 @@
           limit: PAGE_SIZE,
           offset: newOffset
         });
+        await loadAllAlbumDownloadStatuses(moreResults.items);
         albumResults = {
           ...moreResults,
           items: [...albumResults.items, ...moreResults.items],

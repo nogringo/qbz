@@ -154,6 +154,11 @@
     }
   }
 
+  async function loadAllAlbumDownloadStatuses(albums: AlbumCardData[]) {
+    if (!checkAlbumFullyDownloaded || albums.length === 0) return;
+    await Promise.all(albums.map(album => loadAlbumDownloadStatus(album.id)));
+  }
+
   function isAlbumDownloaded(albumId: string): boolean {
     void downloadStateVersion;
     return albumDownloadStatuses.get(albumId) || false;
@@ -358,8 +363,9 @@
 
     // Start Qobuz API calls in parallel (don't await)
     if (isSectionVisible('newReleases')) {
-      fetchFeaturedAlbums('new-releases', LIMITS.featuredAlbums).then(albums => {
+      fetchFeaturedAlbums('new-releases', LIMITS.featuredAlbums).then(async albums => {
         newReleases = albums;
+        await loadAllAlbumDownloadStatuses(albums);
         loadingNewReleases = false;
         markSectionFinished();
       });
@@ -368,8 +374,9 @@
     }
 
     if (isSectionVisible('pressAwards')) {
-      fetchFeaturedAlbums('press-awards', LIMITS.featuredAlbums).then(albums => {
+      fetchFeaturedAlbums('press-awards', LIMITS.featuredAlbums).then(async albums => {
         pressAwards = albums;
+        await loadAllAlbumDownloadStatuses(albums);
         loadingPressAwards = false;
         markSectionFinished();
       });
@@ -378,8 +385,9 @@
     }
 
     if (isSectionVisible('mostStreamed')) {
-      fetchFeaturedAlbums('most-streamed', LIMITS.featuredAlbums).then(albums => {
+      fetchFeaturedAlbums('most-streamed', LIMITS.featuredAlbums).then(async albums => {
         mostStreamed = albums;
+        await loadAllAlbumDownloadStatuses(albums);
         loadingMostStreamed = false;
         markSectionFinished();
       });
@@ -388,8 +396,9 @@
     }
 
     if (isSectionVisible('qobuzissimes')) {
-      fetchFeaturedAlbums('qobuzissimes', LIMITS.featuredAlbums).then(albums => {
+      fetchFeaturedAlbums('qobuzissimes', LIMITS.featuredAlbums).then(async albums => {
         qobuzissimes = albums;
+        await loadAllAlbumDownloadStatuses(albums);
         loadingQobuzissimes = false;
         markSectionFinished();
       });
@@ -398,8 +407,9 @@
     }
 
     if (isSectionVisible('editorPicks')) {
-      fetchFeaturedAlbums('editor-picks', LIMITS.featuredAlbums).then(albums => {
+      fetchFeaturedAlbums('editor-picks', LIMITS.featuredAlbums).then(async albums => {
         editorPicks = albums;
+        await loadAllAlbumDownloadStatuses(albums);
         loadingEditorPicks = false;
         markSectionFinished();
       });
@@ -426,8 +436,9 @@
       // Recently Played (albums) - start immediately with seeds
       if (isSectionVisible('recentAlbums')) {
         const recentAlbumIds = normalizeAlbumIds(seeds.recentlyPlayedAlbumIds);
-        fetchAlbums(recentAlbumIds.slice(0, LIMITS.recentAlbums)).then(albums => {
+        fetchAlbums(recentAlbumIds.slice(0, LIMITS.recentAlbums)).then(async albums => {
           recentAlbums = albums;
+          await loadAllAlbumDownloadStatuses(albums);
           loadingRecentAlbums = false;
           markSectionFinished();
         });
@@ -456,6 +467,7 @@
           ]);
           const albums = await fetchAlbums(favoriteAlbumIds.slice(0, LIMITS.favoriteAlbums));
           favoriteAlbums = albums;
+          await loadAllAlbumDownloadStatuses(albums);
           loadingFavoriteAlbums = false;
           markSectionFinished();
         });
