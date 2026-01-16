@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { ArrowLeft, User, ChevronDown, ChevronUp, Play, Music, Heart } from 'lucide-svelte';
+  import { ArrowLeft, User, ChevronDown, ChevronUp, Play, Music, Heart, Search, X } from 'lucide-svelte';
   import type { ArtistDetail, QobuzArtist } from '$lib/types';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackMenu from '../TrackMenu.svelte';
@@ -119,6 +119,11 @@
   let playlistsSection = $state<HTMLDivElement | null>(null);
   let activeJumpSection = $state('about');
   let jumpObserver: IntersectionObserver | null = null;
+
+  // Page search state
+  let searchOpen = $state(false);
+  let searchQuery = $state('');
+  let searchInputEl = $state<HTMLInputElement | null>(null);
 
   // Download status tracking
   let albumDownloadStatuses = $state<Map<string, boolean>>(new Map());
@@ -343,10 +348,14 @@
     artist.biography?.content || artist.biography?.summary || null
   );
 
-  // Truncate bio for collapsed view
+  // Truncate bio for collapsed view (reduced to ~530 chars, 2/3 of original 800)
+  const BIO_TRUNCATE_LENGTH = 530;
   let truncatedBio = $derived(
-    bioText && bioText.length > 800 ? bioText.slice(0, 800) + '...' : bioText
+    bioText && bioText.length > BIO_TRUNCATE_LENGTH
+      ? bioText.slice(0, BIO_TRUNCATE_LENGTH) + '...'
+      : bioText
   );
+  let bioNeedsTruncation = $derived(bioText ? bioText.length > BIO_TRUNCATE_LENGTH : false);
 
   let hasMoreAlbums = $derived(!!onLoadMore && artist.albumsFetched < artist.totalAlbums);
   let hasTopTracks = $derived(topTracks.length > 0 || tracksLoading);
@@ -369,6 +378,64 @@
   ].filter(section => section.visible));
 
   let showJumpNav = $derived(jumpSections.length > 1);
+
+  // Search filtering
+  let searchLower = $derived(searchQuery.toLowerCase().trim());
+  let filteredAlbums = $derived(
+    searchLower
+      ? artist.albums.filter(a => a.title.toLowerCase().includes(searchLower))
+      : artist.albums
+  );
+  let filteredEpsSingles = $derived(
+    searchLower
+      ? artist.epsSingles.filter(a => a.title.toLowerCase().includes(searchLower))
+      : artist.epsSingles
+  );
+  let filteredLiveAlbums = $derived(
+    searchLower
+      ? artist.liveAlbums.filter(a => a.title.toLowerCase().includes(searchLower))
+      : artist.liveAlbums
+  );
+  let filteredCompilations = $derived(
+    searchLower
+      ? artist.compilations.filter(a => a.title.toLowerCase().includes(searchLower))
+      : artist.compilations
+  );
+  let filteredTributes = $derived(
+    searchLower
+      ? artist.tributes.filter(a => a.title.toLowerCase().includes(searchLower))
+      : artist.tributes
+  );
+  let filteredOthers = $derived(
+    searchLower
+      ? artist.others.filter(a => a.title.toLowerCase().includes(searchLower))
+      : artist.others
+  );
+  let filteredPlaylists = $derived(
+    searchLower
+      ? artist.playlists.filter(p => p.title.toLowerCase().includes(searchLower))
+      : artist.playlists
+  );
+  let totalFilteredResults = $derived(
+    filteredAlbums.length + filteredEpsSingles.length + filteredLiveAlbums.length +
+    filteredCompilations.length + filteredTributes.length + filteredOthers.length +
+    filteredPlaylists.length
+  );
+
+  function toggleSearch() {
+    searchOpen = !searchOpen;
+    if (searchOpen) {
+      // Focus input after it opens
+      setTimeout(() => searchInputEl?.focus(), 100);
+    } else {
+      searchQuery = '';
+    }
+  }
+
+  function clearSearch() {
+    searchQuery = '';
+    searchInputEl?.focus();
+  }
 
   function scrollToSection(target: HTMLDivElement | null, id: string) {
     activeJumpSection = id;
@@ -476,7 +543,7 @@
           <div class="bio-text">
             {@html bioExpanded ? bioText : truncatedBio}
           </div>
-          {#if bioText.length > 300}
+          {#if bioNeedsTruncation}
             <button class="bio-toggle" onclick={() => bioExpanded = !bioExpanded}>
               {#if bioExpanded}
                 <ChevronUp size={16} />
@@ -530,17 +597,50 @@
 
   {#if showJumpNav}
     <div class="jump-nav">
-      <div class="jump-label">Jump to</div>
-      <div class="jump-links">
-        {#each jumpSections as section}
-          <button
-            class="jump-link"
-            class:active={activeJumpSection === section.id}
-            onclick={() => scrollToSection(section.el, section.id)}
-          >
-            {section.label}
-          </button>
-        {/each}
+      <div class="jump-nav-left">
+        <div class="jump-label">Jump to</div>
+        <div class="jump-links">
+          {#each jumpSections as section}
+            <button
+              class="jump-link"
+              class:active={activeJumpSection === section.id}
+              onclick={() => scrollToSection(section.el, section.id)}
+            >
+              {section.label}
+            </button>
+          {/each}
+        </div>
+      </div>
+      <div class="page-search" class:open={searchOpen}>
+        {#if searchOpen}
+          <div class="search-input-wrapper">
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search in this page..."
+              bind:value={searchQuery}
+              bind:this={searchInputEl}
+              onkeydown={(e) => e.key === 'Escape' && toggleSearch()}
+            />
+            {#if searchQuery}
+              <button class="search-clear" onclick={clearSearch}>
+                <X size={14} />
+              </button>
+            {/if}
+            {#if searchQuery && totalFilteredResults === 0}
+              <span class="search-no-results">No results</span>
+            {:else if searchQuery}
+              <span class="search-results-count">{totalFilteredResults} found</span>
+            {/if}
+          </div>
+        {/if}
+        <button class="search-toggle" onclick={toggleSearch} title="Search in this page">
+          {#if searchOpen}
+            <X size={18} />
+          {:else}
+            <Search size={18} />
+          {/if}
+        </button>
       </div>
     </div>
   {/if}
@@ -631,7 +731,7 @@
       <div class="no-albums">No albums found</div>
     {:else}
         <div class="albums-grid">
-          {#each artist.albums as album}
+          {#each filteredAlbums as album}
             <AlbumCard
               albumId={album.id}
               artwork={album.artwork}
@@ -673,7 +773,7 @@
     <div class="discography section-anchor" bind:this={epsSinglesSection}>
       <h2 class="section-title">EPs & Singles</h2>
       <div class="albums-grid">
-        {#each artist.epsSingles as album}
+        {#each filteredEpsSingles as album}
           <AlbumCard
             albumId={album.id}
             artwork={album.artwork}
@@ -703,7 +803,7 @@
     <div class="discography section-anchor" bind:this={liveAlbumsSection}>
       <h2 class="section-title">Live Albums</h2>
       <div class="albums-grid">
-        {#each artist.liveAlbums as album}
+        {#each filteredLiveAlbums as album}
           <AlbumCard
             albumId={album.id}
             artwork={album.artwork}
@@ -733,7 +833,7 @@
     <div class="discography section-anchor" bind:this={compilationsSection}>
       <h2 class="section-title">Compilations</h2>
       <div class="albums-grid">
-        {#each artist.compilations as album}
+        {#each filteredCompilations as album}
           <AlbumCard
             albumId={album.id}
             artwork={album.artwork}
@@ -763,7 +863,7 @@
     <div class="discography section-anchor" bind:this={tributesSection}>
       <h2 class="section-title">Tributes & Covers</h2>
       <div class="albums-grid">
-        {#each artist.tributes as album}
+        {#each filteredTributes as album}
           <AlbumCard
             albumId={album.id}
             artwork={album.artwork}
@@ -793,7 +893,7 @@
     <div class="discography section-anchor" bind:this={othersSection}>
       <h2 class="section-title">Others</h2>
       <div class="albums-grid">
-        {#each artist.others as album}
+        {#each filteredOthers as album}
           <AlbumCard
             albumId={album.id}
             artwork={album.artwork}
@@ -823,7 +923,7 @@
     <div class="playlists-section section-anchor" bind:this={playlistsSection}>
       <h2 class="section-title">Playlists</h2>
       <div class="playlists-grid">
-        {#each artist.playlists as playlist}
+        {#each filteredPlaylists as playlist}
           <button
             class="playlist-card"
             onclick={() => onPlaylistClick?.(playlist.id)}
@@ -1028,13 +1128,20 @@
     top: 0;
     z-index: 4;
     display: flex;
-    flex-wrap: wrap;
+    justify-content: space-between;
     align-items: center;
     gap: 10px;
     padding: 12px 24px;
     background-color: var(--bg-primary);
     border-bottom: 1px solid var(--bg-tertiary);
     margin: 0 -24px 16px;
+  }
+
+  .jump-nav-left {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
   }
 
   .jump-label {
@@ -1068,6 +1175,105 @@
   .jump-link.active {
     color: var(--text-primary);
     border-bottom-color: var(--accent-primary);
+  }
+
+  /* Page Search */
+  .page-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .search-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .search-toggle:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .page-search.open .search-toggle {
+    background: var(--accent-primary);
+    color: white;
+  }
+
+  .search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: slideInFromRight 200ms ease-out;
+  }
+
+  @keyframes slideInFromRight {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .search-input {
+    width: 200px;
+    padding: 6px 12px;
+    border: 1px solid var(--bg-tertiary);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 150ms ease;
+  }
+
+  .search-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .search-input:focus {
+    border-color: var(--accent-primary);
+  }
+
+  .search-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    border-radius: 50%;
+    cursor: pointer;
+    margin-left: -32px;
+  }
+
+  .search-clear:hover {
+    color: var(--text-primary);
+  }
+
+  .search-results-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .search-no-results {
+    font-size: 12px;
+    color: var(--danger);
+    white-space: nowrap;
   }
 
   .similar-artists {

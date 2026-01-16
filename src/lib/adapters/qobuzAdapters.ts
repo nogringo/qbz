@@ -165,7 +165,8 @@ function isLiveAlbum(album: QobuzAlbum): boolean {
 
   // Live album patterns in other languages
   // Spanish: "en vivo", "en directo" | Portuguese: "ao vivo" | Italian: "dal vivo" | French: "en direct"
-  const liveMultilang = /\b(en vivo|en directo|ao vivo|dal vivo|en direct)\b/i;
+  // German: "Konzert", "Live in" | Dutch: "concert" | Japanese: ライブ | Korean: 라이브, 콘서트
+  const liveMultilang = /\b(en vivo|en directo|ao vivo|dal vivo|en direct|konzert|liveopname)\b|ライブ|라이브|콘서트/i;
 
   // Tour recordings (but not "tour edition" which is a studio album variant)
   const tourPatterns = /\b(tour|on tour)\b(?!.*\bedition\b)/;
