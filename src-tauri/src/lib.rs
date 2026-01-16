@@ -17,6 +17,7 @@ pub mod lastfm;
 pub mod library;
 pub mod lyrics;
 pub mod media_controls;
+pub mod offline;
 pub mod player;
 pub mod playlist_import;
 pub mod queue;
@@ -142,6 +143,9 @@ pub fn run() {
         .expect("Failed to initialize download settings");
     // Initialize API keys state (for user-provided credentials)
     let api_keys_state = api_keys::create_api_keys_state();
+    // Initialize offline mode state
+    let offline_state = offline::OfflineState::new()
+        .expect("Failed to initialize offline state");
 
     // Read saved audio device setting for player initialization
     let saved_device = audio_settings_state
@@ -253,6 +257,7 @@ pub fn run() {
         .manage(audio_settings_state)
         .manage(download_settings_state)
         .manage(api_keys_state)
+        .manage(offline_state)
         .invoke_handler(tauri::generate_handler![
             // Auth commands
             commands::init_client,
@@ -496,6 +501,11 @@ pub fn run() {
             api_keys::clear_discogs_credentials,
             api_keys::has_discogs_user_credentials,
             api_keys::get_embedded_credentials_status,
+            // Offline mode commands
+            offline::commands::get_offline_status,
+            offline::commands::get_offline_settings,
+            offline::commands::set_manual_offline,
+            offline::commands::set_show_partial_playlists,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
