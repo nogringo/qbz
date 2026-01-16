@@ -924,8 +924,8 @@
                 : '-'}
             isPlaying={isActiveTrack}
             isLocal={track.isLocal}
-            hideFavorite={track.isLocal || !available}
-            hideDownload={track.isLocal || !available}
+            hideFavorite={track.isLocal}
+            hideDownload={track.isLocal}
             downloadStatus={downloadInfo.status}
             downloadProgress={downloadInfo.progress}
             onPlay={available ? () => handleTrackClick(track) : undefined}
