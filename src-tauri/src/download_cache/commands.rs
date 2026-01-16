@@ -627,9 +627,84 @@ pub async fn start_legacy_migration(
             qobuz_client,
             library_db,
         ).await;
-        
+
         let _ = app_complete.emit("migration:complete", status);
     });
-    
+
     Ok(())
+}
+
+/// Sync downloaded tracks to library database
+/// This ensures all ready downloads appear in the library with source='qobuz_download'
+#[tauri::command]
+pub async fn sync_downloads_to_library(
+    cache_state: State<'_, DownloadCacheState>,
+    library_state: State<'_, crate::library::commands::LibraryState>,
+) -> Result<SyncResult, String> {
+    log::info!("Command: sync_downloads_to_library");
+
+    let cache_db = cache_state.db.lock().await;
+    let library_db = library_state.db.lock().await;
+
+    // Get all ready tracks from download cache
+    let ready_tracks = cache_db.get_ready_tracks_for_sync()?;
+
+    let mut synced = 0;
+    let mut already_present = 0;
+    let mut errors = 0;
+
+    for track in ready_tracks {
+        // Check if track already exists in library
+        match library_db.track_exists_by_qobuz_id(track.track_id) {
+            Ok(true) => {
+                already_present += 1;
+            }
+            Ok(false) => {
+                // Insert into library with basic metadata
+                match library_db.insert_qobuz_download_direct(
+                    track.track_id,
+                    &track.title,
+                    &track.artist,
+                    track.album.as_deref(),
+                    track.duration_secs,
+                    &track.file_path,
+                    track.bit_depth,
+                    track.sample_rate,
+                ) {
+                    Ok(_) => {
+                        log::info!("Synced track {} to library: {}", track.track_id, track.title);
+                        synced += 1;
+                    }
+                    Err(e) => {
+                        log::error!("Failed to sync track {}: {}", track.track_id, e);
+                        errors += 1;
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to check if track {} exists: {}", track.track_id, e);
+                errors += 1;
+            }
+        }
+    }
+
+    log::info!(
+        "Sync complete: {} synced, {} already present, {} errors",
+        synced, already_present, errors
+    );
+
+    Ok(SyncResult {
+        synced,
+        already_present,
+        errors,
+    })
+}
+
+/// Result of syncing downloads to library
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncResult {
+    pub synced: u32,
+    pub already_present: u32,
+    pub errors: u32,
 }

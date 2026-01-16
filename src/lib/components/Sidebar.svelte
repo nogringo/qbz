@@ -287,6 +287,19 @@
     loadLocalTrackCounts();
   }
 
+  // Update counts for a specific playlist (single source of truth from detail view)
+  export function updatePlaylistCounts(playlistId: number, qobuzCount: number, localCount: number) {
+    // Update Qobuz count in userPlaylists
+    userPlaylists = userPlaylists.map(p =>
+      p.id === playlistId ? { ...p, tracks_count: qobuzCount } : p
+    );
+    // Update local count
+    localTrackCounts.set(playlistId, localCount);
+    localTrackCounts = new Map(localTrackCounts); // Trigger reactivity
+    // Invalidate tooltip cache for this playlist
+    invalidatePlaylistTooltip(playlistId);
+  }
+
   // Menu handling functions
   function closeMenu() {
     menuOpen = false;

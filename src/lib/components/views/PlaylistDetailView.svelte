@@ -132,6 +132,7 @@
     onLocalTrackPlayNext?: (track: LocalLibraryTrack) => void;
     onLocalTrackPlayLater?: (track: LocalLibraryTrack) => void;
     onSetLocalQueue?: (trackIds: number[]) => void;
+    onPlaylistCountUpdate?: (playlistId: number, qobuzCount: number, localCount: number) => void;
     onPlaylistUpdated?: () => void;
     onPlaylistDeleted?: (playlistId: number) => void;
     activeTrackId?: number | null;
@@ -158,6 +159,7 @@
     onLocalTrackPlayNext,
     onLocalTrackPlayLater,
     onSetLocalQueue,
+    onPlaylistCountUpdate,
     onPlaylistUpdated,
     onPlaylistDeleted,
     activeTrackId = null,
@@ -250,6 +252,15 @@
   $effect(() => {
     if (offlineStatus.isOffline && tracks.length > 0) {
       checkTracksLocalStatus();
+    }
+  });
+
+  // Notify parent of actual track counts after loading (single source of truth)
+  $effect(() => {
+    if (playlist && !loading) {
+      const qobuzCount = playlist.tracks_count ?? 0;
+      const localCount = localTracks.length;
+      onPlaylistCountUpdate?.(playlistId, qobuzCount, localCount);
     }
   });
 

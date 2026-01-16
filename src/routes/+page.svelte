@@ -2019,6 +2019,9 @@
           onLocalTrackPlayNext={queueLocalTrackNext}
           onLocalTrackPlayLater={queueLocalTrackLater}
           onSetLocalQueue={handleSetLocalQueue}
+          onPlaylistCountUpdate={(playlistId, qobuzCount, localCount) =>
+            sidebarRef?.updatePlaylistCounts(playlistId, qobuzCount, localCount)
+          }
           onPlaylistUpdated={() => {
             sidebarRef?.refreshPlaylists();
             sidebarRef?.refreshLocalTrackCounts();

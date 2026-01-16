@@ -76,6 +76,19 @@ pub struct CachedTrackInfo {
     pub last_accessed_at: String,
 }
 
+/// Minimal track info for syncing to library
+#[derive(Debug, Clone)]
+pub struct ReadyTrackForSync {
+    pub track_id: u64,
+    pub title: String,
+    pub artist: String,
+    pub album: Option<String>,
+    pub duration_secs: u64,
+    pub file_path: String,
+    pub bit_depth: Option<u32>,
+    pub sample_rate: Option<f64>,
+}
+
 /// Statistics about the download cache
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
