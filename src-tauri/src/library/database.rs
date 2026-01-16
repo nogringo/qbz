@@ -240,6 +240,24 @@ impl LibraryDatabase {
             )
             .map_err(|e| LibraryError::Database(format!("Migration failed: {}", e)))?;
 
+        // Migration: Add has_local_content column to playlist_settings
+        let has_local_content: bool = self.conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('playlist_settings') WHERE name = 'has_local_content'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .map(|count| count > 0)
+            .unwrap_or(false);
+
+        if !has_local_content {
+            log::info!("Running migration: adding has_local_content column to playlist_settings");
+            self.conn.execute_batch(
+                "ALTER TABLE playlist_settings ADD COLUMN has_local_content TEXT DEFAULT 'unknown';
+                 CREATE INDEX IF NOT EXISTS idx_playlist_local_content ON playlist_settings(has_local_content);"
+            ).map_err(|e| LibraryError::Database(format!("Migration failed: {}", e)))?;
+        }
+
         let has_file_nocue_index: bool = self
             .conn
             .query_row(
@@ -839,8 +857,45 @@ pub struct PlaylistSettings {
     pub notes: Option<String>,
     pub hidden: bool,
     pub position: i32,
+    pub has_local_content: LocalContentStatus,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+/// Status of local content availability for a playlist
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LocalContentStatus {
+    Unknown,
+    No,
+    SomeLocal,
+    AllLocal,
+}
+
+impl Default for LocalContentStatus {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+impl LocalContentStatus {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "no" => Self::No,
+            "some_local" => Self::SomeLocal,
+            "all_local" => Self::AllLocal,
+            _ => Self::Unknown,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::No => "no",
+            Self::SomeLocal => "some_local",
+            Self::AllLocal => "all_local",
+        }
+    }
 }
 
 /// Playlist statistics
@@ -868,6 +923,7 @@ impl Default for PlaylistSettings {
             notes: None,
             hidden: false,
             position: 0,
+            has_local_content: LocalContentStatus::Unknown,
             created_at: now,
             updated_at: now,
         }
@@ -897,7 +953,7 @@ impl LibraryDatabase {
     pub fn get_playlist_settings(&self, qobuz_playlist_id: u64) -> Result<Option<PlaylistSettings>, LibraryError> {
         let result = self.conn.query_row(
             "SELECT qobuz_playlist_id, custom_artwork_path, sort_by, sort_order,
-                    last_search_query, notes, hidden, position, created_at, updated_at
+                    last_search_query, notes, hidden, position, has_local_content, created_at, updated_at
              FROM playlist_settings WHERE qobuz_playlist_id = ?1",
             params![qobuz_playlist_id as i64],
             |row| {
@@ -910,8 +966,9 @@ impl LibraryDatabase {
                     notes: row.get(5)?,
                     hidden: row.get::<_, i32>(6)? != 0,
                     position: row.get(7)?,
-                    created_at: row.get(8)?,
-                    updated_at: row.get(9)?,
+                    has_local_content: LocalContentStatus::from_str(&row.get::<_, Option<String>>(8)?.unwrap_or_default()),
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
                 })
             },
         ).optional()
@@ -930,8 +987,8 @@ impl LibraryDatabase {
         self.conn.execute(
             "INSERT INTO playlist_settings
                 (qobuz_playlist_id, custom_artwork_path, sort_by, sort_order,
-                 last_search_query, notes, hidden, position, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                 last_search_query, notes, hidden, position, has_local_content, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(qobuz_playlist_id) DO UPDATE SET
                 custom_artwork_path = excluded.custom_artwork_path,
                 sort_by = excluded.sort_by,
@@ -940,6 +997,7 @@ impl LibraryDatabase {
                 notes = excluded.notes,
                 hidden = excluded.hidden,
                 position = excluded.position,
+                has_local_content = excluded.has_local_content,
                 updated_at = excluded.updated_at",
             params![
                 settings.qobuz_playlist_id as i64,
@@ -950,6 +1008,7 @@ impl LibraryDatabase {
                 &settings.notes,
                 settings.hidden as i32,
                 settings.position,
+                settings.has_local_content.as_str(),
                 settings.created_at,
                 now,
             ],
@@ -1048,7 +1107,7 @@ impl LibraryDatabase {
     pub fn get_all_playlist_settings(&self) -> Result<Vec<PlaylistSettings>, LibraryError> {
         let mut stmt = self.conn.prepare(
             "SELECT qobuz_playlist_id, custom_artwork_path, sort_by, sort_order,
-                    last_search_query, notes, hidden, position, created_at, updated_at
+                    last_search_query, notes, hidden, position, has_local_content, created_at, updated_at
              FROM playlist_settings ORDER BY position ASC, updated_at DESC"
         ).map_err(|e| LibraryError::Database(format!("Failed to prepare statement: {}", e)))?;
 
@@ -1062,8 +1121,9 @@ impl LibraryDatabase {
                 notes: row.get(5)?,
                 hidden: row.get::<_, i32>(6)? != 0,
                 position: row.get(7)?,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
+                has_local_content: LocalContentStatus::from_str(&row.get::<_, Option<String>>(8)?.unwrap_or_default()),
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
             })
         }).map_err(|e| LibraryError::Database(format!("Failed to query playlist settings: {}", e)))?;
 
@@ -1582,12 +1642,145 @@ impl LibraryDatabase {
             .as_secs() as i64;
 
         self.conn.execute(
-            "INSERT OR REPLACE INTO artist_images 
-             (artist_name, image_url, source, custom_image_path, fetched_at, updated_at) 
+            "INSERT OR REPLACE INTO artist_images
+             (artist_name, image_url, source, custom_image_path, fetched_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![artist_name, image_url, source, custom_image_path, now, now],
         )
         .map_err(|e| LibraryError::Database(format!("Failed to cache artist image: {}", e)))?;
         Ok(())
+    }
+
+    // === Offline Mode: Local Content Detection ===
+
+    /// Check if a track exists locally by Qobuz track ID
+    pub fn has_local_track_by_qobuz_id(&self, qobuz_track_id: u64) -> Result<bool, LibraryError> {
+        let count: i64 = self.conn
+            .query_row(
+                "SELECT COUNT(*) FROM local_tracks WHERE qobuz_track_id = ?1",
+                params![qobuz_track_id as i64],
+                |row| row.get(0),
+            )
+            .map_err(|e| LibraryError::Database(e.to_string()))?;
+        Ok(count > 0)
+    }
+
+    /// Check if a track exists locally by title, artist, and album (fuzzy match)
+    pub fn has_local_track_by_metadata(&self, title: &str, artist: &str, album: &str) -> Result<bool, LibraryError> {
+        // Normalize strings for comparison
+        let title_lower = title.to_lowercase();
+        let artist_lower = artist.to_lowercase();
+        let album_lower = album.to_lowercase();
+
+        let count: i64 = self.conn
+            .query_row(
+                "SELECT COUNT(*) FROM local_tracks
+                 WHERE LOWER(title) = ?1 AND LOWER(artist) = ?2 AND LOWER(album) = ?3",
+                params![title_lower, artist_lower, album_lower],
+                |row| row.get(0),
+            )
+            .map_err(|e| LibraryError::Database(e.to_string()))?;
+        Ok(count > 0)
+    }
+
+    /// Get local track ID by Qobuz track ID (for downloaded tracks)
+    pub fn get_local_track_id_by_qobuz_id(&self, qobuz_track_id: u64) -> Result<Option<i64>, LibraryError> {
+        self.conn
+            .query_row(
+                "SELECT id FROM local_tracks WHERE qobuz_track_id = ?1",
+                params![qobuz_track_id as i64],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| LibraryError::Database(e.to_string()))
+    }
+
+    /// Get local track ID by metadata (title, artist, album)
+    pub fn get_local_track_id_by_metadata(&self, title: &str, artist: &str, album: &str) -> Result<Option<i64>, LibraryError> {
+        let title_lower = title.to_lowercase();
+        let artist_lower = artist.to_lowercase();
+        let album_lower = album.to_lowercase();
+
+        self.conn
+            .query_row(
+                "SELECT id FROM local_tracks
+                 WHERE LOWER(title) = ?1 AND LOWER(artist) = ?2 AND LOWER(album) = ?3
+                 LIMIT 1",
+                params![title_lower, artist_lower, album_lower],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| LibraryError::Database(e.to_string()))
+    }
+
+    /// Update the has_local_content status for a playlist
+    pub fn update_playlist_local_content_status(
+        &self,
+        qobuz_playlist_id: u64,
+        status: LocalContentStatus,
+    ) -> Result<(), LibraryError> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+
+        // First check if settings exist, if not create default
+        let existing = self.get_playlist_settings(qobuz_playlist_id)?;
+        if existing.is_none() {
+            let mut settings = PlaylistSettings::default();
+            settings.qobuz_playlist_id = qobuz_playlist_id;
+            settings.has_local_content = status;
+            return self.save_playlist_settings(&settings);
+        }
+
+        self.conn.execute(
+            "UPDATE playlist_settings SET has_local_content = ?1, updated_at = ?2
+             WHERE qobuz_playlist_id = ?3",
+            params![status.as_str(), now, qobuz_playlist_id as i64],
+        ).map_err(|e| LibraryError::Database(format!("Failed to update playlist local content status: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Get playlists filtered by local content status
+    pub fn get_playlists_by_local_content(
+        &self,
+        include_partial: bool,
+    ) -> Result<Vec<PlaylistSettings>, LibraryError> {
+        let query = if include_partial {
+            "SELECT qobuz_playlist_id, custom_artwork_path, sort_by, sort_order,
+                    last_search_query, notes, hidden, position, has_local_content, created_at, updated_at
+             FROM playlist_settings
+             WHERE has_local_content IN ('some_local', 'all_local')
+             ORDER BY position ASC, updated_at DESC"
+        } else {
+            "SELECT qobuz_playlist_id, custom_artwork_path, sort_by, sort_order,
+                    last_search_query, notes, hidden, position, has_local_content, created_at, updated_at
+             FROM playlist_settings
+             WHERE has_local_content = 'all_local'
+             ORDER BY position ASC, updated_at DESC"
+        };
+
+        let mut stmt = self.conn.prepare(query)
+            .map_err(|e| LibraryError::Database(format!("Failed to prepare statement: {}", e)))?;
+
+        let settings = stmt.query_map([], |row| {
+            Ok(PlaylistSettings {
+                qobuz_playlist_id: row.get::<_, i64>(0)? as u64,
+                custom_artwork_path: row.get(1)?,
+                sort_by: row.get(2)?,
+                sort_order: row.get(3)?,
+                last_search_query: row.get(4)?,
+                notes: row.get(5)?,
+                hidden: row.get::<_, i32>(6)? != 0,
+                position: row.get(7)?,
+                has_local_content: LocalContentStatus::from_str(&row.get::<_, Option<String>>(8)?.unwrap_or_default()),
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+            })
+        }).map_err(|e| LibraryError::Database(format!("Failed to query playlists by local content: {}", e)))?;
+
+        settings.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| LibraryError::Database(format!("Failed to collect playlists: {}", e)))
     }
 }

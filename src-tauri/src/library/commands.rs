@@ -1083,3 +1083,158 @@ pub async fn library_set_custom_artist_image(
     db.cache_artist_image(&artist_name, None, "custom", Some(&dest_path.to_string_lossy()))
         .map_err(|e| e.to_string())
 }
+
+// === Offline Mode: Playlist Local Content Analysis ===
+
+/// Result of analyzing a playlist's local content
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistAnalysisResult {
+    pub playlist_id: u64,
+    pub total_tracks: u32,
+    pub local_tracks: u32,
+    pub status: crate::library::database::LocalContentStatus,
+}
+
+/// Track info for local content checking
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackInfoForAnalysis {
+    pub id: u64,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+}
+
+/// Analyze a playlist's local content availability
+#[tauri::command]
+pub async fn playlist_analyze_local_content(
+    playlist_id: u64,
+    tracks: Vec<TrackInfoForAnalysis>,
+    state: State<'_, LibraryState>,
+) -> Result<PlaylistAnalysisResult, String> {
+    log::info!("Command: playlist_analyze_local_content for playlist {}", playlist_id);
+
+    let db = state.db.lock().await;
+    let total_tracks = tracks.len() as u32;
+    let mut local_count = 0u32;
+
+    for track in &tracks {
+        // First try to match by Qobuz track ID (for downloaded tracks)
+        let has_by_id = db.has_local_track_by_qobuz_id(track.id)
+            .map_err(|e| e.to_string())?;
+
+        if has_by_id {
+            local_count += 1;
+            continue;
+        }
+
+        // Fallback: match by title + artist + album
+        let has_by_metadata = db.has_local_track_by_metadata(&track.title, &track.artist, &track.album)
+            .map_err(|e| e.to_string())?;
+
+        if has_by_metadata {
+            local_count += 1;
+        }
+    }
+
+    // Determine status
+    let status = if total_tracks == 0 {
+        crate::library::database::LocalContentStatus::Unknown
+    } else if local_count == 0 {
+        crate::library::database::LocalContentStatus::No
+    } else if local_count == total_tracks {
+        crate::library::database::LocalContentStatus::AllLocal
+    } else {
+        crate::library::database::LocalContentStatus::SomeLocal
+    };
+
+    // Update the playlist settings with the new status
+    db.update_playlist_local_content_status(playlist_id, status)
+        .map_err(|e| e.to_string())?;
+
+    Ok(PlaylistAnalysisResult {
+        playlist_id,
+        total_tracks,
+        local_tracks: local_count,
+        status,
+    })
+}
+
+/// Get the local content status for a playlist
+#[tauri::command]
+pub async fn playlist_get_local_content_status(
+    playlist_id: u64,
+    state: State<'_, LibraryState>,
+) -> Result<crate::library::database::LocalContentStatus, String> {
+    log::info!("Command: playlist_get_local_content_status for playlist {}", playlist_id);
+
+    let db = state.db.lock().await;
+    let settings = db.get_playlist_settings(playlist_id)
+        .map_err(|e| e.to_string())?;
+
+    Ok(settings
+        .map(|s| s.has_local_content)
+        .unwrap_or(crate::library::database::LocalContentStatus::Unknown))
+}
+
+/// Check if a specific track is available locally
+#[tauri::command]
+pub async fn playlist_track_is_local(
+    qobuz_track_id: u64,
+    title: String,
+    artist: String,
+    album: String,
+    state: State<'_, LibraryState>,
+) -> Result<bool, String> {
+    let db = state.db.lock().await;
+
+    // First try Qobuz track ID
+    let has_by_id = db.has_local_track_by_qobuz_id(qobuz_track_id)
+        .map_err(|e| e.to_string())?;
+
+    if has_by_id {
+        return Ok(true);
+    }
+
+    // Fallback to metadata
+    db.has_local_track_by_metadata(&title, &artist, &album)
+        .map_err(|e| e.to_string())
+}
+
+/// Get local track ID for a Qobuz track (for playback in offline mode)
+#[tauri::command]
+pub async fn playlist_get_local_track_id(
+    qobuz_track_id: u64,
+    title: String,
+    artist: String,
+    album: String,
+    state: State<'_, LibraryState>,
+) -> Result<Option<i64>, String> {
+    let db = state.db.lock().await;
+
+    // First try Qobuz track ID
+    if let Some(id) = db.get_local_track_id_by_qobuz_id(qobuz_track_id)
+        .map_err(|e| e.to_string())? {
+        return Ok(Some(id));
+    }
+
+    // Fallback to metadata
+    db.get_local_track_id_by_metadata(&title, &artist, &album)
+        .map_err(|e| e.to_string())
+}
+
+/// Get playlists that have local content (for offline mode filtering)
+#[tauri::command]
+pub async fn playlist_get_offline_available(
+    include_partial: bool,
+    state: State<'_, LibraryState>,
+) -> Result<Vec<u64>, String> {
+    log::info!("Command: playlist_get_offline_available (include_partial: {})", include_partial);
+
+    let db = state.db.lock().await;
+    let playlists = db.get_playlists_by_local_content(include_partial)
+        .map_err(|e| e.to_string())?;
+
+    Ok(playlists.iter().map(|p| p.qobuz_playlist_id).collect())
+}
