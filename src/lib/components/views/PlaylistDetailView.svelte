@@ -1479,7 +1479,6 @@
 
   /* Unavailable track styles (offline mode) */
   .track-row-wrapper.unavailable {
-    padding-left: 24px;
     opacity: 0.4;
     pointer-events: none;
     user-select: none;
