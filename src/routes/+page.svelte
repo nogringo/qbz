@@ -1266,6 +1266,9 @@
     setLoggedIn(info);
     showToast(`Welcome, ${info.userName}!`, 'success');
 
+    // Load favorites now that login is confirmed
+    loadFavorites();
+
     // Refresh offline status now that we're logged in
     await refreshOfflineStatus();
 
@@ -1569,8 +1572,8 @@
     initDownloadStates();
     startDownloadEventListeners();
 
-    // Load favorites for global state
-    loadFavorites();
+    // Note: loadFavorites() is called in handleLoginSuccess after login is confirmed
+    // This prevents API calls before authentication is complete
 
     // Subscribe to download state changes to trigger reactivity
     const unsubscribeDownloads = subscribeDownloads(() => {

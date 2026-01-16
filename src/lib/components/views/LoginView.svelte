@@ -24,17 +24,41 @@
   let initStatus = $state('Connecting to Qobuz...');
   let error = $state<string | null>(null);
   let initError = $state<string | null>(null);
+  let isTimedOut = $state(false);
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const LOGIN_TIMEOUT_MS = 60000; // 60 seconds
 
   // Initialize the Qobuz client on mount
   $effect(() => {
     initializeClient();
+    return () => {
+      // Cleanup timeout on unmount
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
   });
 
   async function initializeClient() {
     try {
       isInitializing = true;
       initError = null;
+      isTimedOut = false;
       initStatus = 'Connecting to Qobuz...';
+
+      // Start timeout timer
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        if (isInitializing) {
+          console.warn('Login initialization timed out after 60 seconds');
+          isTimedOut = true;
+          isInitializing = false;
+        }
+      }, LOGIN_TIMEOUT_MS);
 
       const result = await invoke<boolean>('init_client');
       console.log('Client initialized:', result);
@@ -42,6 +66,7 @@
       // Check if already logged in (in-memory session)
       const loggedIn = await invoke<boolean>('is_logged_in');
       if (loggedIn) {
+        clearTimeoutTimer();
         const userInfo = await invoke<{ user_name: string; subscription: string } | null>('get_user_info');
         if (userInfo) {
           onLoginSuccess({ userName: userInfo.user_name, subscription: userInfo.subscription });
@@ -65,6 +90,7 @@
         }>('auto_login');
 
         if (response.success) {
+          clearTimeoutTimer();
           console.log('Auto-login successful');
           onLoginSuccess({
             userName: response.user_name || 'Qobuz User',
@@ -76,12 +102,30 @@
           // Don't show error, just fall through to manual login
         }
       }
+
+      // If we reach here, no auto-login - clear timeout and show login form
+      clearTimeoutTimer();
     } catch (err) {
       console.error('Failed to initialize client:', err);
+      clearTimeoutTimer();
       initError = String(err);
     } finally {
-      isInitializing = false;
+      if (!isTimedOut) {
+        isInitializing = false;
+      }
     }
+  }
+
+  function clearTimeoutTimer() {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  }
+
+  function handleRetryLogin() {
+    isTimedOut = false;
+    initializeClient();
   }
 
   async function handleLogin(e: Event) {
@@ -154,7 +198,18 @@
       <p class="subtitle">Native Qobuz Client for Linux</p>
     </div>
 
-    {#if isInitializing}
+    {#if isTimedOut}
+      <div class="timeout-box">
+        <p class="timeout-title">Connection is taking too long</p>
+        <p class="timeout-detail">
+          Unable to connect to Qobuz after 60 seconds. This could be a network issue or Qobuz may be temporarily unavailable.
+        </p>
+        <div class="timeout-actions">
+          <button class="retry-btn" onclick={handleRetryLogin}>Try Again</button>
+          <button class="offline-btn" onclick={handleStartOffline}>Start Offline</button>
+        </div>
+      </div>
+    {:else if isInitializing}
       <div class="initializing">
         <div class="spinner"></div>
         <p>{initStatus}</p>
@@ -311,9 +366,37 @@
     word-break: break-word;
   }
 
+  .timeout-box {
+    text-align: center;
+    padding: 24px;
+    background-color: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+
+  .timeout-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fbbf24;
+    margin-bottom: 12px;
+  }
+
+  .timeout-detail {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 20px;
+  }
+
+  .timeout-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+
   .retry-btn {
-    margin-top: 16px;
-    padding: 8px 24px;
+    padding: 10px 24px;
     background-color: var(--accent-primary);
     color: white;
     border: none;
@@ -326,6 +409,23 @@
 
   .retry-btn:hover {
     background-color: var(--accent-hover);
+  }
+
+  .offline-btn {
+    padding: 10px 24px;
+    background-color: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--text-muted);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 150ms ease;
+  }
+
+  .offline-btn:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
   }
 
   form {
