@@ -10,6 +10,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { goBack, goForward } from '$lib/stores/navigationStore';
 import { loadToastsPreference } from '$lib/stores/toastStore';
 import { loadSystemNotificationsPreference } from '$lib/services/playbackService';
+import { initOfflineStore, cleanupOfflineStore } from '$lib/stores/offlineStore';
 
 // ============ Theme Management ============
 
@@ -118,9 +119,13 @@ export function bootstrapApp(): BootstrapResult {
   // Restore Last.fm session (async, fire-and-forget)
   restoreLastfmSession();
 
+  // Initialize offline store (async, fire-and-forget)
+  initOfflineStore();
+
   return {
     cleanup: () => {
       cleanupMouse();
+      cleanupOfflineStore();
     }
   };
 }
