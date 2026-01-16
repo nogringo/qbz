@@ -6,6 +6,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentTrack, getCurrentTime, subscribe as subscribePlayer } from './playerStore';
+import { isOffline as checkIsOffline } from './offlineStore';
 
 // ============ Types ============
 
@@ -268,6 +269,16 @@ export async function fetchLyrics(): Promise<void> {
 
   if (!track) {
     reset();
+    return;
+  }
+
+  // Don't fetch lyrics when offline
+  if (checkIsOffline()) {
+    status = 'error';
+    error = 'Lyrics unavailable offline';
+    payload = null;
+    parsedLyrics = { lines: [], isSynced: false };
+    notifyListeners();
     return;
   }
 

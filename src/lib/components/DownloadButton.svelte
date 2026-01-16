@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { Download, Check, Loader, AlertCircle } from 'lucide-svelte';
+  import { Download, Check, Loader, AlertCircle, CloudOff } from 'lucide-svelte';
+  import { t } from '$lib/i18n';
+  import {
+    subscribe as subscribeOffline,
+    isOffline as checkIsOffline
+  } from '$lib/stores/offlineStore';
 
   type DownloadStatus = 'none' | 'queued' | 'downloading' | 'ready' | 'failed';
 
@@ -19,8 +24,23 @@
     onRemove
   }: Props = $props();
 
+  // Offline state
+  let isOffline = $state(checkIsOffline());
+
+  $effect(() => {
+    const unsubscribe = subscribeOffline(() => {
+      isOffline = checkIsOffline();
+    });
+    return unsubscribe;
+  });
+
   function handleClick(e: MouseEvent) {
     e.stopPropagation();
+
+    // Don't allow new downloads when offline
+    if (isOffline && (status === 'none' || status === 'failed')) {
+      return;
+    }
 
     if (status === 'none' || status === 'failed') {
       onDownload?.();
@@ -30,6 +50,10 @@
   }
 
   const title = $derived(() => {
+    // Show offline message when trying to download while offline
+    if (isOffline && (status === 'none' || status === 'failed')) {
+      return $t('offline.featureDisabled');
+    }
     switch (status) {
       case 'none': return 'Download for offline';
       case 'queued': return 'Queued for download';
@@ -39,6 +63,11 @@
       default: return '';
     }
   });
+
+  // Disable button when offline and not already downloaded
+  const isDisabled = $derived(
+    status === 'queued' || (isOffline && status !== 'ready')
+  );
 </script>
 
 <button
@@ -46,9 +75,10 @@
   class:downloading={status === 'downloading' || status === 'queued'}
   class:ready={status === 'ready'}
   class:failed={status === 'failed'}
+  class:offline={isOffline && status !== 'ready'}
   onclick={handleClick}
   title={title()}
-  disabled={status === 'queued'}
+  disabled={isDisabled}
 >
   {#if status === 'ready'}
     <Check {size} />
@@ -58,6 +88,8 @@
     </div>
   {:else if status === 'failed'}
     <AlertCircle {size} />
+  {:else if isOffline}
+    <CloudOff {size} />
   {:else}
     <Download {size} />
   {/if}
@@ -103,6 +135,11 @@
 
   .download-button.downloading {
     color: var(--accent-primary);
+  }
+
+  .download-button.offline {
+    color: var(--text-muted);
+    opacity: 0.5;
   }
 
   .progress-ring {

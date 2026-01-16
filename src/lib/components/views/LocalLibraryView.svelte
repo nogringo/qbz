@@ -17,6 +17,10 @@
     navigateTo,
     getNavigationState
   } from '$lib/stores/navigationStore';
+  import {
+    subscribe as subscribeOffline,
+    isOffline as checkIsOffline
+  } from '$lib/stores/offlineStore';
 
   // Backend types matching Rust models
   interface LocalTrack {
@@ -150,6 +154,7 @@
   let fetchingArtwork = $state(false);
   let updatingArtwork = $state(false);
   let hasDiscogsCredentials = $state(false);
+  let isOffline = $state(checkIsOffline());
 
   // Album detail state (for viewing album tracks)
   let selectedAlbum = $state<LocalAlbum | null>(null);
@@ -167,11 +172,17 @@
   let selectedFolders = $state<Set<string>>(new Set());
 
   let unsubscribeNav: (() => void) | null = null;
+  let unsubscribeOffline: (() => void) | null = null;
 
   onMount(() => {
     loadLibraryData();
     loadFolders();
     checkDiscogsCredentials();
+
+    // Subscribe to offline state changes
+    unsubscribeOffline = subscribeOffline(() => {
+      isOffline = checkIsOffline();
+    });
 
     // Subscribe to navigation changes for back/forward support
     unsubscribeNav = subscribeNav(() => {
@@ -204,6 +215,9 @@
   onDestroy(() => {
     if (unsubscribeNav) {
       unsubscribeNav();
+    }
+    if (unsubscribeOffline) {
+      unsubscribeOffline();
     }
   });
 
@@ -965,6 +979,12 @@
    * Fetch missing artist images from Qobuz and Discogs (fallback).
    */
   async function fetchMissingArtistImages(): Promise<void> {
+    // Don't fetch external artwork when offline
+    if (isOffline) {
+      console.log('[LocalLibrary] Skipping artist image fetch - offline mode');
+      return;
+    }
+
     // Filter out artists we already have images for and "Various Artists"
     const toFetch = artists.filter(artist => {
       const normalized = normalizeArtistName(artist.name);
@@ -1396,11 +1416,16 @@
             <button
               class="secondary-btn"
               onclick={handleFetchMissingArtwork}
-              disabled={fetchingArtwork}
+              disabled={fetchingArtwork || isOffline}
+              title={isOffline ? 'Artwork fetching unavailable offline' : ''}
             >
               <ImageDown size={14} class={fetchingArtwork ? 'spinning' : ''} />
               <span>{fetchingArtwork ? 'Fetching...' : 'Fetch Missing Artwork'}</span>
             </button>
+          {:else if isOffline}
+            <div class="discogs-hint">
+              <span>Artwork fetching unavailable offline</span>
+            </div>
           {:else}
             <div class="discogs-hint">
               <span>Configure Discogs API for automatic artwork fetching</span>

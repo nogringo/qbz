@@ -1,7 +1,12 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { X } from 'lucide-svelte';
+  import { X, CloudOff } from 'lucide-svelte';
   import { showToast } from '$lib/stores/toastStore';
+  import { t } from '$lib/i18n';
+  import {
+    subscribe as subscribeOffline,
+    isOffline as checkIsOffline
+  } from '$lib/stores/offlineStore';
 
   type ProviderKey = 'spotify' | 'apple' | 'tidal' | 'deezer';
 
@@ -42,6 +47,15 @@
   let summary = $state<ImportSummary | null>(null);
   let lockedProvider = $state<ProviderKey | null>(null);
   let logEntries = $state<{ message: string; status: 'info' | 'success' | 'error' }[]>([]);
+  let isOffline = $state(checkIsOffline());
+
+  // Subscribe to offline state changes
+  $effect(() => {
+    const unsubscribe = subscribeOffline(() => {
+      isOffline = checkIsOffline();
+    });
+    return unsubscribe;
+  });
 
   const providers: { key: ProviderKey; label: string; logo: string; color: string }[] = [
     { key: 'spotify', label: 'Spotify', logo: '/spotify-logo.svg', color: '#1DB954' },
@@ -52,7 +66,7 @@
 
   const detectedProvider = $derived(detectProvider(url));
   const activeProvider = $derived(lockedProvider ?? detectedProvider);
-  const isValid = $derived(!!detectedProvider);
+  const isValid = $derived(!!detectedProvider && !isOffline);
 
   $effect(() => {
     if (isOpen) {
@@ -179,6 +193,13 @@
       </div>
 
       <div class="modal-body">
+        {#if isOffline}
+          <div class="offline-warning">
+            <CloudOff size={16} />
+            <span>{$t('offline.featureDisabled')}</span>
+          </div>
+        {/if}
+
         {#if error}
           <div class="error-message">{error}</div>
         {/if}
@@ -320,6 +341,19 @@
   .modal-body {
     padding: 24px;
     overflow-y: auto;
+  }
+
+  .offline-warning {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    color: #eab308;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
   }
 
   .error-message {
