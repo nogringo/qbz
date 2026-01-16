@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { ArrowLeft, Filter, ArrowUpDown, LayoutGrid, List, GripVertical, EyeOff, Eye, BarChart2, Play, Pencil, Search, X, Cloud, CloudOff, Wifi } from 'lucide-svelte';
+  import { ArrowLeft, Filter, ArrowUpDown, LayoutGrid, List, GripVertical, EyeOff, Eye, BarChart2, Play, Pencil, Search, X, Cloud, CloudOff, Wifi, Heart } from 'lucide-svelte';
   import PlaylistCollage from '../PlaylistCollage.svelte';
   import PlaylistModal from '../PlaylistModal.svelte';
   import { t } from '$lib/i18n';
@@ -29,6 +29,7 @@
     hidden: boolean;
     position: number;
     hasLocalContent?: LocalContentStatus;
+    is_favorite?: boolean;
   }
 
   interface PlaylistStats {
@@ -478,6 +479,7 @@
     <div class="grid">
       {#each displayPlaylists as playlist (playlist.id)}
         {@const isHidden = playlistSettings.get(playlist.id)?.hidden}
+        {@const isFavorite = playlistSettings.get(playlist.id)?.is_favorite}
         {@const localStatus = getLocalContentStatus(playlist.id)}
         {@const isUnavailable = offlineStatus.isOffline && !isPlaylistAvailableOffline(playlist.id)}
         <div
@@ -532,6 +534,11 @@
                   <EyeOff size={12} />
                 </div>
               {/if}
+              {#if isFavorite}
+                <div class="favorite-badge" title="Favorite">
+                  <Heart size={12} fill="var(--accent-primary)" color="var(--accent-primary)" />
+                </div>
+              {/if}
               {#if localStatus === 'all_local'}
                 <div class="local-badge all" title={$t('offline.allLocal')}>
                   <Wifi size={12} />
@@ -555,6 +562,7 @@
     <div class="list">
       {#each displayPlaylists as playlist (playlist.id)}
         {@const isHidden = playlistSettings.get(playlist.id)?.hidden}
+        {@const isFavorite = playlistSettings.get(playlist.id)?.is_favorite}
         {@const stats = playlistStats.get(playlist.id)}
         {@const localStatus = getLocalContentStatus(playlist.id)}
         {@const isUnavailable = offlineStatus.isOffline && !isPlaylistAvailableOffline(playlist.id)}
@@ -615,6 +623,11 @@
           {#if isHidden}
             <span class="hidden-indicator" title="Hidden from sidebar">
               <EyeOff size={14} />
+            </span>
+          {/if}
+          {#if isFavorite}
+            <span class="favorite-indicator" title="Favorite">
+              <Heart size={14} fill="var(--accent-primary)" color="var(--accent-primary)" />
             </span>
           {/if}
           {#if !isUnavailable}
@@ -975,6 +988,18 @@
     color: var(--text-muted);
   }
 
+  .favorite-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 4px;
+    padding: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .local-badge {
     position: absolute;
     bottom: 4px;
@@ -1119,6 +1144,12 @@
   .hidden-indicator {
     color: var(--text-muted);
     flex-shrink: 0;
+  }
+
+  .favorite-indicator {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
   }
 
   .list-item .edit-btn {
