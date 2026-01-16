@@ -7,7 +7,7 @@
 //! - Offline settings persistence
 //! - Pending playlist sync queue (playlists created offline)
 
-use rusqlite::{Connection, params, OptionalExtension};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

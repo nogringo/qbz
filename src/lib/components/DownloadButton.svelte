@@ -49,7 +49,7 @@
     }
   }
 
-  const title = $derived(() => {
+  const title = $derived.by(() => {
     // Show offline message when trying to download while offline
     if (isOffline && (status === 'none' || status === 'failed')) {
       return $t('offline.featureDisabled');
@@ -77,7 +77,7 @@
   class:failed={status === 'failed'}
   class:offline={isOffline && status !== 'ready'}
   onclick={handleClick}
-  title={title()}
+  title={title}
   disabled={isDisabled}
 >
   {#if status === 'ready'}

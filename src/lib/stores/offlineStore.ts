@@ -137,10 +137,16 @@ async function fetchSettings(): Promise<void> {
  */
 export async function setManualOffline(enabled: boolean): Promise<void> {
   try {
+    const wasOffline = status.isOffline;
     const newStatus = await invoke<OfflineStatus>('set_manual_offline', { enabled });
     status = newStatus;
     settings.manualOfflineMode = enabled;
     notifyListeners();
+    // Check for offline -> online transition when disabling manual mode
+    if (wasOffline && !newStatus.isOffline && onOnlineTransitionCallback) {
+      console.log('[Offline] Transitioning to online after disabling manual mode');
+      onOnlineTransitionCallback();
+    }
   } catch (error) {
     console.error('Failed to set manual offline mode:', error);
     throw error;
