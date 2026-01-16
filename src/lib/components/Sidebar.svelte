@@ -6,6 +6,13 @@
   import NavigationItem from './NavigationItem.svelte';
   import UserCard from './UserCard.svelte';
   import { t } from '$lib/i18n';
+  import {
+    subscribe as subscribeOffline,
+    getStatus as getOfflineStatus,
+    getSettings as getOfflineSettings,
+    type OfflineStatus,
+    type OfflineSettings
+  } from '$lib/stores/offlineStore';
 
   interface Playlist {
     id: number;
@@ -15,11 +22,14 @@
     duration?: number;
   }
 
+  type LocalContentStatus = 'unknown' | 'no' | 'some_local' | 'all_local';
+
   interface PlaylistSettings {
     qobuz_playlist_id: number;
     hidden: boolean;
     position: number;
     play_count?: number;
+    hasLocalContent?: LocalContentStatus;
   }
 
   type SortOption = 'name' | 'recent' | 'tracks' | 'playcount' | 'custom';
@@ -59,6 +69,10 @@
   let playlistsLoading = $state(false);
   let playlistsCollapsed = $state(false);
   let localLibraryCollapsed = $state(false);
+
+  // Offline state
+  let offlineStatus = $state<OfflineStatus>(getOfflineStatus());
+  let offlineSettings = $state<OfflineSettings>(getOfflineSettings());
 
   // Dropdown menu state
   let menuOpen = $state(false);
@@ -176,10 +190,22 @@
 
   // Visible and sorted playlists
   const visiblePlaylists = $derived.by(() => {
-    const visible = userPlaylists.filter(p => {
+    let visible = userPlaylists.filter(p => {
       const settings = playlistSettings.get(p.id);
       return !settings?.hidden;
     });
+
+    // Filter by local content when offline
+    if (offlineStatus.isOffline) {
+      visible = visible.filter(p => {
+        const settings = playlistSettings.get(p.id);
+        const localStatus = settings?.hasLocalContent ?? 'unknown';
+        if (offlineSettings.showPartialPlaylists) {
+          return localStatus === 'all_local' || localStatus === 'some_local';
+        }
+        return localStatus === 'all_local';
+      });
+    }
 
     // Sort based on selected option
     return [...visible].sort((a, b) => {
@@ -323,6 +349,16 @@
     loadSortPreference();
     loadUserPlaylists();
     loadPlaylistSettings();
+
+    // Subscribe to offline state changes
+    const unsubscribeOffline = subscribeOffline(() => {
+      offlineStatus = getOfflineStatus();
+      offlineSettings = getOfflineSettings();
+    });
+
+    return () => {
+      unsubscribeOffline();
+    };
   });
 
   async function loadUserPlaylists() {
