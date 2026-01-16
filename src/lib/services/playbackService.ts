@@ -25,6 +25,7 @@ import {
   castPause,
   castStop
 } from '$lib/stores/castStore';
+import { isOffline as checkIsOffline } from '$lib/stores/offlineStore';
 
 // ============ Types ============
 
@@ -278,6 +279,12 @@ export async function updateLastfmNowPlaying(
   durationSecs: number,
   trackId: number
 ): Promise<void> {
+  // Skip scrobbling when offline
+  if (checkIsOffline()) {
+    console.log('Last.fm: Skipping scrobble (offline mode)');
+    return;
+  }
+
   // Check if scrobbling is enabled
   const scrobblingEnabled = localStorage.getItem('qbz-lastfm-scrobbling') !== 'false';
   const sessionKey = localStorage.getItem('qbz-lastfm-session-key');

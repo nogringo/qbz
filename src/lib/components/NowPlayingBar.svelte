@@ -21,6 +21,12 @@
   import QualityBadge from './QualityBadge.svelte';
   import AudioOutputBadges from './AudioOutputBadges.svelte';
   import { t } from '$lib/i18n';
+  import {
+    subscribe as subscribeOffline,
+    isOffline as checkIsOffline,
+    getOfflineReason,
+    type OfflineReason
+  } from '$lib/stores/offlineStore';
 
   interface Props {
     artwork?: string;
@@ -99,6 +105,32 @@
   let isDraggingProgress = $state(false);
   let isDraggingVolume = $state(false);
   let showArtworkPreview = $state(false);
+
+  // Offline state
+  let isOffline = $state(checkIsOffline());
+  let offlineReason = $state<OfflineReason | null>(getOfflineReason());
+
+  $effect(() => {
+    const unsubscribe = subscribeOffline(() => {
+      isOffline = checkIsOffline();
+      offlineReason = getOfflineReason();
+    });
+    return unsubscribe;
+  });
+
+  // Get human-readable offline reason
+  function getOfflineReasonText(reason: OfflineReason | null): string {
+    switch (reason) {
+      case 'no_network':
+        return $t('offline.noNetwork');
+      case 'not_logged_in':
+        return $t('offline.notLoggedIn');
+      case 'manual_override':
+        return $t('offline.manualMode');
+      default:
+        return $t('offline.indicator');
+    }
+  }
 
   const progress = $derived(duration > 0 ? (currentTime / duration) * 100 : 0);
   const hasTrack = $derived(trackTitle !== '');
@@ -296,6 +328,12 @@
 
     <!-- Right: Actions & Volume -->
     <div class="right-section">
+      {#if isOffline}
+        <div class="offline-indicator" title={getOfflineReasonText(offlineReason)}>
+          <img src="/offline-small.svg" alt="Offline" class="offline-icon" />
+        </div>
+      {/if}
+
       <button
         class="control-btn"
         class:cast-active={isCastConnected}
@@ -307,9 +345,11 @@
 
       <button
         class="control-btn"
-        class:active={lyricsActive}
-        onclick={onToggleLyrics}
-        title={$t('player.lyrics')}
+        class:active={lyricsActive && !isOffline}
+        class:disabled={isOffline}
+        onclick={isOffline ? undefined : onToggleLyrics}
+        disabled={isOffline}
+        title={isOffline ? $t('offline.featureDisabled') : $t('player.lyrics')}
       >
         <Mic2 size={16} />
       </button>
@@ -506,9 +546,38 @@
     animation: cast-pulse 2s ease-in-out infinite;
   }
 
+  .control-btn.disabled {
+    color: var(--text-disabled);
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .control-btn.disabled:hover {
+    color: var(--text-disabled);
+    background: transparent;
+  }
+
   @keyframes cast-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
+  }
+
+  /* Offline Indicator */
+  .offline-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    background: rgba(234, 179, 8, 0.15);
+    cursor: help;
+  }
+
+  .offline-icon {
+    width: 16px;
+    height: 16px;
+    opacity: 0.9;
   }
 
   .play-btn {
