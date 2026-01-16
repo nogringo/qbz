@@ -32,7 +32,7 @@ use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
 use api::QobuzClient;
-use cache::AudioCache;
+use cache::{AudioCache, PlaybackCache};
 use lastfm::LastFmClient;
 use media_controls::{MediaControlsManager, TrackInfo};
 use player::Player;
@@ -56,12 +56,28 @@ impl AppState {
     }
 
     pub fn with_device(device_name: Option<String>) -> Self {
+        // Create playback cache (L2 - disk, 500MB)
+        let playback_cache = match PlaybackCache::new(500 * 1024 * 1024) {
+            Ok(cache) => Some(Arc::new(cache)),
+            Err(e) => {
+                log::warn!("Failed to create playback cache: {}. Disk spillover disabled.", e);
+                None
+            }
+        };
+
+        // Create audio cache (L1 - memory, 300MB) with optional disk spillover
+        let audio_cache = if let Some(pc) = playback_cache {
+            Arc::new(AudioCache::with_playback_cache(300 * 1024 * 1024, pc))
+        } else {
+            Arc::new(AudioCache::default())
+        };
+
         Self {
             client: Arc::new(Mutex::new(QobuzClient::default())),
             player: Player::new(device_name),
             queue: QueueManager::new(),
             media_controls: MediaControlsManager::new(),
-            audio_cache: Arc::new(AudioCache::default()),
+            audio_cache,
             lastfm: Arc::new(Mutex::new(LastFmClient::default())),
             songlink: SongLinkClient::new(),
         }

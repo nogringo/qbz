@@ -1,12 +1,19 @@
 //! Audio caching module
 //!
-//! Provides in-memory caching for downloaded audio data:
-//! - LRU cache with configurable size limit
-//! - Pre-fetching of next track in queue
-//! - Background download tasks
+//! Provides two-level caching for audio data:
+//! - L1: In-memory LRU cache (fast, limited to ~300MB)
+//! - L2: Disk-based playback cache (slower, larger ~500MB)
+//!
+//! Flow:
+//! 1. When a track is evicted from memory, it's saved to disk cache
+//! 2. When loading, check memory -> disk -> network
+
+pub mod playback_cache;
+
+pub use playback_cache::{PlaybackCache, PlaybackCacheStats};
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Cached audio data for a track
 #[derive(Clone)]
@@ -28,16 +35,18 @@ struct CacheState {
     fetching: HashSet<u64>,
 }
 
-/// Audio cache manager with LRU eviction
+/// Audio cache manager with LRU eviction and disk spillover
 pub struct AudioCache {
     state: Mutex<CacheState>,
-    /// Maximum cache size in bytes (default: 200MB)
+    /// Maximum cache size in bytes
     max_size_bytes: usize,
+    /// Optional disk-based L2 cache for evicted tracks
+    playback_cache: Option<Arc<PlaybackCache>>,
 }
 
 impl Default for AudioCache {
     fn default() -> Self {
-        Self::new(200 * 1024 * 1024) // 200MB default (reduced from 500MB for lower memory footprint)
+        Self::new(300 * 1024 * 1024) // 300MB for ~3-4 Hi-Res tracks
     }
 }
 
@@ -52,7 +61,32 @@ impl AudioCache {
                 fetching: HashSet::new(),
             }),
             max_size_bytes,
+            playback_cache: None,
         }
+    }
+
+    /// Create cache with disk spillover enabled
+    pub fn with_playback_cache(max_size_bytes: usize, playback_cache: Arc<PlaybackCache>) -> Self {
+        Self {
+            state: Mutex::new(CacheState {
+                tracks: HashMap::new(),
+                access_order: Vec::new(),
+                current_size: 0,
+                fetching: HashSet::new(),
+            }),
+            max_size_bytes,
+            playback_cache: Some(playback_cache),
+        }
+    }
+
+    /// Set the playback cache for disk spillover
+    pub fn set_playback_cache(&mut self, cache: Arc<PlaybackCache>) {
+        self.playback_cache = Some(cache);
+    }
+
+    /// Get the playback cache reference
+    pub fn get_playback_cache(&self) -> Option<&Arc<PlaybackCache>> {
+        self.playback_cache.as_ref()
     }
 
     /// Get a track from cache if available
@@ -93,7 +127,7 @@ impl AudioCache {
         self.state.lock().unwrap().fetching.remove(&track_id);
     }
 
-    /// Insert a track into cache, evicting old entries if needed
+    /// Insert a track into cache, evicting old entries to disk if needed
     pub fn insert(&self, track_id: u64, data: Vec<u8>) {
         let size = data.len();
 
@@ -108,20 +142,35 @@ impl AudioCache {
             return;
         }
 
-        let mut state = self.state.lock().unwrap();
+        // Collect tracks to evict (to avoid holding lock while writing to disk)
+        let mut tracks_to_spill: Vec<CachedTrack> = Vec::new();
 
-        // Evict old entries to make room
-        while state.current_size + size > self.max_size_bytes && !state.access_order.is_empty() {
-            let oldest_id = state.access_order.remove(0);
-            if let Some(track) = state.tracks.remove(&oldest_id) {
-                state.current_size = state.current_size.saturating_sub(track.size_bytes);
-                log::debug!(
-                    "Evicted track {} ({} bytes) from cache",
-                    oldest_id,
-                    track.size_bytes
-                );
+        {
+            let mut state = self.state.lock().unwrap();
+
+            // Evict old entries to make room
+            while state.current_size + size > self.max_size_bytes && !state.access_order.is_empty() {
+                let oldest_id = state.access_order.remove(0);
+                if let Some(track) = state.tracks.remove(&oldest_id) {
+                    state.current_size = state.current_size.saturating_sub(track.size_bytes);
+                    log::debug!(
+                        "Evicting track {} ({} bytes) from memory cache",
+                        oldest_id,
+                        track.size_bytes
+                    );
+                    tracks_to_spill.push(track);
+                }
             }
         }
+
+        // Spill evicted tracks to disk cache (outside of lock)
+        if let Some(playback_cache) = &self.playback_cache {
+            for track in tracks_to_spill {
+                playback_cache.insert(track.track_id, &track.data);
+            }
+        }
+
+        let mut state = self.state.lock().unwrap();
 
         // If track already exists, update size tracking
         if let Some(existing) = state.tracks.get(&track_id) {

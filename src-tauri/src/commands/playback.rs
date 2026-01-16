@@ -53,7 +53,7 @@ pub async fn play_track(
 
     let cache = state.audio_cache.clone();
 
-    // Check if track is in memory cache
+    // Check if track is in memory cache (L1)
     if let Some(cached) = cache.get(track_id) {
         log::info!("Playing track {} from memory cache ({} bytes)", track_id, cached.size_bytes);
         state.player.play_data(cached.data, track_id)?;
@@ -68,8 +68,29 @@ pub async fn play_track(
         return Ok(());
     }
 
+    // Check if track is in playback cache (L2 - disk)
+    if let Some(playback_cache) = cache.get_playback_cache() {
+        if let Some(audio_data) = playback_cache.get(track_id) {
+            log::info!("Playing track {} from playback cache ({} bytes)", track_id, audio_data.len());
+
+            // Promote back to memory cache
+            cache.insert(track_id, audio_data.clone());
+
+            state.player.play_data(audio_data, track_id)?;
+
+            // Prefetch next track in background
+            spawn_prefetch(
+                state.client.clone(),
+                state.audio_cache.clone(),
+                &state.queue,
+            );
+
+            return Ok(());
+        }
+    }
+
     // Not in any cache - download and cache in memory
-    log::info!("Track {} not in cache, streaming...", track_id);
+    log::info!("Track {} not in any cache, streaming...", track_id);
 
     let client = state.client.lock().await;
 
