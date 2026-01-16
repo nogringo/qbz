@@ -17,6 +17,7 @@ pub mod lastfm;
 pub mod library;
 pub mod lyrics;
 pub mod media_controls;
+pub mod network;
 pub mod offline;
 pub mod player;
 pub mod playlist_import;
@@ -360,7 +361,13 @@ pub fn run() {
             library::commands::library_add_folder,
             library::commands::library_remove_folder,
             library::commands::library_get_folders,
+            library::commands::library_get_folders_with_metadata,
+            library::commands::library_get_folder,
+            library::commands::library_update_folder_settings,
+            library::commands::library_set_folder_enabled,
+            library::commands::library_check_folder_accessible,
             library::commands::library_scan,
+            library::commands::library_scan_folder,
             library::commands::library_get_scan_progress,
             library::commands::library_stop_scan,
             library::commands::library_get_albums,
@@ -529,6 +536,11 @@ pub fn run() {
             offline::commands::mark_scrobbles_sent,
             offline::commands::get_queued_scrobble_count,
             offline::commands::cleanup_sent_scrobbles,
+            // Network folder detection commands
+            network::commands::check_network_path,
+            network::commands::get_network_mounts_cmd,
+            network::commands::check_mount_accessible,
+            network::commands::check_network_paths_batch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

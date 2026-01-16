@@ -289,12 +289,32 @@ impl LibraryDatabase {
                 .map_err(|e| LibraryError::Database(format!("Migration failed: {}", e)))?;
         }
 
+        // Migration: Add folder metadata columns (alias, network info)
+        let has_folder_alias: bool = self.conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('library_folders') WHERE name = 'alias'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .map(|count| count > 0)
+            .unwrap_or(false);
+
+        if !has_folder_alias {
+            log::info!("Running migration: adding folder metadata columns (alias, network info)");
+            self.conn.execute_batch(
+                "ALTER TABLE library_folders ADD COLUMN alias TEXT;
+                 ALTER TABLE library_folders ADD COLUMN is_network INTEGER DEFAULT 0;
+                 ALTER TABLE library_folders ADD COLUMN network_fs_type TEXT;
+                 ALTER TABLE library_folders ADD COLUMN user_override_network INTEGER DEFAULT 0;"
+            ).map_err(|e| LibraryError::Database(format!("Migration failed: {}", e)))?;
+        }
+
         Ok(())
     }
 
     // === Folder Management ===
 
-    /// Add a folder to the library
+    /// Add a folder to the library with optional network info
     pub fn add_folder(&self, path: &str) -> Result<(), LibraryError> {
         self.conn
             .execute(
@@ -305,6 +325,32 @@ impl LibraryDatabase {
         Ok(())
     }
 
+    /// Add a folder with network detection info
+    pub fn add_folder_with_network_info(
+        &self,
+        path: &str,
+        is_network: bool,
+        network_fs_type: Option<&str>,
+    ) -> Result<i64, LibraryError> {
+        self.conn
+            .execute(
+                "INSERT OR IGNORE INTO library_folders (path, is_network, network_fs_type) VALUES (?, ?, ?)",
+                params![path, is_network as i32, network_fs_type],
+            )
+            .map_err(|e| LibraryError::Database(e.to_string()))?;
+
+        // Get the folder ID (either newly inserted or existing)
+        let id: i64 = self.conn
+            .query_row(
+                "SELECT id FROM library_folders WHERE path = ?",
+                params![path],
+                |row| row.get(0),
+            )
+            .map_err(|e| LibraryError::Database(e.to_string()))?;
+
+        Ok(id)
+    }
+
     /// Remove a folder from the library
     pub fn remove_folder(&self, path: &str) -> Result<(), LibraryError> {
         self.conn
@@ -313,7 +359,7 @@ impl LibraryDatabase {
         Ok(())
     }
 
-    /// Get all enabled library folders
+    /// Get all enabled library folders (paths only, for scanning)
     pub fn get_folders(&self) -> Result<Vec<String>, LibraryError> {
         let mut stmt = self
             .conn
@@ -329,6 +375,97 @@ impl LibraryDatabase {
             folders.push(path.map_err(|e| LibraryError::Database(e.to_string()))?);
         }
         Ok(folders)
+    }
+
+    /// Get all library folders with full metadata
+    pub fn get_folders_with_metadata(&self) -> Result<Vec<LibraryFolder>, LibraryError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, path, alias, enabled, is_network, network_fs_type, user_override_network, last_scan
+                 FROM library_folders ORDER BY path"
+            )
+            .map_err(|e| LibraryError::Database(e.to_string()))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(LibraryFolder {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    alias: row.get(2)?,
+                    enabled: row.get::<_, i32>(3)? != 0,
+                    is_network: row.get::<_, i32>(4).unwrap_or(0) != 0,
+                    network_fs_type: row.get(5)?,
+                    user_override_network: row.get::<_, i32>(6).unwrap_or(0) != 0,
+                    last_scan: row.get(7)?,
+                })
+            })
+            .map_err(|e| LibraryError::Database(e.to_string()))?;
+
+        let mut folders = Vec::new();
+        for folder in rows {
+            folders.push(folder.map_err(|e| LibraryError::Database(e.to_string()))?);
+        }
+        Ok(folders)
+    }
+
+    /// Get a single folder by ID
+    pub fn get_folder_by_id(&self, id: i64) -> Result<Option<LibraryFolder>, LibraryError> {
+        let result = self
+            .conn
+            .query_row(
+                "SELECT id, path, alias, enabled, is_network, network_fs_type, user_override_network, last_scan
+                 FROM library_folders WHERE id = ?",
+                params![id],
+                |row| {
+                    Ok(LibraryFolder {
+                        id: row.get(0)?,
+                        path: row.get(1)?,
+                        alias: row.get(2)?,
+                        enabled: row.get::<_, i32>(3)? != 0,
+                        is_network: row.get::<_, i32>(4).unwrap_or(0) != 0,
+                        network_fs_type: row.get(5)?,
+                        user_override_network: row.get::<_, i32>(6).unwrap_or(0) != 0,
+                        last_scan: row.get(7)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|e| LibraryError::Database(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    /// Update folder settings
+    pub fn update_folder_settings(
+        &self,
+        id: i64,
+        alias: Option<&str>,
+        enabled: bool,
+        is_network: bool,
+        network_fs_type: Option<&str>,
+        user_override_network: bool,
+    ) -> Result<(), LibraryError> {
+        self.conn
+            .execute(
+                "UPDATE library_folders
+                 SET alias = ?, enabled = ?, is_network = ?, network_fs_type = ?, user_override_network = ?
+                 WHERE id = ?",
+                params![alias, enabled as i32, is_network as i32, network_fs_type, user_override_network as i32, id],
+            )
+            .map_err(|e| LibraryError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Set folder enabled state
+    pub fn set_folder_enabled(&self, id: i64, enabled: bool) -> Result<(), LibraryError> {
+        self.conn
+            .execute(
+                "UPDATE library_folders SET enabled = ? WHERE id = ?",
+                params![enabled as i32, id],
+            )
+            .map_err(|e| LibraryError::Database(e.to_string()))?;
+        Ok(())
     }
 
     /// Update last scan time for a folder
@@ -844,6 +981,20 @@ pub struct LibraryStats {
     pub artist_count: u32,
     pub total_duration_secs: u64,
     pub total_size_bytes: u64,
+}
+
+/// Library folder with metadata
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryFolder {
+    pub id: i64,
+    pub path: String,
+    pub alias: Option<String>,
+    pub enabled: bool,
+    pub is_network: bool,
+    pub network_fs_type: Option<String>,
+    pub user_override_network: bool,
+    pub last_scan: Option<i64>,
 }
 
 /// Playlist local settings (enhances remote Qobuz playlists)

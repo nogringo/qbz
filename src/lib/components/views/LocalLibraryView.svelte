@@ -4,8 +4,11 @@
   import { onMount, onDestroy } from 'svelte';
   import {
     HardDrive, Music, Disc3, Mic2, FolderPlus, Trash2, RefreshCw,
-    Settings, ArrowLeft, X, Play, AlertCircle, ImageDown, Upload, Search, LayoutGrid, List, Edit3
+    Settings, ArrowLeft, X, Play, AlertCircle, ImageDown, Upload, Search, LayoutGrid, List, Edit3,
+    Network, Power, PowerOff
   } from 'lucide-svelte';
+  import FolderSettingsModal from '../FolderSettingsModal.svelte';
+  import { t } from '$lib/i18n';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackRow from '../TrackRow.svelte';
   import {
@@ -99,6 +102,17 @@
     errors: { file_path: string; error: string }[];
   }
 
+  interface LibraryFolder {
+    id: number;
+    path: string;
+    alias: string | null;
+    enabled: boolean;
+    isNetwork: boolean;
+    networkFsType: string | null;
+    userOverrideNetwork: boolean;
+    lastScan: number | null;
+  }
+
   interface Props {
     onAlbumClick?: (album: LocalAlbum) => void;
     onQobuzArtistClick?: (artistId: number) => void;
@@ -144,7 +158,7 @@
   let artists = $state<LocalArtist[]>([]);
   let tracks = $state<LocalTrack[]>([]);
   let stats = $state<LibraryStats | null>(null);
-  let folders = $state<string[]>([]);
+  let folders = $state<LibraryFolder[]>([]);
   let scanProgress = $state<ScanProgress | null>(null);
 
   // Loading state
@@ -168,8 +182,15 @@
   let editingAlbumTitle = $state('');
   let editingAlbumHidden = $state(false);
 
-  // Folder selection state
-  let selectedFolders = $state<Set<string>>(new Set());
+  // Folder selection state (by folder ID)
+  let selectedFolders = $state<Set<number>>(new Set());
+
+  // Folder settings modal state
+  let showFolderSettingsModal = $state(false);
+  let editingFolder = $state<LibraryFolder | null>(null);
+
+  // Folder accessibility cache
+  let folderAccessibility = $state<Map<number, boolean>>(new Map());
 
   let unsubscribeNav: (() => void) | null = null;
   let unsubscribeOffline: (() => void) | null = null;
@@ -272,9 +293,30 @@
 
   async function loadFolders() {
     try {
-      folders = await invoke<string[]>('library_get_folders');
+      folders = await invoke<LibraryFolder[]>('library_get_folders_with_metadata');
+      // Check accessibility for network folders
+      for (const folder of folders) {
+        if (folder.isNetwork) {
+          checkFolderAccessibility(folder);
+        } else {
+          folderAccessibility.set(folder.id, true);
+        }
+      }
+      folderAccessibility = new Map(folderAccessibility);
     } catch (err) {
       console.error('Failed to load folders:', err);
+    }
+  }
+
+  async function checkFolderAccessibility(folder: LibraryFolder) {
+    try {
+      const accessible = await invoke<boolean>('library_check_folder_accessible', { path: folder.path });
+      folderAccessibility.set(folder.id, accessible);
+      folderAccessibility = new Map(folderAccessibility);
+    } catch (err) {
+      console.error('Failed to check folder accessibility:', err);
+      folderAccessibility.set(folder.id, false);
+      folderAccessibility = new Map(folderAccessibility);
     }
   }
 
@@ -340,21 +382,27 @@
 
       if (!selected || typeof selected !== 'string') return;
 
-      await invoke('library_add_folder', { path: selected });
+      const newFolder = await invoke<LibraryFolder>('library_add_folder', { path: selected });
       await loadFolders();
+
+      // Show warning if network folder detected
+      if (newFolder.isNetwork) {
+        alert($t('library.networkFolderDetected'));
+      }
     } catch (err) {
       console.error('Failed to add folder:', err);
     }
   }
 
-  async function handleRemoveFolder(path: string) {
-    if (!confirm(`Remove "${path}" from library? This will remove all indexed tracks from this folder.`)) {
+  async function handleRemoveFolder(folder: LibraryFolder) {
+    const displayName = folder.alias || folder.path;
+    if (!confirm(`Remove "${displayName}" from library? This will remove all indexed tracks from this folder.`)) {
       return;
     }
 
     try {
-      await invoke('library_remove_folder', { path });
-      selectedFolders.delete(path);
+      await invoke('library_remove_folder', { path: folder.path });
+      selectedFolders.delete(folder.id);
       selectedFolders = new Set(selectedFolders);
       await loadFolders();
       await loadLibraryData();
@@ -364,24 +412,67 @@
     }
   }
 
-  function toggleFolderSelection(folder: string) {
-    if (selectedFolders.has(folder)) {
-      selectedFolders.delete(folder);
+  function toggleFolderSelection(folderId: number) {
+    if (selectedFolders.has(folderId)) {
+      selectedFolders.delete(folderId);
     } else {
-      selectedFolders.add(folder);
+      selectedFolders.add(folderId);
     }
     selectedFolders = new Set(selectedFolders);
   }
 
+  function handleEditFolder() {
+    if (selectedFolders.size !== 1) return;
+    const folderId = Array.from(selectedFolders)[0];
+    editingFolder = folders.find(f => f.id === folderId) || null;
+    if (editingFolder) {
+      showFolderSettingsModal = true;
+    }
+  }
+
+  function handleFolderSettingsSave(updatedFolder: LibraryFolder) {
+    // Update folder in list
+    const index = folders.findIndex(f => f.id === updatedFolder.id);
+    if (index !== -1) {
+      folders[index] = updatedFolder;
+      folders = [...folders];
+    }
+    editingFolder = null;
+  }
+
+  async function handleScanSingleFolder(folderId: number) {
+    try {
+      scanning = true;
+      await invoke('library_scan_folder', { folderId });
+      // Start polling for progress
+      const progressInterval = setInterval(async () => {
+        scanProgress = await invoke<ScanProgress>('library_get_scan_progress');
+        if (scanProgress.status === 'Complete' || scanProgress.status === 'Cancelled' || scanProgress.status === 'Error') {
+          clearInterval(progressInterval);
+          scanning = false;
+          await loadLibraryData();
+          await loadFolders();
+        }
+      }, 500);
+    } catch (err) {
+      console.error('Failed to scan folder:', err);
+      scanning = false;
+      alert(`Failed to scan folder: ${err}`);
+    }
+  }
+
   async function handleRemoveSelectedFolders() {
     if (selectedFolders.size === 0) return;
-    
+
     const count = selectedFolders.size;
     if (!confirm(`Remove ${count} selected folder${count > 1 ? 's' : ''}? This will remove all indexed tracks from these folders.`)) return;
 
     try {
-      for (const folder of selectedFolders) {
-        await invoke('library_remove_folder', { path: folder });
+      for (const folderId of selectedFolders) {
+        const folder = folders.find(f => f.id === folderId);
+        if (folder) {
+          await invoke('library_remove_folder', { path: folder.path });
+        }
       }
       selectedFolders.clear();
       selectedFolders = new Set(selectedFolders);
@@ -1368,16 +1459,24 @@
     {#if showSettings}
       <div class="settings-panel">
         <div class="settings-header">
-          <h3>Library Folders</h3>
+          <h3>{$t('library.folders')}</h3>
           <div class="folder-actions">
-            <button class="icon-btn" onclick={handleAddFolder} title="Add folder">
+            <button class="icon-btn" onclick={handleAddFolder} title={$t('library.addFolder')}>
               <FolderPlus size={16} />
             </button>
-            <button 
-              class="icon-btn" 
-              onclick={handleRemoveSelectedFolders} 
+            <button
+              class="icon-btn"
+              onclick={handleEditFolder}
+              disabled={selectedFolders.size !== 1}
+              title={selectedFolders.size === 1 ? $t('library.editFolder') : $t('library.editFolderHint')}
+            >
+              <Edit3 size={16} />
+            </button>
+            <button
+              class="icon-btn"
+              onclick={handleRemoveSelectedFolders}
               disabled={selectedFolders.size === 0}
-              title="Remove selected folders"
+              title={$t('library.removeSelectedFolders')}
             >
               <Trash2 size={16} />
             </button>
@@ -1386,20 +1485,45 @@
 
         {#if folders.length === 0}
           <div class="no-folders">
-            <p>No folders added yet. Add a folder to start building your library.</p>
+            <p>{$t('library.noFolders')}</p>
           </div>
         {:else}
           <div class="folder-table">
-            {#each folders as folder}
-              <div class="folder-row" class:selected={selectedFolders.has(folder)}>
+            {#each folders as folder (folder.id)}
+              {@const accessible = folderAccessibility.get(folder.id) ?? true}
+              <div
+                class="folder-row"
+                class:selected={selectedFolders.has(folder.id)}
+                class:disabled={!folder.enabled}
+                class:inaccessible={!accessible}
+              >
                 <label class="folder-checkbox">
                   <input
                     type="checkbox"
-                    checked={selectedFolders.has(folder)}
-                    onchange={() => toggleFolderSelection(folder)}
+                    checked={selectedFolders.has(folder.id)}
+                    onchange={() => toggleFolderSelection(folder.id)}
                   />
                 </label>
-                <span class="folder-path">{folder}</span>
+                <div class="folder-icon">
+                  {#if folder.isNetwork}
+                    <Network size={14} class={accessible ? 'network-connected' : 'network-disconnected'} />
+                  {:else}
+                    <HardDrive size={14} />
+                  {/if}
+                </div>
+                <div class="folder-info">
+                  {#if folder.alias}
+                    <span class="folder-alias">{folder.alias}</span>
+                    <span class="folder-path-small">{folder.path}</span>
+                  {:else}
+                    <span class="folder-path">{folder.path}</span>
+                  {/if}
+                </div>
+                {#if !folder.enabled}
+                  <span class="folder-badge disabled-badge">{$t('library.disabled')}</span>
+                {:else if folder.isNetwork && !accessible}
+                  <span class="folder-badge offline-badge">{$t('library.unavailable')}</span>
+                {/if}
               </div>
             {/each}
           </div>
@@ -2014,6 +2138,15 @@
   </div>
 {/if}
 
+<!-- Folder Settings Modal -->
+<FolderSettingsModal
+  isOpen={showFolderSettingsModal}
+  folder={editingFolder}
+  onClose={() => { showFolderSettingsModal = false; editingFolder = null; }}
+  onSave={handleFolderSettingsSave}
+  onScanFolder={handleScanSingleFolder}
+/>
+
 <style>
   .library-view {
     padding: 24px;
@@ -2251,6 +2384,73 @@
 
   .folder-row.selected:hover {
     background: rgba(59, 130, 246, 0.2);
+  }
+
+  .folder-row.disabled {
+    opacity: 0.5;
+  }
+
+  .folder-row.inaccessible {
+    border-left: 3px solid #ef4444;
+  }
+
+  .folder-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: var(--text-muted);
+  }
+
+  .folder-icon :global(.network-connected) {
+    color: #22c55e;
+  }
+
+  .folder-icon :global(.network-disconnected) {
+    color: #ef4444;
+  }
+
+  .folder-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .folder-alias {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .folder-path-small {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono, 'Courier New', monospace);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .folder-badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .disabled-badge {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+  }
+
+  .offline-badge {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
   }
 
   .folder-checkbox {

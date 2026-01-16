@@ -10,9 +10,10 @@ use tokio::sync::Mutex;
 use crate::api_keys::ApiKeysState;
 use crate::discogs::DiscogsClient;
 use crate::library::{
-    cue_to_tracks, get_artwork_cache_dir, CueParser, LibraryDatabase, LibraryScanner, LibraryStats,
+    cue_to_tracks, get_artwork_cache_dir, CueParser, LibraryDatabase, LibraryFolder, LibraryScanner, LibraryStats,
     LocalAlbum, LocalArtist, LocalTrack, MetadataExtractor, ScanError, ScanProgress, ScanStatus,
 };
+use crate::network::{is_network_path, MountKind, NetworkFs};
 
 /// Library state shared across commands
 pub struct LibraryState {
@@ -31,7 +32,7 @@ fn normalize_library_path(path: &Path) -> PathBuf {
 pub async fn library_add_folder(
     path: String,
     state: State<'_, LibraryState>,
-) -> Result<(), String> {
+) -> Result<LibraryFolder, String> {
     log::info!("Command: library_add_folder {}", path);
 
     // Validate path exists and is a directory
@@ -43,8 +44,39 @@ pub async fn library_add_folder(
         return Err(format!("Path is not a directory: {}", path));
     }
 
+    // Detect if this is a network folder
+    let network_info = is_network_path(path_ref);
+    let (is_network, fs_type) = if network_info.is_network {
+        let fs_type = network_info.mount_info.as_ref().and_then(|m| {
+            match &m.kind {
+                MountKind::Network(nfs) => Some(match nfs {
+                    NetworkFs::Cifs => "cifs".to_string(),
+                    NetworkFs::Nfs => "nfs".to_string(),
+                    NetworkFs::Sshfs => "sshfs".to_string(),
+                    NetworkFs::Rclone => "rclone".to_string(),
+                    NetworkFs::Webdav => "webdav".to_string(),
+                    NetworkFs::Gluster => "glusterfs".to_string(),
+                    NetworkFs::Ceph => "ceph".to_string(),
+                    NetworkFs::Other(s) => s.clone(),
+                }),
+                _ => None,
+            }
+        });
+        (true, fs_type)
+    } else {
+        (false, None)
+    };
+
+    log::info!("Folder network info: is_network={}, fs_type={:?}", is_network, fs_type);
+
     let db = state.db.lock().await;
-    db.add_folder(&path).map_err(|e| e.to_string())
+    let id = db.add_folder_with_network_info(&path, is_network, fs_type.as_deref())
+        .map_err(|e| e.to_string())?;
+
+    // Return the full folder info
+    db.get_folder_by_id(id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Failed to retrieve folder after insert".to_string())
 }
 
 #[tauri::command]
@@ -66,6 +98,87 @@ pub async fn library_get_folders(state: State<'_, LibraryState>) -> Result<Vec<S
 
     let db = state.db.lock().await;
     db.get_folders().map_err(|e| e.to_string())
+}
+
+/// Get all library folders with full metadata
+#[tauri::command]
+pub async fn library_get_folders_with_metadata(
+    state: State<'_, LibraryState>,
+) -> Result<Vec<LibraryFolder>, String> {
+    log::info!("Command: library_get_folders_with_metadata");
+
+    let db = state.db.lock().await;
+    db.get_folders_with_metadata().map_err(|e| e.to_string())
+}
+
+/// Get a single folder by ID
+#[tauri::command]
+pub async fn library_get_folder(
+    id: i64,
+    state: State<'_, LibraryState>,
+) -> Result<Option<LibraryFolder>, String> {
+    log::info!("Command: library_get_folder {}", id);
+
+    let db = state.db.lock().await;
+    db.get_folder_by_id(id).map_err(|e| e.to_string())
+}
+
+/// Update folder settings (alias, enabled, network info)
+#[tauri::command]
+pub async fn library_update_folder_settings(
+    id: i64,
+    alias: Option<String>,
+    enabled: bool,
+    is_network: bool,
+    network_fs_type: Option<String>,
+    user_override_network: bool,
+    state: State<'_, LibraryState>,
+) -> Result<LibraryFolder, String> {
+    log::info!("Command: library_update_folder_settings {} alias={:?} enabled={}", id, alias, enabled);
+
+    let db = state.db.lock().await;
+    db.update_folder_settings(
+        id,
+        alias.as_deref(),
+        enabled,
+        is_network,
+        network_fs_type.as_deref(),
+        user_override_network,
+    ).map_err(|e| e.to_string())?;
+
+    db.get_folder_by_id(id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Folder not found after update".to_string())
+}
+
+/// Enable or disable a folder
+#[tauri::command]
+pub async fn library_set_folder_enabled(
+    id: i64,
+    enabled: bool,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    log::info!("Command: library_set_folder_enabled {} enabled={}", id, enabled);
+
+    let db = state.db.lock().await;
+    db.set_folder_enabled(id, enabled).map_err(|e| e.to_string())
+}
+
+/// Check network accessibility for a folder
+#[tauri::command]
+pub async fn library_check_folder_accessible(path: String) -> Result<bool, String> {
+    log::info!("Command: library_check_folder_accessible {}", path);
+
+    let path_ref = Path::new(&path);
+    if !path_ref.exists() {
+        return Ok(false);
+    }
+
+    // Try to read the directory
+    match std::fs::read_dir(path_ref) {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
 }
 
 // === Scanning ===
@@ -325,6 +438,198 @@ pub async fn library_get_scan_progress(
 pub async fn library_stop_scan(state: State<'_, LibraryState>) -> Result<(), String> {
     log::info!("Command: library_stop_scan");
     state.scan_cancel.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+/// Scan a single folder (by ID)
+#[tauri::command]
+pub async fn library_scan_folder(
+    folder_id: i64,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    log::info!("Command: library_scan_folder {}", folder_id);
+
+    // Get folder info
+    let folder = {
+        let db = state.db.lock().await;
+        db.get_folder_by_id(folder_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Folder with ID {} not found", folder_id))?
+    };
+
+    if !folder.enabled {
+        return Err("Cannot scan disabled folder".to_string());
+    }
+
+    // Reset cancel flag and progress
+    state.scan_cancel.store(false, Ordering::Relaxed);
+    {
+        let mut progress = state.scan_progress.lock().await;
+        *progress = ScanProgress {
+            status: ScanStatus::Scanning,
+            total_files: 0,
+            processed_files: 0,
+            current_file: None,
+            errors: Vec::new(),
+        };
+    }
+
+    let scanner = LibraryScanner::new();
+    let mut all_errors: Vec<ScanError> = Vec::new();
+
+    log::info!("Scanning single folder: {}", folder.path);
+
+    // Scan for files
+    let scan_result = match scanner.scan_directory(Path::new(&folder.path)) {
+        Ok(result) => result,
+        Err(e) => {
+            let mut progress = state.scan_progress.lock().await;
+            progress.status = ScanStatus::Complete;
+            progress.errors = vec![ScanError {
+                file_path: folder.path.clone(),
+                error: e.to_string(),
+            }];
+            return Err(e.to_string());
+        }
+    };
+
+    let total_files = scan_result.audio_files.len() + scan_result.cue_files.len();
+
+    // Update total count
+    {
+        let mut progress = state.scan_progress.lock().await;
+        progress.total_files = total_files as u32;
+    }
+
+    // Process CUE files first
+    for cue_path in &scan_result.cue_files {
+        if state.scan_cancel.load(Ordering::Relaxed) {
+            let mut progress = state.scan_progress.lock().await;
+            progress.status = ScanStatus::Cancelled;
+            progress.current_file = None;
+            log::info!("Library scan cancelled by user");
+            return Ok(());
+        }
+
+        {
+            let mut progress = state.scan_progress.lock().await;
+            progress.current_file = Some(cue_path.to_string_lossy().to_string());
+        }
+
+        match process_cue_file(cue_path, &state).await {
+            Ok(_) => {}
+            Err(e) => {
+                all_errors.push(ScanError {
+                    file_path: cue_path.to_string_lossy().to_string(),
+                    error: e,
+                });
+            }
+        }
+
+        {
+            let mut progress = state.scan_progress.lock().await;
+            progress.processed_files += 1;
+        }
+    }
+
+    // Process regular audio files
+    let cue_audio_files: std::collections::HashSet<String> = scan_result
+        .cue_files
+        .iter()
+        .filter_map(|p| {
+            CueParser::parse(p).ok().map(|cue| {
+                normalize_library_path(Path::new(&cue.audio_file))
+                    .to_string_lossy()
+                    .to_string()
+            })
+        })
+        .collect();
+
+    for audio_path in &scan_result.audio_files {
+        if state.scan_cancel.load(Ordering::Relaxed) {
+            let mut progress = state.scan_progress.lock().await;
+            progress.status = ScanStatus::Cancelled;
+            progress.current_file = None;
+            log::info!("Library scan cancelled by user");
+            return Ok(());
+        }
+
+        let canonical_path = normalize_library_path(audio_path);
+        let path_str = canonical_path.to_string_lossy().to_string();
+        if cue_audio_files.contains(&path_str) {
+            let mut progress = state.scan_progress.lock().await;
+            progress.processed_files += 1;
+            continue;
+        }
+
+        {
+            let mut progress = state.scan_progress.lock().await;
+            progress.current_file = Some(path_str.clone());
+        }
+
+        match MetadataExtractor::extract(&canonical_path) {
+            Ok(mut track) => {
+                let artwork_cache = get_artwork_cache_dir();
+                let mut artwork_path = MetadataExtractor::extract_artwork(&canonical_path, &artwork_cache);
+                if artwork_path.is_none() {
+                    if let Some(folder_art) = MetadataExtractor::find_folder_artwork(
+                        canonical_path.as_path(),
+                        Some(&track.album),
+                    ) {
+                        artwork_path = MetadataExtractor::cache_artwork_file(
+                            Path::new(&folder_art),
+                            &artwork_cache,
+                        );
+                    }
+                }
+                track.artwork_path = artwork_path.clone();
+
+                let db = state.db.lock().await;
+                let group_key = track.album_group_key.clone();
+                if let Err(e) = db.insert_track(&track) {
+                    all_errors.push(ScanError {
+                        file_path: path_str,
+                        error: e.to_string(),
+                    });
+                } else if let Some(path) = artwork_path.as_ref() {
+                    if !group_key.is_empty() {
+                        let _ = db.update_album_group_artwork(&group_key, path);
+                    }
+                }
+            }
+            Err(e) => {
+                all_errors.push(ScanError {
+                    file_path: path_str,
+                    error: e.to_string(),
+                });
+            }
+        }
+
+        {
+            let mut progress = state.scan_progress.lock().await;
+            progress.processed_files += 1;
+        }
+    }
+
+    // Update folder scan time
+    {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let db = state.db.lock().await;
+        let _ = db.update_folder_scan_time(&folder.path, now);
+    }
+
+    // Update final status
+    {
+        let mut progress = state.scan_progress.lock().await;
+        progress.status = ScanStatus::Complete;
+        progress.current_file = None;
+        progress.errors = all_errors;
+    }
+
+    log::info!("Single folder scan complete");
     Ok(())
 }
 
