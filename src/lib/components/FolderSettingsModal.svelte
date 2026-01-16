@@ -289,7 +289,7 @@
             />
             <span>{$t('library.folderEnabled')}</span>
           </label>
-          <span class="form-hint">{$t('library.folderEnabledHint')}</span>
+          <small class="form-hint">{$t('library.folderEnabledHint')}</small>
         </div>
 
         <!-- Network folder toggle -->
@@ -326,7 +326,7 @@
               {$t('library.networkOverrideHint')}
             </span>
           {:else}
-            <span class="form-hint">{$t('library.networkFolderHint')}</span>
+            <small class="form-hint">{$t('library.networkFolderHint')}</small>
           {/if}
         </div>
 
@@ -366,10 +366,10 @@
         </button>
         <div class="footer-spacer"></div>
         <button class="btn-secondary" onclick={onClose} disabled={loading}>
-          {$t('common.cancel')}
+          {$t('actions.cancel')}
         </button>
         <button class="btn-primary" onclick={handleSave} disabled={loading}>
-          {loading ? $t('common.saving') : $t('common.save')}
+          {loading ? $t('actions.saving') : $t('actions.save')}
         </button>
       </div>
     </div>
@@ -389,7 +389,7 @@
 
   .modal {
     width: 100%;
-    max-width: 660px;
+    max-width: 720px;
     max-height: 90vh;
     overflow: hidden;
     display: flex;
@@ -473,7 +473,7 @@
   }
 
   .folder-name {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
   }
