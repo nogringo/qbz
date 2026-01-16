@@ -710,6 +710,10 @@
   async function handleAllowImmediateScrobblingChange(enabled: boolean) {
     try {
       await setAllowImmediateScrobbling(enabled);
+      // Mutually exclusive: if turning on, turn off the other
+      if (enabled && offlineSettings.allowAccumulatedScrobbling) {
+        await setAllowAccumulatedScrobbling(false);
+      }
     } catch (error) {
       console.error('Failed to set allow immediate scrobbling:', error);
     }
@@ -718,6 +722,10 @@
   async function handleAllowAccumulatedScrobblingChange(enabled: boolean) {
     try {
       await setAllowAccumulatedScrobbling(enabled);
+      // Mutually exclusive: if turning on, turn off the other
+      if (enabled && offlineSettings.allowImmediateScrobbling) {
+        await setAllowImmediateScrobbling(false);
+      }
     } catch (error) {
       console.error('Failed to set allow accumulated scrobbling:', error);
     }
