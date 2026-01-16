@@ -89,6 +89,45 @@
   let offlineSettings = $state<OfflineSettings>(getOfflineSettings());
   let isCheckingNetwork = $state(false);
 
+  // Section navigation
+  let settingsViewEl: HTMLDivElement;
+  let audioSection: HTMLElement;
+  let playbackSection: HTMLElement;
+  let offlineModeSection: HTMLElement;
+  let appearanceSection: HTMLElement;
+  let downloadsSection: HTMLElement;
+  let librarySection: HTMLElement;
+  let integrationsSection: HTMLElement;
+  let storageSection: HTMLElement;
+  let lyricsSection: HTMLElement;
+  let apiKeysSection: HTMLElement;
+  let activeSection = $state('audio');
+
+  interface NavSection {
+    id: string;
+    label: string;
+    el: HTMLElement | undefined;
+  }
+
+  const navSections = $derived<NavSection[]>([
+    { id: 'audio', label: 'Audio', el: audioSection },
+    { id: 'playback', label: 'Playback', el: playbackSection },
+    { id: 'offline', label: 'Offline', el: offlineModeSection },
+    { id: 'appearance', label: 'Appearance', el: appearanceSection },
+    { id: 'downloads', label: 'Downloads', el: downloadsSection },
+    { id: 'library', label: 'Library', el: librarySection },
+    { id: 'integrations', label: 'Integrations', el: integrationsSection },
+    { id: 'storage', label: 'Storage', el: storageSection },
+    { id: 'lyrics', label: 'Lyrics', el: lyricsSection },
+    { id: 'api-keys', label: 'API Keys', el: apiKeysSection },
+  ]);
+
+  function scrollToSection(el: HTMLElement | undefined, id: string) {
+    if (!el) return;
+    activeSection = id;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   // Audio device state
   let audioDevices = $state<AudioDevice[]>([]);
   let pipewireSinks = $state<PipewireSink[]>([]);
@@ -288,8 +327,33 @@
       offlineSettings = getOfflineSettings();
     });
 
+    // Scroll tracking for navigation
+    const handleScroll = () => {
+      if (!settingsViewEl) return;
+      const scrollTop = settingsViewEl.scrollTop;
+      const offset = 120; // Account for sticky nav height
+
+      // Find which section is currently in view
+      for (const section of navSections) {
+        if (!section.el) continue;
+        const rect = section.el.getBoundingClientRect();
+        const containerRect = settingsViewEl.getBoundingClientRect();
+        const relativeTop = rect.top - containerRect.top;
+
+        if (relativeTop <= offset + 50 && relativeTop + rect.height > offset) {
+          if (activeSection !== section.id) {
+            activeSection = section.id;
+          }
+          break;
+        }
+      }
+    };
+
+    settingsViewEl?.addEventListener('scroll', handleScroll);
+
     return () => {
       unsubscribeOffline();
+      settingsViewEl?.removeEventListener('scroll', handleScroll);
     };
   });
 
@@ -920,7 +984,7 @@
   }
 </script>
 
-<div class="settings-view">
+<div class="settings-view" bind:this={settingsViewEl}>
   <!-- Header -->
   <div class="header">
     {#if onBack}
@@ -948,8 +1012,21 @@
     </div>
   </section>
 
+  <!-- Settings Navigation -->
+  <nav class="settings-nav">
+    {#each navSections as section}
+      <button
+        class="nav-link"
+        class:active={activeSection === section.id}
+        onclick={() => scrollToSection(section.el, section.id)}
+      >
+        {section.label}
+      </button>
+    {/each}
+  </nav>
+
   <!-- Audio Section -->
-  <section class="section">
+  <section class="section" bind:this={audioSection}
     <h3 class="section-title">{$t('settings.audio.title')}</h3>
     <div class="setting-row">
       <span class="setting-label">{$t('settings.audio.streamingQuality')}</span>
@@ -998,7 +1075,7 @@
   </section>
 
   <!-- Playback Section -->
-  <section class="section">
+  <section class="section" bind:this={playbackSection}>
     <h3 class="section-title">{$t('settings.playback.title')}</h3>
     <div class="setting-row">
       <span class="setting-label">{$t('settings.playback.gapless')}</span>
@@ -1017,7 +1094,7 @@
   </section>
 
   <!-- Offline Mode Section -->
-  <section class="section">
+  <section class="section" bind:this={offlineModeSection}>
     <h3 class="section-title">{$t('offline.title')}</h3>
     <div class="setting-row">
       <div class="setting-info">
@@ -1056,7 +1133,7 @@
   </section>
 
   <!-- Appearance Section -->
-  <section class="section">
+  <section class="section" bind:this={appearanceSection}>
     <h3 class="section-title">{$t('settings.appearance.title')}</h3>
     <div class="setting-row">
       <span class="setting-label">{$t('settings.appearance.theme')}</span>
@@ -1093,7 +1170,7 @@
   </section>
 
   <!-- Downloads Section -->
-  <section class="section">
+  <section class="section" bind:this={downloadsSection}>
     <h3 class="section-title">Downloads</h3>
     <div class="setting-row">
       <div class="setting-with-description">
@@ -1146,7 +1223,7 @@
   </section>
 
   <!-- Library Section -->
-  <section class="section">
+  <section class="section" bind:this={librarySection}>
     <h3 class="section-title">{$t('settings.library.title')}</h3>
     <div class="setting-row last">
       <div class="setting-with-description">
@@ -1161,7 +1238,7 @@
   </section>
 
   <!-- Integrations Section -->
-  <section class="section">
+  <section class="section" bind:this={integrationsSection}>
     <h3 class="section-title">{$t('settings.integrations.title')}</h3>
 
     {#if lastfmConnected}
@@ -1253,7 +1330,7 @@
   </section>
 
   <!-- Storage Section (Memory Cache) -->
-  <section class="section">
+  <section class="section" bind:this={storageSection}>
     <h3 class="section-title">{$t('settings.storage.title')}</h3>
     <div class="setting-row">
       <span class="setting-label">{$t('settings.storage.cacheSize')}</span>
@@ -1288,7 +1365,7 @@
   </section>
 
   <!-- Lyrics Section -->
-  <section class="section">
+  <section class="section" bind:this={lyricsSection}>
     <h3 class="section-title">{$t('settings.lyrics.title')}</h3>
     <div class="setting-row">
       <span class="setting-label">Provider</span>
@@ -1307,7 +1384,7 @@
   </section>
 
   <!-- API Keys Section (collapsible) -->
-  <section class="section api-keys-section">
+  <section class="section api-keys-section" bind:this={apiKeysSection}>
     <button
       class="section-title-btn"
       onclick={() => apiKeysExpanded = !apiKeysExpanded}
@@ -1542,7 +1619,44 @@
     color: var(--text-primary);
   }
 
+  /* Settings Navigation */
+  .settings-nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 12px 24px;
+    margin: 0 -32px 24px -32px;
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--bg-tertiary);
+  }
+
+  .nav-link {
+    padding: 6px 0;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 150ms ease, border-color 150ms ease;
+    white-space: nowrap;
+  }
+
+  .nav-link:hover {
+    color: var(--text-secondary);
+    border-bottom-color: var(--text-muted);
+  }
+
+  .nav-link.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent-primary);
+  }
+
   .section {
+    scroll-margin-top: 60px;
     background-color: var(--bg-secondary);
     border-radius: 12px;
     padding: 24px;
