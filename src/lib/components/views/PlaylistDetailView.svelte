@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Play, Shuffle, ListMusic, Search, X, ChevronDown, ChevronRight, ImagePlus, HardDrive, Info, Edit3, BarChart2, WifiOff } from 'lucide-svelte';
+  import { ArrowLeft, Play, Shuffle, ListMusic, Search, X, ChevronDown, ChevronRight, ImagePlus, Info, Edit3, BarChart2, WifiOff } from 'lucide-svelte';
   import AlbumMenu from '../AlbumMenu.svelte';
   import PlaylistCollage from '../PlaylistCollage.svelte';
   import PlaylistModal from '../PlaylistModal.svelte';
@@ -27,6 +27,7 @@
     maximum_bit_depth?: number;
     maximum_sampling_rate?: number;
     isrc?: string;
+    playlist_track_id?: number; // Qobuz playlist-specific ID for removal
   }
 
   interface Playlist {
@@ -59,6 +60,7 @@
     isLocal?: boolean;
     localTrackId?: number;
     artworkPath?: string;
+    playlistTrackId?: number; // Qobuz playlist-specific ID for removal
   }
 
   // Local library track from backend
@@ -262,6 +264,7 @@
           bitDepth: t.maximum_bit_depth,
           samplingRate: t.maximum_sampling_rate,
           isrc: t.isrc,
+          playlistTrackId: t.playlist_track_id,
         }));
       }
     } catch (err) {
@@ -471,13 +474,22 @@
     }
   }
 
-  async function removeLocalTrack(track: DisplayTrack) {
-    if (!track.localTrackId) return;
+  async function removeTrackFromPlaylist(track: DisplayTrack) {
     try {
-      await invoke('playlist_remove_local_track', { playlistId, localTrackId: track.localTrackId });
-      await loadLocalTracks(); // Refresh
+      if (track.isLocal && track.localTrackId) {
+        // Remove local track
+        await invoke('playlist_remove_local_track', { playlistId, localTrackId: track.localTrackId });
+        await loadLocalTracks();
+      } else if (track.playlistTrackId) {
+        // Remove Qobuz track using playlist_track_id
+        await invoke('remove_tracks_from_playlist', {
+          playlistId,
+          playlistTrackIds: [track.playlistTrackId]
+        });
+        await loadPlaylist();
+      }
     } catch (err) {
-      console.error('Failed to remove local track:', err);
+      console.error('Failed to remove track from playlist:', err);
     }
   }
 
@@ -784,15 +796,10 @@
         {@const available = isTrackAvailable(track)}
         <div
           class="track-row-wrapper"
-          class:is-local={track.isLocal}
           class:unavailable={!available}
           title={!available ? $t('offline.trackNotAvailable') : undefined}
         >
-          {#if track.isLocal}
-            <div class="local-indicator" title="Local track">
-              <HardDrive size={12} />
-            </div>
-          {:else if !available}
+          {#if !available && !track.isLocal}
             <div class="unavailable-indicator" title={$t('offline.trackNotAvailable')}>
               <WifiOff size={12} />
             </div>
@@ -810,6 +817,7 @@
                 ? 'Hi-Res'
                 : '-'}
             isPlaying={isActiveTrack}
+            isLocal={track.isLocal}
             hideFavorite={track.isLocal || !available}
             hideDownload={track.isLocal || !available}
             downloadStatus={downloadInfo.status}
@@ -822,17 +830,13 @@
               onPlayNext: track.isLocal ? () => handleTrackPlayNext(track) : (onTrackPlayNext ? () => onTrackPlayNext(track) : undefined),
               onPlayLater: track.isLocal ? () => handleTrackPlayLater(track) : (onTrackPlayLater ? () => onTrackPlayLater(track) : undefined),
               onAddToPlaylist: !track.isLocal && onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined,
+              onRemoveFromPlaylist: () => removeTrackFromPlaylist(track),
               onShareQobuz: !track.isLocal && onTrackShareQobuz ? () => onTrackShareQobuz(track.id) : undefined,
               onShareSonglink: !track.isLocal && onTrackShareSonglink ? () => onTrackShareSonglink(track) : undefined,
               onGoToAlbum: !track.isLocal && track.albumId && onTrackGoToAlbum ? () => onTrackGoToAlbum(track.albumId!) : undefined,
               onGoToArtist: !track.isLocal && track.artistId && onTrackGoToArtist ? () => onTrackGoToArtist(track.artistId!) : undefined
             } : {}}
           />
-          {#if track.isLocal}
-            <button class="remove-local-btn" onclick={() => removeLocalTrack(track)} title="Remove from playlist">
-              <X size={14} />
-            </button>
-          {/if}
         </div>
       {/each}
 
@@ -1387,22 +1391,8 @@
     position: relative;
   }
 
-  .track-row-wrapper.is-local {
-    padding-left: 24px;
-  }
-
   .track-row-wrapper :global(.track-row) {
     flex: 1;
-  }
-
-  .local-indicator {
-    position: absolute;
-    left: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    color: var(--accent-primary);
   }
 
   /* Unavailable track styles (offline mode) */
@@ -1425,30 +1415,6 @@
     justify-content: center;
     width: 20px;
     color: var(--text-muted);
-  }
-
-  .remove-local-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    border-radius: 4px;
-    opacity: 0;
-    transition: all 150ms ease;
-  }
-
-  .track-row-wrapper:hover .remove-local-btn {
-    opacity: 1;
-  }
-
-  .remove-local-btn:hover {
-    color: #ff6b6b;
-    background-color: rgba(255, 107, 107, 0.1);
   }
 
 </style>

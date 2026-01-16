@@ -40,6 +40,7 @@
     onPlayNext?: () => void;
     onPlayLater?: () => void;
     onAddToPlaylist?: () => void;
+    onRemoveFromPlaylist?: () => void;
     onShareQobuz?: () => void;
     onShareSonglink?: () => void;
     onGoToAlbum?: () => void;
@@ -176,17 +177,14 @@
   <div class="track-duration">{duration}</div>
 
   <!-- Quality (always render to maintain column alignment) -->
-  <div class="track-quality">
-    {#if isLocal}
-      <span class="local-icon" title="Local library track">
-        <HardDrive size={12} />
-      </span>
-    {/if}
-    {quality ?? ''}
-  </div>
+  <div class="track-quality">{quality ?? ''}</div>
 
-  <!-- Favorite Button -->
-  {#if !hideFavorite}
+  <!-- Favorite Button / Local Indicator -->
+  {#if isLocal}
+    <div class="local-indicator" title="Local library track">
+      <HardDrive size={14} />
+    </div>
+  {:else if !hideFavorite}
     <button
       class="favorite-btn"
       class:is-favorite={isFavorite}
@@ -221,6 +219,7 @@
       onPlayLater={menuActions?.onPlayLater}
       onAddFavorite={trackId !== undefined ? () => toggleTrackFavorite(trackId) : undefined}
       onAddToPlaylist={menuActions?.onAddToPlaylist}
+      onRemoveFromPlaylist={menuActions?.onRemoveFromPlaylist}
       onShareQobuz={menuActions?.onShareQobuz}
       onShareSonglink={menuActions?.onShareSonglink}
       onGoToAlbum={menuActions?.onGoToAlbum}
@@ -391,21 +390,20 @@
   }
 
   .track-quality {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 4px;
     font-size: 12px;
     color: #666666;
     width: 80px;
     text-align: right;
   }
 
-  .local-icon {
+  .local-indicator {
     display: flex;
     align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     color: var(--text-muted);
-    opacity: 0.7;
+    opacity: 0.6;
   }
 
   .favorite-btn {

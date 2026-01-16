@@ -11,7 +11,8 @@
     Share2,
     Disc3,
     User,
-    Link
+    Link,
+    Trash2
   } from 'lucide-svelte';
 
   interface Props {
@@ -20,6 +21,7 @@
     onPlayLater?: () => void;
     onAddFavorite?: () => void;
     onAddToPlaylist?: () => void;
+    onRemoveFromPlaylist?: () => void;
     onShareQobuz?: () => void;
     onShareSonglink?: () => void;
     onGoToAlbum?: () => void;
@@ -32,6 +34,7 @@
     onPlayLater,
     onAddFavorite,
     onAddToPlaylist,
+    onRemoveFromPlaylist,
     onShareQobuz,
     onShareSonglink,
     onGoToAlbum,
@@ -49,7 +52,7 @@
   let submenuStyle = $state('');
 
   const hasPlayback = $derived(!!(onPlayNow || onPlayNext || onPlayLater));
-  const hasLibrary = $derived(!!(onAddFavorite || onAddToPlaylist));
+  const hasLibrary = $derived(!!(onAddFavorite || onAddToPlaylist || onRemoveFromPlaylist));
   const hasShare = $derived(!!(onShareQobuz || onShareSonglink));
   const hasNav = $derived(!!(onGoToAlbum || onGoToArtist));
   const hasMenu = $derived(hasPlayback || hasLibrary || hasShare || hasNav);
@@ -205,6 +208,12 @@
               <span>Add to playlist</span>
             </button>
           {/if}
+          {#if onRemoveFromPlaylist}
+            <button class="menu-item danger" onclick={() => handleAction(onRemoveFromPlaylist)}>
+              <Trash2 size={14} />
+              <span>Remove from playlist</span>
+            </button>
+          {/if}
         {/if}
 
         {#if hasLibrary && (hasShare || hasNav)}
@@ -331,6 +340,15 @@
   .menu-item:hover {
     background-color: var(--bg-hover);
     color: var(--text-primary);
+  }
+
+  .menu-item.danger {
+    color: #ef4444;
+  }
+
+  .menu-item.danger:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
   }
 
   .separator {
