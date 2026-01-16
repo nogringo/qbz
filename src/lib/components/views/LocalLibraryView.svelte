@@ -532,34 +532,52 @@
     }
   }
 
-  async function handleClearLibrary() {
+  let clearingLibrary = $state(false);
+
+  function handleClearLibrary(event: MouseEvent) {
+    // Prevent double execution
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (clearingLibrary) return;
+
     const firstConfirm = confirm(
       'Clear entire library?\n\n' +
       'This will remove ALL indexed tracks from the database.\n' +
       'Your audio files will NOT be deleted.\n\n' +
       'You will need to re-scan your folders after this.'
     );
-    
-    if (!firstConfirm) return;
+
+    if (!firstConfirm) {
+      return;
+    }
 
     const secondConfirm = confirm(
       'Are you absolutely sure?\n\n' +
-      'This action cannot be undone.\n' +
-      'Type OK to confirm or Cancel to abort.'
+      'This action cannot be undone.'
     );
-    
-    if (!secondConfirm) return;
 
-    try {
-      await invoke('library_clear');
-      await loadLibraryData();
-      albums = [];
-      artists = [];
-      tracks = [];
-    } catch (err) {
-      console.error('Failed to clear library:', err);
-      alert(`Failed to clear library: ${err}`);
+    if (!secondConfirm) {
+      return;
     }
+
+    // Only proceed if both confirmations passed
+    clearingLibrary = true;
+
+    invoke('library_clear')
+      .then(() => loadLibraryData())
+      .then(() => {
+        albums = [];
+        artists = [];
+        tracks = [];
+      })
+      .catch((err) => {
+        console.error('Failed to clear library:', err);
+        alert(`Failed to clear library: ${err}`);
+      })
+      .finally(() => {
+        clearingLibrary = false;
+      });
   }
 
   async function handleFetchMissingArtwork() {
@@ -1558,9 +1576,9 @@
 
         <div class="danger-zone">
           <div class="danger-zone-label">Danger Zone</div>
-          <button class="danger-btn-small" onclick={handleClearLibrary}>
+          <button class="danger-btn-small" onclick={(e) => handleClearLibrary(e)} disabled={clearingLibrary}>
             <Trash2 size={12} />
-            <span>Clear Library Database</span>
+            <span>{clearingLibrary ? 'Clearing...' : 'Clear Library Database'}</span>
           </button>
         </div>
       </div>
