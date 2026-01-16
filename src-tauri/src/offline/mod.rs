@@ -392,14 +392,14 @@ pub async fn check_network_connectivity() -> bool {
 // Tauri commands
 pub mod commands {
     use super::*;
-    use crate::AppState;
     use tauri::State;
 
     /// Get current offline status
+    /// Note: Login state is not checked here because the frontend already handles
+    /// showing LoginView when not logged in. This prevents race conditions on startup.
     #[tauri::command]
     pub async fn get_offline_status(
         offline_state: State<'_, OfflineState>,
-        app_state: State<'_, AppState>,
     ) -> Result<OfflineStatus, String> {
         let settings = {
             let store = offline_state.store.lock().map_err(|e| format!("Lock error: {}", e))?;
@@ -412,20 +412,6 @@ pub mod commands {
                 is_offline: true,
                 reason: Some(OfflineReason::ManualOverride),
                 manual_mode_enabled: true,
-            });
-        }
-
-        // Check if user is logged in
-        let is_logged_in = {
-            let client = app_state.client.lock().await;
-            client.is_logged_in().await
-        };
-
-        if !is_logged_in {
-            return Ok(OfflineStatus {
-                is_offline: true,
-                reason: Some(OfflineReason::NotLoggedIn),
-                manual_mode_enabled: false,
             });
         }
 
@@ -461,7 +447,6 @@ pub mod commands {
     pub async fn set_manual_offline(
         enabled: bool,
         state: State<'_, OfflineState>,
-        app_state: State<'_, AppState>,
         app_handle: AppHandle,
     ) -> Result<OfflineStatus, String> {
         {
@@ -470,7 +455,7 @@ pub mod commands {
         }
 
         // Get updated status
-        let status = get_offline_status(state, app_state).await?;
+        let status = get_offline_status(state).await?;
 
         // Emit event to frontend
         let _ = app_handle.emit("offline-status-changed", &status);
