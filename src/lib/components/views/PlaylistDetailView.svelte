@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Play, Shuffle, ListMusic, Search, X, ChevronDown, ChevronRight, ImagePlus, HardDrive, Info, Edit3, BarChart2 } from 'lucide-svelte';
+  import { ArrowLeft, Play, Shuffle, ListMusic, Search, X, ChevronDown, ChevronRight, ImagePlus, HardDrive, Info, Edit3, BarChart2, WifiOff } from 'lucide-svelte';
   import AlbumMenu from '../AlbumMenu.svelte';
   import PlaylistCollage from '../PlaylistCollage.svelte';
   import PlaylistModal from '../PlaylistModal.svelte';
@@ -8,6 +8,13 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import TrackRow from '../TrackRow.svelte';
   import { type DownloadStatus } from '$lib/stores/downloadState';
+  import {
+    subscribe as subscribeOffline,
+    getStatus as getOfflineStatus,
+    type OfflineStatus
+  } from '$lib/stores/offlineStore';
+  import { t } from '$lib/i18n';
+  import { onMount } from 'svelte';
 
   interface PlaylistTrack {
     id: number;
@@ -147,6 +154,10 @@
   let error = $state<string | null>(null);
   let playBtnHovered = $state(false);
 
+  // Offline mode state
+  let offlineStatus = $state<OfflineStatus>(getOfflineStatus());
+  let tracksWithLocalCopies = $state<Set<number>>(new Set());
+
   // Local settings state
   let searchQuery = $state('');
   let sortBy = $state<SortField>('default');
@@ -157,6 +168,49 @@
   let playlistStats = $state<PlaylistStats | null>(null);
   let editModalOpen = $state(false);
 
+  // Subscribe to offline status changes
+  onMount(() => {
+    const unsubscribe = subscribeOffline(() => {
+      offlineStatus = getOfflineStatus();
+      // Re-check local copies when offline status changes
+      if (offlineStatus.isOffline && tracks.length > 0) {
+        checkTracksLocalStatus();
+      }
+    });
+    return unsubscribe;
+  });
+
+  // Check if a track is available (has local copy when offline, always available when online)
+  function isTrackAvailable(track: DisplayTrack): boolean {
+    if (!offlineStatus.isOffline) return true;
+    if (track.isLocal) return true; // Local tracks are always available
+    return tracksWithLocalCopies.has(track.id);
+  }
+
+  // Check which tracks have local copies (for offline mode)
+  async function checkTracksLocalStatus() {
+    if (!offlineStatus.isOffline || tracks.length === 0) {
+      tracksWithLocalCopies = new Set();
+      return;
+    }
+
+    try {
+      const qobuzTrackIds = tracks.filter(t => !t.isLocal).map(t => t.id);
+      if (qobuzTrackIds.length === 0) {
+        tracksWithLocalCopies = new Set();
+        return;
+      }
+
+      const localIds = await invoke<number[]>('playlist_get_tracks_with_local_copies', {
+        trackIds: qobuzTrackIds
+      });
+      tracksWithLocalCopies = new Set(localIds);
+    } catch (err) {
+      console.error('Failed to check local track status:', err);
+      tracksWithLocalCopies = new Set();
+    }
+  }
+
   // Reload playlist when playlistId changes
   $effect(() => {
     // Access playlistId to create dependency
@@ -165,6 +219,13 @@
     loadSettings();
     loadLocalTracks();
     loadStats();
+  });
+
+  // Check local track status after loading tracks and when offline
+  $effect(() => {
+    if (offlineStatus.isOffline && tracks.length > 0) {
+      checkTracksLocalStatus();
+    }
   });
 
   async function loadLocalTracks() {
@@ -720,10 +781,20 @@
             ? (track.localTrackId !== undefined && activeTrackId === track.localTrackId)
             : activeTrackId === track.id
         )}
-        <div class="track-row-wrapper" class:is-local={track.isLocal}>
+        {@const available = isTrackAvailable(track)}
+        <div
+          class="track-row-wrapper"
+          class:is-local={track.isLocal}
+          class:unavailable={!available}
+          title={!available ? $t('offline.trackNotAvailable') : undefined}
+        >
           {#if track.isLocal}
             <div class="local-indicator" title="Local track">
               <HardDrive size={12} />
+            </div>
+          {:else if !available}
+            <div class="unavailable-indicator" title={$t('offline.trackNotAvailable')}>
+              <WifiOff size={12} />
             </div>
           {/if}
           <TrackRow
@@ -739,14 +810,14 @@
                 ? 'Hi-Res'
                 : '-'}
             isPlaying={isActiveTrack}
-            hideFavorite={track.isLocal}
-            hideDownload={track.isLocal}
+            hideFavorite={track.isLocal || !available}
+            hideDownload={track.isLocal || !available}
             downloadStatus={downloadInfo.status}
             downloadProgress={downloadInfo.progress}
-            onPlay={() => handleTrackClick(track)}
-            onDownload={!track.isLocal && onTrackDownload ? () => onTrackDownload(track) : undefined}
-            onRemoveDownload={!track.isLocal && onTrackRemoveDownload ? () => onTrackRemoveDownload(track.id) : undefined}
-            menuActions={{
+            onPlay={available ? () => handleTrackClick(track) : undefined}
+            onDownload={available && !track.isLocal && onTrackDownload ? () => onTrackDownload(track) : undefined}
+            onRemoveDownload={available && !track.isLocal && onTrackRemoveDownload ? () => onTrackRemoveDownload(track.id) : undefined}
+            menuActions={available ? {
               onPlayNow: () => handleTrackClick(track),
               onPlayNext: track.isLocal ? () => handleTrackPlayNext(track) : (onTrackPlayNext ? () => onTrackPlayNext(track) : undefined),
               onPlayLater: track.isLocal ? () => handleTrackPlayLater(track) : (onTrackPlayLater ? () => onTrackPlayLater(track) : undefined),
@@ -755,7 +826,7 @@
               onShareSonglink: !track.isLocal && onTrackShareSonglink ? () => onTrackShareSonglink(track) : undefined,
               onGoToAlbum: !track.isLocal && track.albumId && onTrackGoToAlbum ? () => onTrackGoToAlbum(track.albumId!) : undefined,
               onGoToArtist: !track.isLocal && track.artistId && onTrackGoToArtist ? () => onTrackGoToArtist(track.artistId!) : undefined
-            }}
+            } : {}}
           />
           {#if track.isLocal}
             <button class="remove-local-btn" onclick={() => removeLocalTrack(track)} title="Remove from playlist">
@@ -1332,6 +1403,28 @@
     justify-content: center;
     width: 20px;
     color: var(--accent-primary);
+  }
+
+  /* Unavailable track styles (offline mode) */
+  .track-row-wrapper.unavailable {
+    padding-left: 24px;
+    opacity: 0.4;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .track-row-wrapper.unavailable :global(.track-row) {
+    filter: grayscale(100%);
+  }
+
+  .unavailable-indicator {
+    position: absolute;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    color: var(--text-muted);
   }
 
   .remove-local-btn {

@@ -1224,6 +1224,21 @@ pub async fn playlist_get_local_track_id(
         .map_err(|e| e.to_string())
 }
 
+/// Batch check which tracks have local copies (for offline mode)
+/// Returns a list of track IDs that have local versions
+#[tauri::command]
+pub async fn playlist_get_tracks_with_local_copies(
+    track_ids: Vec<u64>,
+    state: State<'_, LibraryState>,
+) -> Result<Vec<u64>, String> {
+    let db = state.db.lock().await;
+
+    let local_ids = db.get_tracks_with_local_copies(&track_ids)
+        .map_err(|e| e.to_string())?;
+
+    Ok(local_ids.into_iter().collect())
+}
+
 /// Get playlists that have local content (for offline mode filtering)
 #[tauri::command]
 pub async fn playlist_get_offline_available(

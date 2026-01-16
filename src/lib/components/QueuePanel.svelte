@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, GripVertical, Play, Search } from 'lucide-svelte';
+  import { X, GripVertical, Play, Search, WifiOff } from 'lucide-svelte';
   import { t } from '$lib/i18n';
 
   interface QueueTrack {
@@ -8,6 +8,7 @@
     title: string;
     artist: string;
     duration: string;
+    available?: boolean; // Whether track is available (false when offline without local copy)
   }
 
   interface Props {
@@ -96,13 +97,17 @@
   }
 
   // Handle click only on non-drag-handle area
-  function handleTrackClick(e: MouseEvent, trackId: string) {
+  function handleTrackClick(e: MouseEvent, track: QueueTrack) {
     const target = e.target as HTMLElement;
     // Don't trigger play if clicking on drag handle
     if (target.closest('.drag-handle')) {
       return;
     }
-    onPlayTrack?.(trackId);
+    // Don't trigger play if track is unavailable
+    if (track.available === false) {
+      return;
+    }
+    onPlayTrack?.(track.id);
   }
 </script>
 
@@ -169,32 +174,41 @@
           <div class="tracks">
             {#each filteredTracks as track, index}
               {@const originalIndex = upcomingTracks.findIndex(t => t.id === track.id)}
+              {@const isUnavailable = track.available === false}
               <div
                 class="queue-track"
-                class:hovered={hoveredTrack === track.id}
+                class:hovered={hoveredTrack === track.id && !isUnavailable}
                 class:dragging={draggedIndex === originalIndex}
                 class:drag-over={dragOverIndex === originalIndex && draggedIndex !== originalIndex}
-                draggable={canDrag}
+                class:unavailable={isUnavailable}
+                draggable={canDrag && !isUnavailable}
                 onmouseenter={() => (hoveredTrack = track.id)}
                 onmouseleave={() => (hoveredTrack = null)}
-                onclick={(e) => handleTrackClick(e, track.id)}
+                onclick={(e) => handleTrackClick(e, track)}
                 ondragstart={(e) => handleDragStart(e, originalIndex)}
                 ondragover={(e) => handleDragOver(e, originalIndex)}
                 ondragleave={handleDragLeave}
                 ondrop={(e) => handleDrop(e, originalIndex)}
                 ondragend={handleDragEnd}
                 role="button"
-                tabindex="0"
-                onkeydown={(e) => e.key === 'Enter' && onPlayTrack?.(track.id)}
+                tabindex={isUnavailable ? -1 : 0}
+                title={isUnavailable ? $t('offline.trackNotAvailable') : undefined}
+                onkeydown={(e) => e.key === 'Enter' && !isUnavailable && onPlayTrack?.(track.id)}
               >
-                <!-- Drag Handle -->
-                <div class="drag-handle" class:visible={hoveredTrack === track.id && canDrag}>
-                  <GripVertical size={14} />
-                </div>
+                <!-- Unavailable Indicator or Drag Handle -->
+                {#if isUnavailable}
+                  <div class="unavailable-indicator">
+                    <WifiOff size={14} />
+                  </div>
+                {:else}
+                  <div class="drag-handle" class:visible={hoveredTrack === track.id && canDrag}>
+                    <GripVertical size={14} />
+                  </div>
+                {/if}
 
                 <!-- Track Number / Play Icon -->
                 <div class="track-number">
-                  {#if hoveredTrack === track.id}
+                  {#if hoveredTrack === track.id && !isUnavailable}
                     <Play size={12} fill="white" color="white" />
                   {:else}
                     <span>{originalIndex + 1}</span>
@@ -492,6 +506,27 @@
 
   .drag-handle.visible {
     opacity: 1;
+  }
+
+  /* Unavailable track styles (offline mode) */
+  .queue-track.unavailable {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .queue-track.unavailable .track-info,
+  .queue-track.unavailable .track-number,
+  .queue-track.unavailable .track-duration {
+    filter: grayscale(100%);
+  }
+
+  .unavailable-indicator {
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
   }
 
   .track-number {

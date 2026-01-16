@@ -409,6 +409,7 @@ pub fn run() {
             library::commands::playlist_get_local_content_status,
             library::commands::playlist_track_is_local,
             library::commands::playlist_get_local_track_id,
+            library::commands::playlist_get_tracks_with_local_copies,
             library::commands::playlist_get_offline_available,
             // Chromecast casting commands
             cast::commands::cast_start_discovery,

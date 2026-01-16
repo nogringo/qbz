@@ -446,6 +446,13 @@
     "featureDisabled": "This feature requires internet connection",
     "startWithoutLogin": "Start in offline mode without logging in",
     "noNetworkToast": "No internet connection available",
-    "checkingNetwork": "Checking network connection..."
+    "checkingNetwork": "Checking network connection...",
+    "available": "Available Offline",
+    "partiallyAvailable": "Partially Available",
+    "notAvailableOffline": "Not Available Offline",
+    "viewOnly": "View Only (Offline)"
+  },
+  "filter": {
+    "all": "All"
   }
 }

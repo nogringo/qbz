@@ -14,6 +14,7 @@ export interface QueueTrack {
   title: string;
   artist: string;
   duration: string;
+  available?: boolean; // Whether track is available (false when offline without local copy)
 }
 
 export interface BackendQueueTrack {
@@ -116,6 +117,58 @@ function formatDuration(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+// ============ Offline Mode State ============
+
+let isOfflineMode = false;
+let tracksWithLocalCopies = new Set<number>();
+
+/**
+ * Set offline mode state for queue availability checking
+ */
+export function setOfflineMode(offline: boolean): void {
+  isOfflineMode = offline;
+  // Refresh queue to update availability
+  if (queue.length > 0) {
+    syncQueueState();
+  }
+}
+
+/**
+ * Update tracks with local copies (called from offline store)
+ */
+export async function updateLocalCopiesSet(): Promise<void> {
+  if (!isOfflineMode || queue.length === 0) {
+    tracksWithLocalCopies = new Set();
+    return;
+  }
+
+  try {
+    const trackIds = queue.map(t => parseInt(t.id)).filter(id => !isNaN(id));
+    if (trackIds.length === 0) {
+      tracksWithLocalCopies = new Set();
+      return;
+    }
+
+    const localIds = await invoke<number[]>('playlist_get_tracks_with_local_copies', {
+      trackIds
+    });
+    tracksWithLocalCopies = new Set(localIds);
+
+    // Update queue availability
+    queue = queue.map(t => {
+      const numId = parseInt(t.id);
+      return {
+        ...t,
+        available: isNaN(numId) || localTrackIds.has(numId) || tracksWithLocalCopies.has(numId)
+      };
+    });
+    notifyListeners();
+  } catch (err) {
+    console.error('Failed to check local copies:', err);
+    tracksWithLocalCopies = new Set();
+  }
+}
+
 // ============ Queue Actions ============
 
 /**
@@ -125,13 +178,31 @@ export async function syncQueueState(): Promise<void> {
   try {
     const queueState = await invoke<BackendQueueState>('get_queue_state');
 
+    // Get track IDs for local copy check
+    const trackIds = queueState.upcoming.map(t => t.id);
+
+    // Check local copies if in offline mode
+    let localCopies = new Set<number>();
+    if (isOfflineMode && trackIds.length > 0) {
+      try {
+        const localIds = await invoke<number[]>('playlist_get_tracks_with_local_copies', {
+          trackIds
+        });
+        localCopies = new Set(localIds);
+        tracksWithLocalCopies = localCopies;
+      } catch {
+        // Ignore errors, assume all available
+      }
+    }
+
     // Convert backend queue tracks to frontend format
     queue = queueState.upcoming.map(t => ({
       id: String(t.id),
       artwork: t.artwork_url || '',
       title: t.title,
       artist: t.artist,
-      duration: formatDuration(t.duration_secs)
+      duration: formatDuration(t.duration_secs),
+      available: !isOfflineMode || localTrackIds.has(t.id) || localCopies.has(t.id)
     }));
 
     queueTotalTracks = queueState.total_tracks;

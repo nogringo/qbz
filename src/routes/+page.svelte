@@ -114,6 +114,7 @@
     isLocalTrack,
     getBackendQueueState,
     getQueueState,
+    setOfflineMode as setQueueOfflineMode,
     type QueueTrack,
     type BackendQueueTrack,
     type RepeatMode
@@ -723,9 +724,52 @@
     }
   }
 
-  // Helper to play a track from the queue
-  async function playQueueTrack(track: BackendQueueTrack) {
+  // Check if a track is available for playback (handles offline mode)
+  async function isTrackAvailable(track: BackendQueueTrack): Promise<boolean> {
+    // Always available when online
+    if (!offlineStatus.isOffline) return true;
+
+    // Local tracks are always available
+    if (isLocalTrack(track.id)) return true;
+
+    // Check if Qobuz track has a local copy
+    try {
+      const localIds = await invoke<number[]>('playlist_get_tracks_with_local_copies', {
+        trackIds: [track.id]
+      });
+      return localIds.includes(track.id);
+    } catch {
+      return false;
+    }
+  }
+
+  // Helper to play a track from the queue (with offline skip support)
+  async function playQueueTrack(track: BackendQueueTrack, skippedIds = new Set<number>()) {
     const isLocal = isLocalTrack(track.id);
+
+    // In offline mode, check if track is available
+    if (offlineStatus.isOffline && !isLocal) {
+      const available = await isTrackAvailable(track);
+      if (!available) {
+        // Skip to next track (prevent infinite loop)
+        if (skippedIds.has(track.id)) {
+          // Already tried this track, stop to prevent infinite loop
+          setQueueEnded(true);
+          showToast('No available tracks in queue (offline mode)', 'info');
+          return;
+        }
+        skippedIds.add(track.id);
+
+        // Get next track and try to play it
+        const nextTrackResult = await nextTrack();
+        if (nextTrackResult) {
+          await playQueueTrack(nextTrackResult, skippedIds);
+        } else {
+          setQueueEnded(true);
+        }
+        return;
+      }
+    }
 
     // Reset queue ended flag when playing a new track
     setQueueEnded(false);
@@ -1559,6 +1603,8 @@
     // Subscribe to offline state changes
     const unsubscribeOffline = subscribeOffline(() => {
       offlineStatus = getOfflineStatus();
+      // Sync offline mode to queue store for track availability
+      setQueueOfflineMode(offlineStatus.isOffline);
     });
 
     // Subscribe to navigation state changes

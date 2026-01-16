@@ -37,7 +37,7 @@
     last_played_at?: number;
   }
 
-  type PlaylistFilter = 'all' | 'visible' | 'hidden';
+  type PlaylistFilter = 'all' | 'visible' | 'hidden' | 'offline_all' | 'offline_partial' | 'offline_unavailable';
   type PlaylistSort = 'name' | 'recent' | 'playcount' | 'custom';
   type ViewMode = 'list' | 'grid';
 
@@ -88,33 +88,63 @@
   $effect(() => { localStorage.setItem('qbz-pm-sort', sort); });
   $effect(() => { localStorage.setItem('qbz-pm-view', viewMode); });
 
+  // Check if a playlist is available for interaction in offline mode
+  function isPlaylistAvailableOffline(playlistId: number): boolean {
+    if (!offlineStatus.isOffline) return true;
+    const localStatus = playlistSettings.get(playlistId)?.hasLocalContent ?? 'unknown';
+    if (localStatus === 'all_local') return true;
+    if (localStatus === 'some_local' && offlineSettings.showPartialPlaylists) return true;
+    return false;
+  }
+
   // Filtered and sorted playlists
   const displayPlaylists = $derived.by(() => {
     let result = [...playlists];
 
-    // Apply offline filter first - only show playlists with local content
-    if (offlineStatus.isOffline) {
-      result = result.filter(p => {
-        const settings = playlistSettings.get(p.id);
-        const localStatus = settings?.hasLocalContent ?? 'unknown';
-        if (offlineSettings.showPartialPlaylists) {
-          return localStatus === 'all_local' || localStatus === 'some_local';
-        }
-        return localStatus === 'all_local';
-      });
-    }
-
-    // Apply search filter
+    // Apply search filter first
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase();
       result = result.filter(p => p.name.toLowerCase().includes(query));
     }
 
-    // Apply visibility filter
-    if (filter === 'visible') {
-      result = result.filter(p => !playlistSettings.get(p.id)?.hidden);
-    } else if (filter === 'hidden') {
-      result = result.filter(p => playlistSettings.get(p.id)?.hidden);
+    // Apply filter based on mode (offline or regular)
+    if (offlineStatus.isOffline) {
+      // In offline mode, use offline-specific filters
+      if (filter === 'offline_all' || filter === 'all') {
+        // Show all playlists with ANY local content (full or partial)
+        result = result.filter(p => {
+          const localStatus = playlistSettings.get(p.id)?.hasLocalContent ?? 'unknown';
+          return localStatus === 'all_local' || localStatus === 'some_local';
+        });
+      } else if (filter === 'offline_partial') {
+        // Show only playlists with partial local content
+        result = result.filter(p => {
+          const localStatus = playlistSettings.get(p.id)?.hasLocalContent ?? 'unknown';
+          return localStatus === 'some_local';
+        });
+      } else if (filter === 'offline_unavailable') {
+        // Show playlists with NO local content (view-only)
+        result = result.filter(p => {
+          const localStatus = playlistSettings.get(p.id)?.hasLocalContent ?? 'unknown';
+          return localStatus === 'no' || localStatus === 'unknown';
+        });
+      } else if (filter === 'visible') {
+        result = result.filter(p => {
+          const settings = playlistSettings.get(p.id);
+          const localStatus = settings?.hasLocalContent ?? 'unknown';
+          return !settings?.hidden && (localStatus === 'all_local' || localStatus === 'some_local');
+        });
+      } else if (filter === 'hidden') {
+        result = result.filter(p => playlistSettings.get(p.id)?.hidden);
+      }
+    } else {
+      // Regular online mode filters
+      if (filter === 'visible') {
+        result = result.filter(p => !playlistSettings.get(p.id)?.hidden);
+      } else if (filter === 'hidden') {
+        result = result.filter(p => playlistSettings.get(p.id)?.hidden);
+      }
+      // 'all' shows everything
     }
 
     // Apply sort
@@ -321,17 +351,35 @@
       <button class="control-btn" onclick={() => { showFilterMenu = !showFilterMenu; showSortMenu = false; }}>
         {#if filter === 'hidden'}
           <EyeOff size={16} />
+        {:else if filter === 'offline_unavailable'}
+          <CloudOff size={16} />
         {:else}
           <Filter size={16} />
         {/if}
         <span>
-          {filter === 'all' ? 'All' : filter === 'visible' ? 'Visible' : 'Hidden'}
+          {#if offlineStatus.isOffline}
+            {filter === 'all' || filter === 'offline_all' ? $t('offline.available') : filter === 'offline_partial' ? $t('offline.partiallyAvailable') : filter === 'offline_unavailable' ? $t('offline.notAvailableOffline') : filter === 'visible' ? 'Visible' : 'Hidden'}
+          {:else}
+            {filter === 'all' ? 'All' : filter === 'visible' ? 'Visible' : 'Hidden'}
+          {/if}
         </span>
       </button>
       {#if showFilterMenu}
         <div class="dropdown-menu">
-          <button class="dropdown-item" class:selected={filter === 'all'} onclick={() => { filter = 'all'; showFilterMenu = false; }}>
-            All
+          {#if offlineStatus.isOffline}
+            <button class="dropdown-item" class:selected={filter === 'all' || filter === 'offline_all'} onclick={() => { filter = 'offline_all'; showFilterMenu = false; }}>
+              {$t('offline.available')}
+            </button>
+            <button class="dropdown-item" class:selected={filter === 'offline_partial'} onclick={() => { filter = 'offline_partial'; showFilterMenu = false; }}>
+              {$t('offline.partiallyAvailable')}
+            </button>
+            <button class="dropdown-item" class:selected={filter === 'offline_unavailable'} onclick={() => { filter = 'offline_unavailable'; showFilterMenu = false; }}>
+              {$t('offline.notAvailableOffline')}
+            </button>
+            <div class="dropdown-divider"></div>
+          {/if}
+          <button class="dropdown-item" class:selected={filter === 'all' && !offlineStatus.isOffline} onclick={() => { filter = 'all'; showFilterMenu = false; }}>
+            {offlineStatus.isOffline ? $t('filter.all') : 'All'}
           </button>
           <button class="dropdown-item" class:selected={filter === 'visible'} onclick={() => { filter = 'visible'; showFilterMenu = false; }}>
             Visible
@@ -401,34 +449,42 @@
       {#each displayPlaylists as playlist (playlist.id)}
         {@const isHidden = playlistSettings.get(playlist.id)?.hidden}
         {@const localStatus = getLocalContentStatus(playlist.id)}
+        {@const isUnavailable = offlineStatus.isOffline && !isPlaylistAvailableOffline(playlist.id)}
         <div
           class="grid-item"
           class:hidden={isHidden}
+          class:unavailable={isUnavailable}
           class:dragging={draggedId === playlist.id}
           class:drag-over={dragOverId === playlist.id}
-          draggable={sort === 'custom'}
-          ondragstart={(e) => handleDragStart(e, playlist.id)}
-          ondragover={(e) => handleDragOver(e, playlist.id)}
+          draggable={sort === 'custom' && !isUnavailable}
+          ondragstart={(e) => !isUnavailable && handleDragStart(e, playlist.id)}
+          ondragover={(e) => !isUnavailable && handleDragOver(e, playlist.id)}
           ondragleave={handleDragLeave}
-          ondrop={(e) => handleDrop(e, playlist.id)}
+          ondrop={(e) => !isUnavailable && handleDrop(e, playlist.id)}
           ondragend={handleDragEnd}
         >
           <!-- Top row: drag handle (left) and edit button (right) -->
           <div class="grid-item-header">
-            {#if sort === 'custom'}
+            {#if sort === 'custom' && !isUnavailable}
               <div class="drag-handle">
                 <GripVertical size={14} />
               </div>
             {:else}
               <div class="drag-handle-placeholder"></div>
             {/if}
-            <button
-              class="edit-btn"
-              onclick={(e) => { e.stopPropagation(); openEditModal(playlist); }}
-              title="Edit playlist"
-            >
-              <Pencil size={14} />
-            </button>
+            {#if !isUnavailable}
+              <button
+                class="edit-btn"
+                onclick={(e) => { e.stopPropagation(); openEditModal(playlist); }}
+                title="Edit playlist"
+              >
+                <Pencil size={14} />
+              </button>
+            {:else}
+              <span class="view-only-badge" title={$t('offline.viewOnly')}>
+                <CloudOff size={12} />
+              </span>
+            {/if}
           </div>
 
           <!-- Clickable area: artwork + info -->
@@ -437,6 +493,7 @@
             role="button"
             tabindex="0"
             onclick={() => onPlaylistSelect?.(playlist.id)}
+            title={isUnavailable ? $t('offline.viewOnly') : undefined}
           >
             <div class="artwork">
               <PlaylistCollage artworks={playlist.images ?? []} size={140} />
@@ -470,22 +527,25 @@
         {@const isHidden = playlistSettings.get(playlist.id)?.hidden}
         {@const stats = playlistStats.get(playlist.id)}
         {@const localStatus = getLocalContentStatus(playlist.id)}
+        {@const isUnavailable = offlineStatus.isOffline && !isPlaylistAvailableOffline(playlist.id)}
         <div
           class="list-item"
           class:hidden={isHidden}
+          class:unavailable={isUnavailable}
           class:dragging={draggedId === playlist.id}
           class:drag-over={dragOverId === playlist.id}
-          draggable={sort === 'custom'}
-          ondragstart={(e) => handleDragStart(e, playlist.id)}
-          ondragover={(e) => handleDragOver(e, playlist.id)}
+          draggable={sort === 'custom' && !isUnavailable}
+          ondragstart={(e) => !isUnavailable && handleDragStart(e, playlist.id)}
+          ondragover={(e) => !isUnavailable && handleDragOver(e, playlist.id)}
           ondragleave={handleDragLeave}
-          ondrop={(e) => handleDrop(e, playlist.id)}
+          ondrop={(e) => !isUnavailable && handleDrop(e, playlist.id)}
           ondragend={handleDragEnd}
           role="button"
           tabindex="0"
           onclick={() => onPlaylistSelect?.(playlist.id)}
+          title={isUnavailable ? $t('offline.viewOnly') : undefined}
         >
-          {#if sort === 'custom'}
+          {#if sort === 'custom' && !isUnavailable}
             <div class="drag-handle">
               <GripVertical size={16} />
             </div>
@@ -503,7 +563,11 @@
               {/if}
             </span>
           </div>
-          {#if localStatus === 'all_local'}
+          {#if isUnavailable}
+            <span class="unavailable-badge" title={$t('offline.viewOnly')}>
+              <CloudOff size={14} />
+            </span>
+          {:else if localStatus === 'all_local'}
             <span class="local-indicator all" title={$t('offline.allLocal')}>
               <Wifi size={14} />
             </span>
@@ -523,13 +587,15 @@
               <EyeOff size={14} />
             </span>
           {/if}
-          <button
-            class="edit-btn"
-            onclick={(e) => { e.stopPropagation(); openEditModal(playlist); }}
-            title="Edit playlist"
-          >
-            <Pencil size={14} />
-          </button>
+          {#if !isUnavailable}
+            <button
+              class="edit-btn"
+              onclick={(e) => { e.stopPropagation(); openEditModal(playlist); }}
+              title="Edit playlist"
+            >
+              <Pencil size={14} />
+            </button>
+          {/if}
         </div>
       {/each}
     </div>
@@ -675,6 +741,12 @@
 
   .dropdown-item.selected {
     color: var(--accent-primary);
+  }
+
+  .dropdown-divider {
+    height: 1px;
+    background: var(--bg-tertiary);
+    margin: 4px 0;
   }
 
   .playlist-count {
@@ -1015,6 +1087,33 @@
   }
 
   .list-item .edit-btn {
+    flex-shrink: 0;
+  }
+
+  /* Unavailable playlist styles (offline mode) */
+  .grid-item.unavailable,
+  .list-item.unavailable {
+    opacity: 0.5;
+  }
+
+  .grid-item.unavailable .artwork,
+  .list-item.unavailable .artwork-small {
+    filter: grayscale(100%);
+  }
+
+  .view-only-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    color: var(--text-muted);
+  }
+
+  .unavailable-badge {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    margin-right: 8px;
     flex-shrink: 0;
   }
 </style>
