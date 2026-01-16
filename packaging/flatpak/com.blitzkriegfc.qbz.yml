@@ -26,6 +26,8 @@ finish-args:
   - --talk-name=org.mpris.MediaPlayer2.*
   # Own MPRIS name to register as media player (not just talk to others)
   - --own-name=org.mpris.MediaPlayer2.qbz_nix
+  # OAuth browser authentication
+  - --talk-name=org.freedesktop.portal.OpenURI
 
 modules:
   # intltool required for libdbusmenu
