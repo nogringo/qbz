@@ -89,10 +89,27 @@
   $effect(() => { localStorage.setItem('qbz-pm-sort', sort); });
   $effect(() => { localStorage.setItem('qbz-pm-view', viewMode); });
 
+  // Helper to get local content status for a playlist (calculated from actual data)
+  function getLocalContentStatus(playlistId: number): LocalContentStatus {
+    const playlist = playlists.find(p => p.id === playlistId);
+    const localCount = localTrackCounts.get(playlistId) ?? 0;
+    const qobuzCount = playlist?.tracks_count ?? 0;
+
+    if (localCount === 0) {
+      return 'no';
+    } else if (qobuzCount === 0) {
+      // Only local tracks - fully available offline
+      return 'all_local';
+    } else {
+      // Mixed: has both local and Qobuz tracks - partially available
+      return 'some_local';
+    }
+  }
+
   // Check if a playlist is available for interaction in offline mode
   function isPlaylistAvailableOffline(playlistId: number): boolean {
     if (!offlineStatus.isOffline) return true;
-    const localStatus = playlistSettings.get(playlistId)?.hasLocalContent ?? 'unknown';
+    const localStatus = getLocalContentStatus(playlistId);
     if (localStatus === 'all_local') return true;
     if (localStatus === 'some_local' && offlineSettings.showPartialPlaylists) return true;
     return false;
@@ -114,25 +131,25 @@
       if (filter === 'offline_all' || filter === 'all') {
         // Show all playlists with ANY local content (full or partial)
         result = result.filter(p => {
-          const localStatus = playlistSettings.get(p.id)?.hasLocalContent ?? 'unknown';
+          const localStatus = getLocalContentStatus(p.id);
           return localStatus === 'all_local' || localStatus === 'some_local';
         });
       } else if (filter === 'offline_partial') {
         // Show only playlists with partial local content
         result = result.filter(p => {
-          const localStatus = playlistSettings.get(p.id)?.hasLocalContent ?? 'unknown';
+          const localStatus = getLocalContentStatus(p.id);
           return localStatus === 'some_local';
         });
       } else if (filter === 'offline_unavailable') {
         // Show playlists with NO local content (view-only)
         result = result.filter(p => {
-          const localStatus = playlistSettings.get(p.id)?.hasLocalContent ?? 'unknown';
+          const localStatus = getLocalContentStatus(p.id);
           return localStatus === 'no' || localStatus === 'unknown';
         });
       } else if (filter === 'visible') {
         result = result.filter(p => {
           const settings = playlistSettings.get(p.id);
-          const localStatus = settings?.hasLocalContent ?? 'unknown';
+          const localStatus = getLocalContentStatus(p.id);
           return !settings?.hidden && (localStatus === 'all_local' || localStatus === 'some_local');
         });
       } else if (filter === 'hidden') {
@@ -168,11 +185,6 @@
 
     return result;
   });
-
-  // Helper to get local content status for a playlist
-  function getLocalContentStatus(playlistId: number): LocalContentStatus {
-    return playlistSettings.get(playlistId)?.hasLocalContent ?? 'unknown';
-  }
 
   onMount(() => {
     loadData();

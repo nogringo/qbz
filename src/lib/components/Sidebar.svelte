@@ -227,8 +227,22 @@
     // Filter by local content when offline
     if (offlineStatus.isOffline) {
       visible = visible.filter(p => {
-        const settings = playlistSettings.get(p.id);
-        const localStatus = settings?.hasLocalContent ?? 'unknown';
+        // Calculate local content status from actual data
+        const localCount = localTrackCounts.get(p.id) ?? 0;
+        const qobuzCount = p.tracks_count ?? 0;
+
+        // Determine availability status
+        let localStatus: LocalContentStatus;
+        if (localCount === 0) {
+          localStatus = 'no';
+        } else if (qobuzCount === 0) {
+          // Only local tracks - fully available
+          localStatus = 'all_local';
+        } else {
+          // Mixed: has both local and Qobuz tracks - partially available
+          localStatus = 'some_local';
+        }
+
         if (offlineSettings.showPartialPlaylists) {
           return localStatus === 'all_local' || localStatus === 'some_local';
         }
