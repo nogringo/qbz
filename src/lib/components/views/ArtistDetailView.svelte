@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { ArrowLeft, User, ChevronDown, ChevronUp, Play, Music, Heart, Search, X } from 'lucide-svelte';
+  import { ArrowLeft, User, ChevronDown, ChevronUp, Play, Music, Heart, Search, X, ChevronLeft, ChevronRight } from 'lucide-svelte';
   import type { ArtistDetail, QobuzArtist } from '$lib/types';
   import AlbumCard from '../AlbumCard.svelte';
   import TrackMenu from '../TrackMenu.svelte';
@@ -124,6 +124,7 @@
   let searchOpen = $state(false);
   let searchQuery = $state('');
   let searchInputEl = $state<HTMLInputElement | null>(null);
+  let currentSearchIndex = $state(0);
 
   // Download status tracking
   let albumDownloadStatuses = $state<Map<string, boolean>>(new Map());
@@ -422,19 +423,71 @@
     filteredPlaylists.length
   );
 
+  // Collect all result IDs for navigation
+  let allSearchResultIds = $derived.by(() => {
+    if (!searchLower) return [];
+    const ids: string[] = [];
+    filteredAlbums.forEach(a => ids.push(`album-${a.id}`));
+    filteredEpsSingles.forEach(a => ids.push(`album-${a.id}`));
+    filteredLiveAlbums.forEach(a => ids.push(`album-${a.id}`));
+    filteredCompilations.forEach(a => ids.push(`album-${a.id}`));
+    filteredTributes.forEach(a => ids.push(`album-${a.id}`));
+    filteredOthers.forEach(a => ids.push(`album-${a.id}`));
+    filteredPlaylists.forEach(p => ids.push(`playlist-${p.id}`));
+    return ids;
+  });
+
+  // Reset index when search changes
+  $effect(() => {
+    if (searchQuery) {
+      currentSearchIndex = 0;
+      // Navigate to first result
+      if (allSearchResultIds.length > 0) {
+        setTimeout(() => navigateToResult(0), 100);
+      }
+    }
+  });
+
   function toggleSearch() {
-    searchOpen = !searchOpen;
     if (searchOpen) {
-      // Focus input after it opens
-      setTimeout(() => searchInputEl?.focus(), 100);
-    } else {
+      searchOpen = false;
       searchQuery = '';
+      currentSearchIndex = 0;
+    } else {
+      searchOpen = true;
+      setTimeout(() => searchInputEl?.focus(), 100);
     }
   }
 
   function clearSearch() {
     searchQuery = '';
-    searchInputEl?.focus();
+    currentSearchIndex = 0;
+  }
+
+  function navigateToResult(index: number) {
+    if (allSearchResultIds.length === 0) return;
+    const id = allSearchResultIds[index];
+    if (!id) return;
+
+    // Find the AlbumCard element by data attribute
+    const element = artistDetailEl?.querySelector(`[data-search-id="${id}"]`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function nextResult() {
+    if (allSearchResultIds.length === 0) return;
+    currentSearchIndex = (currentSearchIndex + 1) % allSearchResultIds.length;
+    navigateToResult(currentSearchIndex);
+  }
+
+  function prevResult() {
+    if (allSearchResultIds.length === 0) return;
+    currentSearchIndex = currentSearchIndex === 0
+      ? allSearchResultIds.length - 1
+      : currentSearchIndex - 1;
+    navigateToResult(currentSearchIndex);
   }
 
   function scrollToSection(target: HTMLDivElement | null, id: string) {
@@ -613,34 +666,58 @@
       </div>
       <div class="page-search" class:open={searchOpen}>
         {#if searchOpen}
-          <div class="search-input-wrapper">
+          <div class="search-input-container">
             <input
               type="text"
               class="search-input"
               placeholder="Search in this page..."
               bind:value={searchQuery}
               bind:this={searchInputEl}
-              onkeydown={(e) => e.key === 'Escape' && toggleSearch()}
+              onkeydown={(e) => {
+                if (e.key === 'Escape') toggleSearch();
+                else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (e.shiftKey) prevResult();
+                  else nextResult();
+                }
+              }}
             />
-            {#if searchQuery}
-              <button class="search-clear" onclick={clearSearch}>
-                <X size={14} />
+            <div class="search-controls">
+              {#if searchQuery}
+                <span class="search-count">
+                  {#if totalFilteredResults === 0}
+                    0/0
+                  {:else}
+                    {currentSearchIndex + 1}/{totalFilteredResults}
+                  {/if}
+                </span>
+                <button
+                  class="search-nav-btn"
+                  onclick={prevResult}
+                  disabled={totalFilteredResults === 0}
+                  title="Previous result (Shift+Enter)"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  class="search-nav-btn"
+                  onclick={nextResult}
+                  disabled={totalFilteredResults === 0}
+                  title="Next result (Enter)"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              {/if}
+              <button class="search-close-btn" onclick={toggleSearch} title="Close search">
+                <X size={16} />
               </button>
-            {/if}
-            {#if searchQuery && totalFilteredResults === 0}
-              <span class="search-no-results">No results</span>
-            {:else if searchQuery}
-              <span class="search-results-count">{totalFilteredResults} found</span>
-            {/if}
+            </div>
           </div>
-        {/if}
-        <button class="search-toggle" onclick={toggleSearch} title="Search in this page">
-          {#if searchOpen}
-            <X size={18} />
-          {:else}
+        {:else}
+          <button class="search-toggle" onclick={toggleSearch} title="Search in this page">
             <Search size={18} />
-          {/if}
-        </button>
+          </button>
+        {/if}
       </div>
     </div>
   {/if}
@@ -738,6 +815,7 @@
               title={album.title}
               artist={album.year || ''}
               quality={album.quality}
+              searchId={`album-${album.id}`}
               onPlay={onAlbumPlay ? () => onAlbumPlay(album.id) : undefined}
               onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(album.id) : undefined}
               onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(album.id) : undefined}
@@ -780,6 +858,7 @@
             title={album.title}
             artist={album.year || ''}
             quality={album.quality}
+            searchId={`album-${album.id}`}
             onPlay={onAlbumPlay ? () => onAlbumPlay(album.id) : undefined}
             onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(album.id) : undefined}
             onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(album.id) : undefined}
@@ -789,7 +868,7 @@
             isAlbumFullyDownloaded={isAlbumDownloaded(album.id)}
             onOpenContainingFolder={onOpenAlbumFolder ? () => onOpenAlbumFolder(album.id) : undefined}
             onReDownloadAlbum={onReDownloadAlbum ? () => onReDownloadAlbum(album.id) : undefined}
-              {downloadStateVersion}
+            {downloadStateVersion}
             onclick={() => { onAlbumClick?.(album.id); loadAlbumDownloadStatus(album.id); }}
           />
         {/each}
@@ -810,6 +889,7 @@
             title={album.title}
             artist={album.year || ''}
             quality={album.quality}
+            searchId={`album-${album.id}`}
             onPlay={onAlbumPlay ? () => onAlbumPlay(album.id) : undefined}
             onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(album.id) : undefined}
             onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(album.id) : undefined}
@@ -819,7 +899,7 @@
             isAlbumFullyDownloaded={isAlbumDownloaded(album.id)}
             onOpenContainingFolder={onOpenAlbumFolder ? () => onOpenAlbumFolder(album.id) : undefined}
             onReDownloadAlbum={onReDownloadAlbum ? () => onReDownloadAlbum(album.id) : undefined}
-              {downloadStateVersion}
+            {downloadStateVersion}
             onclick={() => { onAlbumClick?.(album.id); loadAlbumDownloadStatus(album.id); }}
           />
         {/each}
@@ -840,6 +920,7 @@
             title={album.title}
             artist={album.year || ''}
             quality={album.quality}
+            searchId={`album-${album.id}`}
             onPlay={onAlbumPlay ? () => onAlbumPlay(album.id) : undefined}
             onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(album.id) : undefined}
             onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(album.id) : undefined}
@@ -849,7 +930,7 @@
             isAlbumFullyDownloaded={isAlbumDownloaded(album.id)}
             onOpenContainingFolder={onOpenAlbumFolder ? () => onOpenAlbumFolder(album.id) : undefined}
             onReDownloadAlbum={onReDownloadAlbum ? () => onReDownloadAlbum(album.id) : undefined}
-              {downloadStateVersion}
+            {downloadStateVersion}
             onclick={() => { onAlbumClick?.(album.id); loadAlbumDownloadStatus(album.id); }}
           />
         {/each}
@@ -870,6 +951,7 @@
             title={album.title}
             artist={album.year || ''}
             quality={album.quality}
+            searchId={`album-${album.id}`}
             onPlay={onAlbumPlay ? () => onAlbumPlay(album.id) : undefined}
             onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(album.id) : undefined}
             onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(album.id) : undefined}
@@ -879,7 +961,7 @@
             isAlbumFullyDownloaded={isAlbumDownloaded(album.id)}
             onOpenContainingFolder={onOpenAlbumFolder ? () => onOpenAlbumFolder(album.id) : undefined}
             onReDownloadAlbum={onReDownloadAlbum ? () => onReDownloadAlbum(album.id) : undefined}
-              {downloadStateVersion}
+            {downloadStateVersion}
             onclick={() => { onAlbumClick?.(album.id); loadAlbumDownloadStatus(album.id); }}
           />
         {/each}
@@ -900,6 +982,7 @@
             title={album.title}
             artist={album.year || ''}
             quality={album.quality}
+            searchId={`album-${album.id}`}
             onPlay={onAlbumPlay ? () => onAlbumPlay(album.id) : undefined}
             onPlayNext={onAlbumPlayNext ? () => onAlbumPlayNext(album.id) : undefined}
             onPlayLater={onAlbumPlayLater ? () => onAlbumPlayLater(album.id) : undefined}
@@ -909,7 +992,7 @@
             isAlbumFullyDownloaded={isAlbumDownloaded(album.id)}
             onOpenContainingFolder={onOpenAlbumFolder ? () => onOpenAlbumFolder(album.id) : undefined}
             onReDownloadAlbum={onReDownloadAlbum ? () => onReDownloadAlbum(album.id) : undefined}
-              {downloadStateVersion}
+            {downloadStateVersion}
             onclick={() => { onAlbumClick?.(album.id); loadAlbumDownloadStatus(album.id); }}
           />
         {/each}
@@ -926,6 +1009,7 @@
         {#each filteredPlaylists as playlist}
           <button
             class="playlist-card"
+            data-search-id={`playlist-${playlist.id}`}
             onclick={() => onPlaylistClick?.(playlist.id)}
             disabled={!onPlaylistClick}
           >
@@ -1181,7 +1265,6 @@
   .page-search {
     display: flex;
     align-items: center;
-    gap: 8px;
   }
 
   .search-toggle {
@@ -1191,27 +1274,24 @@
     width: 32px;
     height: 32px;
     border: none;
-    background: var(--bg-secondary);
+    background: transparent;
     color: var(--text-muted);
     border-radius: 6px;
     cursor: pointer;
-    transition: all 150ms ease;
+    transition: color 150ms ease;
   }
 
   .search-toggle:hover {
-    background: var(--bg-tertiary);
     color: var(--text-primary);
   }
 
-  .page-search.open .search-toggle {
-    background: var(--accent-primary);
-    color: white;
-  }
-
-  .search-input-wrapper {
+  .search-input-container {
     display: flex;
     align-items: center;
-    gap: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--bg-tertiary);
+    border-radius: 6px;
+    padding: 0 4px 0 12px;
     animation: slideInFromRight 200ms ease-out;
   }
 
@@ -1227,53 +1307,77 @@
   }
 
   .search-input {
-    width: 200px;
-    padding: 6px 12px;
-    border: 1px solid var(--bg-tertiary);
-    border-radius: 6px;
-    background: var(--bg-secondary);
+    width: 180px;
+    padding: 6px 0;
+    border: none;
+    background: transparent;
     color: var(--text-primary);
     font-size: 13px;
     outline: none;
-    transition: border-color 150ms ease;
   }
 
   .search-input::placeholder {
     color: var(--text-muted);
   }
 
-  .search-input:focus {
-    border-color: var(--accent-primary);
+  .search-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 8px;
   }
 
-  .search-clear {
+  .search-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 32px;
+    text-align: center;
+    padding: 0 4px;
+  }
+
+  .search-nav-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border: none;
-    background: var(--bg-tertiary);
+    background: transparent;
     color: var(--text-muted);
-    border-radius: 50%;
+    border-radius: 4px;
     cursor: pointer;
-    margin-left: -32px;
+    transition: all 150ms ease;
   }
 
-  .search-clear:hover {
+  .search-nav-btn:hover:not(:disabled) {
     color: var(--text-primary);
+    background: var(--bg-tertiary);
   }
 
-  .search-results-count {
-    font-size: 12px;
+  .search-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .search-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
     color: var(--text-muted);
-    white-space: nowrap;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 150ms ease;
+    margin-left: 2px;
   }
 
-  .search-no-results {
-    font-size: 12px;
-    color: var(--danger);
-    white-space: nowrap;
+  .search-close-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
   }
 
   .similar-artists {

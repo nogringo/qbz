@@ -16,6 +16,7 @@
     artist: string;
     quality?: string;
     size?: 'standard' | 'large';
+    searchId?: string;
     onclick?: () => void;
     onPlay?: () => void;
     onPlayNext?: () => void;
@@ -38,6 +39,7 @@
     artist,
     quality,
     size = 'standard',
+    searchId,
     onclick,
     onPlay,
     onPlayNext,
@@ -153,6 +155,7 @@
 <div
   class="album-card"
   style="width: {cardSize}px"
+  data-search-id={searchId}
   onclick={handleCardClick}
   role="button"
   tabindex="0"
