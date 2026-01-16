@@ -247,10 +247,23 @@
   import PlaylistImportModal from '$lib/components/PlaylistImportModal.svelte';
   import CastPicker from '$lib/components/CastPicker.svelte';
   import LyricsSidebar from '$lib/components/lyrics/LyricsSidebar.svelte';
+  import OfflinePlaceholder from '$lib/components/OfflinePlaceholder.svelte';
+
+  // Offline state
+  import {
+    subscribe as subscribeOffline,
+    getStatus as getOfflineStatus,
+    isOffline as checkIsOffline,
+    getOfflineReason,
+    type OfflineStatus
+  } from '$lib/stores/offlineStore';
 
   // Auth State (from authStore subscription)
   let isLoggedIn = $state(false);
   let userInfo = $state<UserInfo | null>(null);
+
+  // Offline State (from offlineStore subscription)
+  let offlineStatus = $state<OfflineStatus>(getOfflineStatus());
 
   // View State (from navigationStore subscription)
   let activeView = $state<ViewType>('home');
@@ -1527,6 +1540,11 @@
       userInfo = authState.userInfo;
     });
 
+    // Subscribe to offline state changes
+    const unsubscribeOffline = subscribeOffline(() => {
+      offlineStatus = getOfflineStatus();
+    });
+
     // Subscribe to navigation state changes
     const unsubscribeNav = subscribeNav(() => {
       const navState = getNavigationState();
@@ -1708,6 +1726,7 @@
       unsubscribeToast();
       unsubscribeUI();
       unsubscribeAuth();
+      unsubscribeOffline();
       unsubscribeNav();
       unsubscribePlayer();
       unsubscribeQueue();
@@ -1781,46 +1800,60 @@
     <!-- Main Content -->
     <main class="main-content">
       {#if activeView === 'home'}
-        <HomeView
-          userName={userInfo?.userName}
-          onAlbumClick={handleAlbumClick}
-          onAlbumPlay={playAlbumById}
-          onAlbumPlayNext={queueAlbumNextById}
-          onAlbumPlayLater={queueAlbumLaterById}
-          onAlbumShareQobuz={shareAlbumQobuzLinkById}
-          onAlbumShareSonglink={shareAlbumSonglinkById}
-          onAlbumDownload={downloadAlbumById}
-          onOpenAlbumFolder={openAlbumFolderById}
-          onReDownloadAlbum={reDownloadAlbumById}
-          checkAlbumFullyDownloaded={checkAlbumFullyDownloaded}
-          {downloadStateVersion}
-          onArtistClick={handleArtistClick}
-          onTrackPlay={handleDisplayTrackPlay}
-        />
+        {#if offlineStatus.isOffline}
+          <OfflinePlaceholder
+            reason={offlineStatus.reason}
+            onGoToLibrary={() => navigateTo('library')}
+          />
+        {:else}
+          <HomeView
+            userName={userInfo?.userName}
+            onAlbumClick={handleAlbumClick}
+            onAlbumPlay={playAlbumById}
+            onAlbumPlayNext={queueAlbumNextById}
+            onAlbumPlayLater={queueAlbumLaterById}
+            onAlbumShareQobuz={shareAlbumQobuzLinkById}
+            onAlbumShareSonglink={shareAlbumSonglinkById}
+            onAlbumDownload={downloadAlbumById}
+            onOpenAlbumFolder={openAlbumFolderById}
+            onReDownloadAlbum={reDownloadAlbumById}
+            checkAlbumFullyDownloaded={checkAlbumFullyDownloaded}
+            {downloadStateVersion}
+            onArtistClick={handleArtistClick}
+            onTrackPlay={handleDisplayTrackPlay}
+          />
+        {/if}
       {:else if activeView === 'search'}
-        <SearchView
-          onAlbumClick={handleAlbumClick}
-          onAlbumPlay={playAlbumById}
-          onAlbumPlayNext={queueAlbumNextById}
-          onAlbumPlayLater={queueAlbumLaterById}
-          onAlbumShareQobuz={shareAlbumQobuzLinkById}
-          onAlbumShareSonglink={shareAlbumSonglinkById}
-          onAlbumDownload={downloadAlbumById}
-          onOpenAlbumFolder={openAlbumFolderById}
-          onReDownloadAlbum={reDownloadAlbumById}
-          checkAlbumFullyDownloaded={checkAlbumFullyDownloaded}
-          {downloadStateVersion}
-          onTrackPlay={handleTrackPlay}
-          onTrackPlayNext={queueQobuzTrackNext}
-          onTrackPlayLater={queueQobuzTrackLater}
-          onTrackAddFavorite={handleAddToFavorites}
-          onTrackAddToPlaylist={(trackId) => openAddToPlaylist([trackId])}
-          onTrackShareQobuz={shareQobuzTrackLink}
-          onTrackShareSonglink={(track) => shareSonglinkTrack(track.id, track.isrc)}
-          onTrackGoToAlbum={handleAlbumClick}
-          onTrackGoToArtist={handleArtistClick}
-          onArtistClick={handleArtistClick}
-        />
+        {#if offlineStatus.isOffline}
+          <OfflinePlaceholder
+            reason={offlineStatus.reason}
+            onGoToLibrary={() => navigateTo('library')}
+          />
+        {:else}
+          <SearchView
+            onAlbumClick={handleAlbumClick}
+            onAlbumPlay={playAlbumById}
+            onAlbumPlayNext={queueAlbumNextById}
+            onAlbumPlayLater={queueAlbumLaterById}
+            onAlbumShareQobuz={shareAlbumQobuzLinkById}
+            onAlbumShareSonglink={shareAlbumSonglinkById}
+            onAlbumDownload={downloadAlbumById}
+            onOpenAlbumFolder={openAlbumFolderById}
+            onReDownloadAlbum={reDownloadAlbumById}
+            checkAlbumFullyDownloaded={checkAlbumFullyDownloaded}
+            {downloadStateVersion}
+            onTrackPlay={handleTrackPlay}
+            onTrackPlayNext={queueQobuzTrackNext}
+            onTrackPlayLater={queueQobuzTrackLater}
+            onTrackAddFavorite={handleAddToFavorites}
+            onTrackAddToPlaylist={(trackId) => openAddToPlaylist([trackId])}
+            onTrackShareQobuz={shareQobuzTrackLink}
+            onTrackShareSonglink={(track) => shareSonglinkTrack(track.id, track.isrc)}
+            onTrackGoToAlbum={handleAlbumClick}
+            onTrackGoToArtist={handleArtistClick}
+            onArtistClick={handleArtistClick}
+          />
+        {/if}
       {:else if activeView === 'settings'}
         <SettingsView
           onBack={navGoBack}
@@ -1921,32 +1954,39 @@
           onPlaylistDeleted={() => { sidebarRef?.refreshPlaylists(); navGoBack(); }}
         />
       {:else if activeView === 'favorites'}
-        <FavoritesView
-          onAlbumClick={handleAlbumClick}
-          onAlbumPlay={playAlbumById}
-          onAlbumPlayNext={queueAlbumNextById}
-          onAlbumPlayLater={queueAlbumLaterById}
-          onAlbumShareQobuz={shareAlbumQobuzLinkById}
-          onAlbumShareSonglink={shareAlbumSonglinkById}
-          onAlbumDownload={downloadAlbumById}
-          onOpenAlbumFolder={openAlbumFolderById}
-          onReDownloadAlbum={reDownloadAlbumById}
-          checkAlbumFullyDownloaded={checkAlbumFullyDownloaded}
-          {downloadStateVersion}
-          onTrackPlay={handleDisplayTrackPlay}
-          onArtistClick={handleArtistClick}
-          onTrackPlayNext={queuePlaylistTrackNext}
-          onTrackPlayLater={queuePlaylistTrackLater}
-          onTrackAddFavorite={handleAddToFavorites}
-          onTrackAddToPlaylist={(trackId) => openAddToPlaylist([trackId])}
-          onTrackShareQobuz={shareQobuzTrackLink}
-          onTrackShareSonglink={(track) => shareSonglinkTrack(track.id, track.isrc)}
-          onTrackGoToAlbum={handleAlbumClick}
-          onTrackGoToArtist={handleArtistClick}
-          onTrackDownload={handleDisplayTrackDownload}
-          onTrackRemoveDownload={handleTrackRemoveDownload}
-          getTrackDownloadStatus={getTrackDownloadStatus}
-        />
+        {#if offlineStatus.isOffline}
+          <OfflinePlaceholder
+            reason={offlineStatus.reason}
+            onGoToLibrary={() => navigateTo('library')}
+          />
+        {:else}
+          <FavoritesView
+            onAlbumClick={handleAlbumClick}
+            onAlbumPlay={playAlbumById}
+            onAlbumPlayNext={queueAlbumNextById}
+            onAlbumPlayLater={queueAlbumLaterById}
+            onAlbumShareQobuz={shareAlbumQobuzLinkById}
+            onAlbumShareSonglink={shareAlbumSonglinkById}
+            onAlbumDownload={downloadAlbumById}
+            onOpenAlbumFolder={openAlbumFolderById}
+            onReDownloadAlbum={reDownloadAlbumById}
+            checkAlbumFullyDownloaded={checkAlbumFullyDownloaded}
+            {downloadStateVersion}
+            onTrackPlay={handleDisplayTrackPlay}
+            onArtistClick={handleArtistClick}
+            onTrackPlayNext={queuePlaylistTrackNext}
+            onTrackPlayLater={queuePlaylistTrackLater}
+            onTrackAddFavorite={handleAddToFavorites}
+            onTrackAddToPlaylist={(trackId) => openAddToPlaylist([trackId])}
+            onTrackShareQobuz={shareQobuzTrackLink}
+            onTrackShareSonglink={(track) => shareSonglinkTrack(track.id, track.isrc)}
+            onTrackGoToAlbum={handleAlbumClick}
+            onTrackGoToArtist={handleArtistClick}
+            onTrackDownload={handleDisplayTrackDownload}
+            onTrackRemoveDownload={handleTrackRemoveDownload}
+            getTrackDownloadStatus={getTrackDownloadStatus}
+          />
+        {/if}
       {:else if activeView === 'playlist-manager'}
         <PlaylistManagerView
           onBack={navGoBack}

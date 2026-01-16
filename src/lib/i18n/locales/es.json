@@ -420,5 +420,29 @@
     "moveUp": "Subir",
     "moveDown": "Bajar",
     "resetToDefaults": "Restablecer valores"
+  },
+  "offline": {
+    "title": "Modo Offline",
+    "message": "Conecta a internet para acceder al contenido de Qobuz.",
+    "noNetwork": "Sin Conexion a Internet",
+    "noNetworkMessage": "Verifica tu conexion para acceder al streaming de Qobuz.",
+    "notLoggedIn": "No Has Iniciado Sesion",
+    "notLoggedInMessage": "Inicia sesion en tu cuenta de Qobuz para acceder al contenido.",
+    "manualMode": "Modo Offline Activado",
+    "manualModeMessage": "Has activado el modo offline manualmente. Tu biblioteca local sigue disponible.",
+    "goToLibrary": "Ir a Biblioteca Local",
+    "enableManual": "Activar Modo Offline",
+    "enableManualDesc": "Cambiar manualmente a modo offline incluso con internet",
+    "showPartialPlaylists": "Mostrar Listas Parciales",
+    "showPartialPlaylistsDesc": "Mostrar listas con algo de contenido local en modo offline",
+    "status": "Estado",
+    "online": "En linea",
+    "offlineReason": "Offline",
+    "indicator": "Offline",
+    "allLocal": "Disponible Offline",
+    "someLocal": "Parcialmente Disponible Offline",
+    "notAvailable": "No Disponible Offline",
+    "trackNotAvailable": "Esta pista no esta disponible offline",
+    "featureDisabled": "Esta funcion requiere conexion a internet"
   }
 }

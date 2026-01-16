@@ -420,5 +420,29 @@
     "moveUp": "Move up",
     "moveDown": "Move down",
     "resetToDefaults": "Reset to defaults"
+  },
+  "offline": {
+    "title": "Offline Mode",
+    "message": "Connect to the internet to access Qobuz content.",
+    "noNetwork": "No Network Connection",
+    "noNetworkMessage": "Check your internet connection to access Qobuz streaming.",
+    "notLoggedIn": "Not Logged In",
+    "notLoggedInMessage": "Log in to your Qobuz account to access streaming content.",
+    "manualMode": "Offline Mode Enabled",
+    "manualModeMessage": "You have manually enabled offline mode. Your local library is still available.",
+    "goToLibrary": "Go to Local Library",
+    "enableManual": "Enable Offline Mode",
+    "enableManualDesc": "Manually switch to offline mode even with internet",
+    "showPartialPlaylists": "Show Partial Playlists",
+    "showPartialPlaylistsDesc": "Show playlists with some local content in offline mode",
+    "status": "Status",
+    "online": "Online",
+    "offlineReason": "Offline",
+    "indicator": "Offline",
+    "allLocal": "Fully Available Offline",
+    "someLocal": "Partially Available Offline",
+    "notAvailable": "Not Available Offline",
+    "trackNotAvailable": "This track is not available offline",
+    "featureDisabled": "This feature requires internet connection"
   }
 }
