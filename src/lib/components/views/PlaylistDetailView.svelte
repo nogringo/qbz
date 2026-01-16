@@ -77,6 +77,21 @@
     artwork_path?: string;
   }
 
+  // Local track with playlist position (for mixed ordering)
+  interface PlaylistLocalTrack {
+    id: number;
+    file_path: string;
+    title: string;
+    artist: string;
+    album: string;
+    duration_secs: number;
+    format: string;
+    bit_depth?: number;
+    sample_rate: number;
+    artwork_path?: string;
+    playlist_position: number;
+  }
+
   interface PlaylistSettings {
     qobuz_playlist_id: number;
     custom_artwork_path?: string;
@@ -151,8 +166,8 @@
 
   let playlist = $state<Playlist | null>(null);
   let tracks = $state<DisplayTrack[]>([]);
-  let localTracks = $state<LocalLibraryTrack[]>([]);
-  let localTracksMap = $state<Map<number, LocalLibraryTrack>>(new Map());
+  let localTracks = $state<PlaylistLocalTrack[]>([]);
+  let localTracksMap = $state<Map<number, PlaylistLocalTrack>>(new Map());
   let hasLocalTracks = $derived(localTracks.length > 0);
 
   // Total counts including local tracks
@@ -240,7 +255,7 @@
 
   async function loadLocalTracks() {
     try {
-      const result = await invoke<LocalLibraryTrack[]>('playlist_get_local_tracks', { playlistId });
+      const result = await invoke<PlaylistLocalTrack[]>('playlist_get_local_tracks_with_position', { playlistId });
       localTracks = result;
       // Create a map for quick lookup
       localTracksMap = new Map(result.map(t => [t.id, t]));
@@ -350,7 +365,7 @@
   }
 
   // Convert local tracks to DisplayTrack format
-  function localTrackToDisplay(track: LocalLibraryTrack, index: number): DisplayTrack {
+  function localTrackToDisplay(track: PlaylistLocalTrack, index: number): DisplayTrack {
     return {
       id: -track.id, // Negative ID to distinguish from Qobuz tracks
       number: index + 1,
@@ -369,25 +384,53 @@
     };
   }
 
-  // Filtered and sorted tracks (merged Qobuz + local)
+  // Filtered and sorted tracks (merged Qobuz + local by position)
   let displayTracks = $derived.by(() => {
-    // Combine Qobuz tracks with local tracks
-    const localDisplayTracks = localTracks.map((t, idx) => localTrackToDisplay(t, tracks.length + idx));
-    let result = [...tracks, ...localDisplayTracks];
+    // Build merged list by interleaving based on position
+    // Local tracks have explicit playlist_position
+    // Qobuz tracks fill positions not occupied by local tracks
+    const result: DisplayTrack[] = [];
+    const totalCount = tracks.length + localTracks.length;
+
+    // Create a map of local track positions
+    const localByPosition = new Map<number, PlaylistLocalTrack>();
+    for (const lt of localTracks) {
+      localByPosition.set(lt.playlist_position, lt);
+    }
+
+    // Interleave: iterate through positions, use local if exists, else use next Qobuz track
+    let qobuzIdx = 0;
+    for (let pos = 0; pos < totalCount; pos++) {
+      const localTrack = localByPosition.get(pos);
+      if (localTrack) {
+        result.push(localTrackToDisplay(localTrack, pos));
+      } else if (qobuzIdx < tracks.length) {
+        // Use Qobuz track but update its number to match merged position
+        result.push({ ...tracks[qobuzIdx], number: pos + 1 });
+        qobuzIdx++;
+      }
+    }
+
+    // If any Qobuz tracks remain (shouldn't happen with correct positions), append them
+    while (qobuzIdx < tracks.length) {
+      result.push({ ...tracks[qobuzIdx], number: result.length + 1 });
+      qobuzIdx++;
+    }
 
     // Filter by search query
+    let filtered = result;
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(t =>
+      filtered = result.filter(t =>
         t.title.toLowerCase().includes(query) ||
         (t.artist?.toLowerCase().includes(query)) ||
         (t.album?.toLowerCase().includes(query))
       );
     }
 
-    // Sort
+    // Sort (only if not default)
     if (sortBy !== 'default') {
-      result.sort((a, b) => {
+      filtered.sort((a, b) => {
         let cmp = 0;
         switch (sortBy) {
           case 'title':
@@ -407,7 +450,7 @@
       });
     }
 
-    return result;
+    return filtered;
   });
 
   const sortOptions: { field: SortField; label: string }[] = [

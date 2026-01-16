@@ -1031,6 +1031,19 @@ pub async fn playlist_get_local_tracks(
         .map_err(|e| e.to_string())
 }
 
+/// Get all local tracks in a playlist with their positions (for mixed ordering)
+#[tauri::command]
+pub async fn playlist_get_local_tracks_with_position(
+    playlist_id: u64,
+    state: State<'_, LibraryState>,
+) -> Result<Vec<crate::library::PlaylistLocalTrack>, String> {
+    log::info!("Command: playlist_get_local_tracks_with_position {}", playlist_id);
+
+    let db = state.db.lock().await;
+    db.get_playlist_local_tracks_with_position(playlist_id)
+        .map_err(|e| e.to_string())
+}
+
 /// Get local track counts for all playlists
 #[tauri::command]
 pub async fn playlist_get_all_local_track_counts(

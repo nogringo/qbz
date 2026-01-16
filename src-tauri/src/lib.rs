@@ -387,6 +387,7 @@ pub fn run() {
             library::commands::playlist_add_local_track,
             library::commands::playlist_remove_local_track,
             library::commands::playlist_get_local_tracks,
+            library::commands::playlist_get_local_tracks_with_position,
             library::commands::playlist_get_all_local_track_counts,
             library::commands::playlist_clear_local_tracks,
             // Playlist management commands

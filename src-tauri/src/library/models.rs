@@ -104,6 +104,15 @@ impl Default for LocalTrack {
     }
 }
 
+/// A local track within a playlist, including its position
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaylistLocalTrack {
+    #[serde(flatten)]
+    pub track: LocalTrack,
+    /// Position in the combined playlist (Qobuz + local tracks)
+    pub playlist_position: i32,
+}
+
 /// An album aggregated from local tracks
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalAlbum {

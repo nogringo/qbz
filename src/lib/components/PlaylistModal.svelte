@@ -181,12 +181,18 @@
 
     try {
       if (isLocalTracks) {
-        // Add local tracks one by one
+        // Get current total count (Qobuz + local) to append at correct position
+        const playlist = userPlaylists.find(p => p.id === selectedPlaylistId);
+        const qobuzCount = playlist?.tracks_count ?? 0;
+        const localCount = localTrackCounts.get(selectedPlaylistId!) ?? 0;
+        const startPosition = qobuzCount + localCount;
+
+        // Add local tracks at the end
         for (let i = 0; i < trackIds.length; i++) {
           await invoke('playlist_add_local_track', {
             playlistId: selectedPlaylistId,
             localTrackId: trackIds[i],
-            position: i
+            position: startPosition + i
           });
         }
       } else {
