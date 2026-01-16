@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Play, Shuffle, ListMusic, Search, X, ChevronDown, ChevronRight, ImagePlus, Edit3, BarChart2 } from 'lucide-svelte';
+  import { ArrowLeft, Play, Shuffle, ListMusic, Search, X, ChevronDown, ChevronRight, ImagePlus, Edit3, BarChart2, Heart } from 'lucide-svelte';
   import AlbumMenu from '../AlbumMenu.svelte';
   import PlaylistCollage from '../PlaylistCollage.svelte';
   import PlaylistModal from '../PlaylistModal.svelte';
@@ -101,6 +101,7 @@
     notes?: string;
     hidden?: boolean;
     position?: number;
+    is_favorite?: boolean;
   }
 
   interface PlaylistStats {
@@ -194,6 +195,7 @@
   let playlistSettings = $state<PlaylistSettings | null>(null);
   let playlistStats = $state<PlaylistStats | null>(null);
   let editModalOpen = $state(false);
+  let isFavorite = $state(false);
 
   // Subscribe to offline status changes
   onMount(() => {
@@ -320,6 +322,7 @@
     customArtworkPath = null;
     searchQuery = '';
     playlistSettings = null;
+    isFavorite = false;
 
     try {
       const settings = await invoke<PlaylistSettings | null>('playlist_get_settings', { playlistId });
@@ -329,6 +332,7 @@
         sortOrder = (settings.sort_order as SortOrder) || 'asc';
         customArtworkPath = settings.custom_artwork_path || null;
         searchQuery = settings.last_search_query || '';
+        isFavorite = settings.is_favorite ?? false;
       }
     } catch (err) {
       console.error('Failed to load playlist settings:', err);
@@ -341,6 +345,17 @@
       playlistStats = stats;
     } catch (err) {
       console.error('Failed to load playlist stats:', err);
+    }
+  }
+
+  async function toggleFavorite() {
+    const newValue = !isFavorite;
+    isFavorite = newValue; // Optimistic update
+    try {
+      await invoke('playlist_set_favorite', { playlistId, favorite: newValue });
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err);
+      isFavorite = !newValue; // Revert on error
     }
   }
 
@@ -787,7 +802,17 @@
       <!-- Playlist Metadata -->
       <div class="metadata">
         <span class="playlist-label">Playlist</span>
-        <h1 class="playlist-title">{playlist.name}</h1>
+        <div class="title-row">
+          <h1 class="playlist-title">{playlist.name}</h1>
+          <button
+            class="favorite-btn"
+            class:active={isFavorite}
+            onclick={toggleFavorite}
+            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart size={24} fill={isFavorite ? 'var(--accent-primary)' : 'none'} color={isFavorite ? 'var(--accent-primary)' : 'var(--text-secondary)'} />
+          </button>
+        </div>
         {#if playlist.description}
           <p class="playlist-description">{playlist.description}</p>
         {/if}
@@ -1199,6 +1224,33 @@
     font-weight: 600;
     letter-spacing: 0.1em;
     margin-bottom: 8px;
+  }
+
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .favorite-btn {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+  }
+
+  .favorite-btn:hover {
+    background-color: var(--bg-tertiary);
+    transform: scale(1.1);
+  }
+
+  .favorite-btn.active:hover {
+    background-color: rgba(var(--accent-primary-rgb), 0.15);
   }
 
   .playlist-title {
