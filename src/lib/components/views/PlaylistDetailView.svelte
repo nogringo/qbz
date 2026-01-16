@@ -390,7 +390,6 @@
     // Local tracks have explicit playlist_position
     // Qobuz tracks fill positions not occupied by local tracks
     const result: DisplayTrack[] = [];
-    const totalCount = tracks.length + localTracks.length;
 
     // Create a map of local track positions
     const localByPosition = new Map<number, PlaylistLocalTrack>();
@@ -398,20 +397,28 @@
       localByPosition.set(lt.playlist_position, lt);
     }
 
+    // Calculate total count: must reach the highest local position
+    const maxLocalPosition = localTracks.length > 0
+      ? Math.max(...localTracks.map(t => t.playlist_position))
+      : -1;
+    const minTotalCount = tracks.length + localTracks.length;
+    const totalCount = Math.max(minTotalCount, maxLocalPosition + 1);
+
     // Interleave: iterate through positions, use local if exists, else use next Qobuz track
     let qobuzIdx = 0;
     for (let pos = 0; pos < totalCount; pos++) {
       const localTrack = localByPosition.get(pos);
       if (localTrack) {
-        result.push(localTrackToDisplay(localTrack, pos));
+        result.push(localTrackToDisplay(localTrack, result.length));
       } else if (qobuzIdx < tracks.length) {
-        // Use Qobuz track but update its number to match merged position
-        result.push({ ...tracks[qobuzIdx], number: pos + 1 });
+        // Use Qobuz track
+        result.push({ ...tracks[qobuzIdx], number: result.length + 1 });
         qobuzIdx++;
       }
+      // Skip positions with no track (gaps)
     }
 
-    // If any Qobuz tracks remain (shouldn't happen with correct positions), append them
+    // If any Qobuz tracks remain, append them
     while (qobuzIdx < tracks.length) {
       result.push({ ...tracks[qobuzIdx], number: result.length + 1 });
       qobuzIdx++;
