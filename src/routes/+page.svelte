@@ -2018,6 +2018,7 @@
           onLocalTrackPlay={handleLocalTrackPlay}
           onLocalTrackPlayNext={queueLocalTrackNext}
           onLocalTrackPlayLater={queueLocalTrackLater}
+          onSetLocalQueue={handleSetLocalQueue}
           onPlaylistUpdated={() => {
             sidebarRef?.refreshPlaylists();
             sidebarRef?.refreshLocalTrackCounts();

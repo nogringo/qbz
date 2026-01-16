@@ -116,6 +116,7 @@
     onLocalTrackPlay?: (track: LocalLibraryTrack) => void;
     onLocalTrackPlayNext?: (track: LocalLibraryTrack) => void;
     onLocalTrackPlayLater?: (track: LocalLibraryTrack) => void;
+    onSetLocalQueue?: (trackIds: number[]) => void;
     onPlaylistUpdated?: () => void;
     onPlaylistDeleted?: (playlistId: number) => void;
     activeTrackId?: number | null;
@@ -141,6 +142,7 @@
     onLocalTrackPlay,
     onLocalTrackPlayNext,
     onLocalTrackPlayLater,
+    onSetLocalQueue,
     onPlaylistUpdated,
     onPlaylistDeleted,
     activeTrackId = null,
@@ -502,30 +504,50 @@
   }
 
   async function handlePlayAll() {
-    if (tracks.length > 0 && onTrackPlay) {
-      // Set queue with all tracks and play first
-      const queueTracks = tracks.map(t => ({
-        id: t.id,
-        title: t.title,
-        artist: t.artist || 'Unknown Artist',
-        album: t.album || playlist?.name || 'Playlist',
-        duration_secs: t.durationSeconds,
-        artwork_url: t.albumArt || getPlaylistImage(),
-        hires: t.hires ?? false,
-        bit_depth: t.bitDepth ?? null,
-        sample_rate: t.samplingRate ?? null,
-      }));
+    // Get all display tracks (Qobuz + local, respecting search/sort)
+    const allTracks = displayTracks;
+    if (allTracks.length === 0) return;
 
-      try {
-        await invoke('set_queue', { tracks: queueTracks, startIndex: 0 });
-        onTrackPlay(tracks[0]);
+    // Build queue tracks, using absolute ID for local tracks
+    const queueTracks = allTracks.map(t => ({
+      id: t.isLocal ? Math.abs(t.id) : t.id,
+      title: t.title,
+      artist: t.artist || 'Unknown Artist',
+      album: t.album || playlist?.name || 'Playlist',
+      duration_secs: t.durationSeconds,
+      artwork_url: t.albumArt || getPlaylistImage(),
+      hires: t.hires ?? false,
+      bit_depth: t.bitDepth ?? null,
+      sample_rate: t.samplingRate != null ? (t.isLocal ? t.samplingRate * 1000 : t.samplingRate) : null,
+    }));
 
-        // Increment play count
-        const stats = await invoke<PlaylistStats>('playlist_increment_play_count', { playlistId });
-        playlistStats = stats;
-      } catch (err) {
-        console.error('Failed to set queue:', err);
+    // Collect local track IDs (original positive IDs)
+    const localIds = allTracks
+      .filter(t => t.isLocal)
+      .map(t => Math.abs(t.id));
+
+    try {
+      await invoke('set_queue', { tracks: queueTracks, startIndex: 0 });
+
+      // Tell parent about local tracks in queue
+      if (localIds.length > 0) {
+        onSetLocalQueue?.(localIds);
       }
+
+      // Play first track (handle local vs Qobuz)
+      const firstTrack = allTracks[0];
+      if (firstTrack.isLocal && onLocalTrackPlay) {
+        const localTrack = localTracks.find(t => t.id === Math.abs(firstTrack.id));
+        if (localTrack) onLocalTrackPlay(localTrack);
+      } else if (onTrackPlay) {
+        onTrackPlay(firstTrack);
+      }
+
+      // Increment play count
+      const stats = await invoke<PlaylistStats>('playlist_increment_play_count', { playlistId });
+      playlistStats = stats;
+    } catch (err) {
+      console.error('Failed to set queue:', err);
     }
   }
 
@@ -554,14 +576,21 @@
   }
 
   async function handlePlayAllNext() {
-    if (tracks.length === 0) return;
+    const allTracks = displayTracks;
+    if (allTracks.length === 0) return;
+
+    // Collect local track IDs to add to set
+    const localIds = allTracks
+      .filter(t => t.isLocal)
+      .map(t => Math.abs(t.id));
+
     // Add in reverse order so first track ends up right after current
-    for (let i = tracks.length - 1; i >= 0; i--) {
-      const t = tracks[i];
+    for (let i = allTracks.length - 1; i >= 0; i--) {
+      const t = allTracks[i];
       try {
         await invoke('add_to_queue_next', {
           track: {
-            id: t.id,
+            id: t.isLocal ? Math.abs(t.id) : t.id,
             title: t.title,
             artist: t.artist || 'Unknown Artist',
             album: t.album || playlist?.name || 'Playlist',
@@ -569,19 +598,26 @@
             artwork_url: t.albumArt || getPlaylistImage(),
             hires: t.hires ?? false,
             bit_depth: t.bitDepth ?? null,
-            sample_rate: t.samplingRate ?? null,
+            sample_rate: t.samplingRate != null ? (t.isLocal ? t.samplingRate * 1000 : t.samplingRate) : null,
           }
         });
       } catch (err) {
         console.error('Failed to add track next:', err);
       }
     }
+
+    // Tell parent about local tracks added to queue
+    if (localIds.length > 0) {
+      onSetLocalQueue?.(localIds);
+    }
   }
 
   async function handlePlayAllLater() {
-    if (tracks.length === 0) return;
-    const queueTracks = tracks.map(t => ({
-      id: t.id,
+    const allTracks = displayTracks;
+    if (allTracks.length === 0) return;
+
+    const queueTracks = allTracks.map(t => ({
+      id: t.isLocal ? Math.abs(t.id) : t.id,
       title: t.title,
       artist: t.artist || 'Unknown Artist',
       album: t.album || playlist?.name || 'Playlist',
@@ -589,11 +625,21 @@
       artwork_url: t.albumArt || getPlaylistImage(),
       hires: t.hires ?? false,
       bit_depth: t.bitDepth ?? null,
-      sample_rate: t.samplingRate ?? null,
+      sample_rate: t.samplingRate != null ? (t.isLocal ? t.samplingRate * 1000 : t.samplingRate) : null,
     }));
+
+    // Collect local track IDs
+    const localIds = allTracks
+      .filter(t => t.isLocal)
+      .map(t => Math.abs(t.id));
 
     try {
       await invoke('add_tracks_to_queue', { tracks: queueTracks });
+
+      // Tell parent about local tracks added to queue
+      if (localIds.length > 0) {
+        onSetLocalQueue?.(localIds);
+      }
     } catch (err) {
       console.error('Failed to add to queue:', err);
     }
