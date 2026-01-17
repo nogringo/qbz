@@ -1,6 +1,6 @@
 //! Discogs API client for fetching album artwork
 //!
-//! Uses the Discogs database API to search for releases and download cover images.
+//! Uses Cloudflare Workers proxy to search the Discogs database and download cover images.
 
 use reqwest::Client;
 use serde::Deserialize;
@@ -8,11 +8,12 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
+// Cloudflare Workers proxy URL - handles credentials
+const DISCOGS_PROXY_URL: &str = "https://qbz-api-proxy.blitzkriegfc.workers.dev/discogs";
+
 /// Discogs API client
 pub struct DiscogsClient {
     client: Client,
-    consumer_key: Option<String>,
-    consumer_secret: Option<String>,
 }
 
 /// Search result from Discogs API
@@ -31,46 +32,35 @@ pub struct SearchResult {
     pub result_type: String,
 }
 
-// Compile-time embedded credentials (from build environment)
-const EMBEDDED_CONSUMER_KEY: Option<&str> = option_env!("DISCOGS_API_CLIENT_KEY");
-const EMBEDDED_CONSUMER_SECRET: Option<&str> = option_env!("DISCOGS_API_CLIENT_SECRET");
-
 impl DiscogsClient {
-    /// Create a new Discogs client with optional credentials
-    /// Priority: user-provided > embedded > runtime env vars
+    /// Create a new Discogs client (proxy handles credentials)
     pub fn new() -> Self {
         Self::with_user_credentials(None, None)
     }
 
-    /// Create a new Discogs client with user-provided credentials (override)
+    /// Create a new Discogs client - compatibility method (proxy handles credentials)
     pub fn with_user_credentials(
-        user_key: Option<String>,
-        user_secret: Option<String>,
+        _user_key: Option<String>,
+        _user_secret: Option<String>,
     ) -> Self {
-        // Priority: user-provided > embedded > runtime env vars
-        let consumer_key = user_key
-            .or_else(|| EMBEDDED_CONSUMER_KEY.map(String::from))
-            .or_else(|| std::env::var("DISCOGS_API_CLIENT_KEY").ok());
-        let consumer_secret = user_secret
-            .or_else(|| EMBEDDED_CONSUMER_SECRET.map(String::from))
-            .or_else(|| std::env::var("DISCOGS_API_CLIENT_SECRET").ok());
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::USER_AGENT,
+            reqwest::header::HeaderValue::from_static("QBZ/1.0.0"),
+        );
 
         let client = Client::builder()
             .timeout(Duration::from_secs(10))
-            .user_agent("QBZ/0.1.0 +https://github.com/vicrodh/qbz")
+            .default_headers(headers)
             .build()
             .expect("Failed to create HTTP client");
 
-        Self {
-            client,
-            consumer_key,
-            consumer_secret,
-        }
+        Self { client }
     }
 
-    /// Check if credentials are configured
+    /// Check if credentials are configured (always true - proxy handles credentials)
     pub fn has_credentials(&self) -> bool {
-        self.consumer_key.is_some() && self.consumer_secret.is_some()
+        true
     }
 
     /// Search for album artwork and download if found
@@ -81,11 +71,6 @@ impl DiscogsClient {
         album: &str,
         cache_dir: &Path,
     ) -> Option<String> {
-        if !self.has_credentials() {
-            log::debug!("Discogs credentials not configured, skipping artwork fetch");
-            return None;
-        }
-
         // Search for the release
         let cover_url = self.search_release(artist, album).await?;
 
@@ -109,16 +94,12 @@ impl DiscogsClient {
 
     /// Search for a release and return the cover image URL
     async fn search_release(&self, artist: &str, album: &str) -> Option<String> {
-        let key = self.consumer_key.as_ref()?;
-        let secret = self.consumer_secret.as_ref()?;
-
         // Build search query
         let query = format!("{} {}", artist, album);
         let url = format!(
-            "https://api.discogs.com/database/search?q={}&type=release&key={}&secret={}",
-            urlencoding::encode(&query),
-            key,
-            secret
+            "{}/search?q={}&type=release",
+            DISCOGS_PROXY_URL,
+            urlencoding::encode(&query)
         );
 
         log::debug!("Searching Discogs for: {} - {}", artist, album);
@@ -156,18 +137,10 @@ impl DiscogsClient {
 
     /// Search for artists and return search results
     pub async fn search_artist(&self, query: &str) -> Result<SearchResponse, String> {
-        if !self.has_credentials() {
-            return Err("Discogs credentials not configured".to_string());
-        }
-
-        let key = self.consumer_key.as_ref().unwrap();
-        let secret = self.consumer_secret.as_ref().unwrap();
-
         let url = format!(
-            "https://api.discogs.com/database/search?q={}&type=artist&key={}&secret={}",
-            urlencoding::encode(query),
-            key,
-            secret
+            "{}/search?q={}&type=artist",
+            DISCOGS_PROXY_URL,
+            urlencoding::encode(query)
         );
 
         log::debug!("Searching Discogs for artist: {}", query);
@@ -186,17 +159,19 @@ impl DiscogsClient {
     }
 
     /// Download an image to the cache directory
-    async fn download_image(&self, url: &str, path: &Path) -> Option<()> {
-        log::debug!("Downloading Discogs artwork: {}", url);
+    async fn download_image(&self, image_url: &str, path: &Path) -> Option<()> {
+        log::debug!("Downloading Discogs artwork: {}", image_url);
 
-        let key = self.consumer_key.as_ref()?;
-        let secret = self.consumer_secret.as_ref()?;
+        // Use proxy to download image with authentication
+        let proxy_url = format!(
+            "{}/image?url={}",
+            DISCOGS_PROXY_URL,
+            urlencoding::encode(image_url)
+        );
 
-        // Discogs requires auth even for image downloads
         let response = self
             .client
-            .get(url)
-            .header("Authorization", format!("Discogs key={}, secret={}", key, secret))
+            .get(&proxy_url)
             .send()
             .await
             .ok()?;
