@@ -59,9 +59,9 @@
 
   const isExternal = $derived(currentDevice ? isExternalDevice(currentDevice) : false);
 
-  // Badge states - based on settings AND actual device capability
+  // Badge states - based on settings
   const dacPassthroughActive = $derived(
-    settings?.dac_passthrough === true && isExternal
+    settings?.dac_passthrough === true
   );
   const exclusiveModeActive = $derived(
     settings?.exclusive_mode === true
