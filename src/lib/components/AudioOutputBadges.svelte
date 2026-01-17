@@ -196,17 +196,18 @@
               <span class="setting-icon" class:active={dacBadgeState === 'active'} class:warning={dacBadgeState === 'warning'}>●</span>
               <span class="setting-text">
                 {#if dacBadgeState === 'warning'}
-                  ⚠ DAC Passthrough: Resampling detected
+                  ⚠ ERROR: PipeWire is resampling
                   {#if hardwareStatus?.hardware_sample_rate && samplingRate}
-                    <br><span class="setting-detail">{samplingRate} kHz → {(hardwareStatus.hardware_sample_rate / 1000).toFixed(1)} kHz</span>
+                    <br><span class="setting-detail">File: {samplingRate} kHz → Hardware: {(hardwareStatus.hardware_sample_rate / 1000).toFixed(1)} kHz</span>
+                    <br><span class="setting-help">Fix: Configure PipeWire sample rate switching</span>
                   {/if}
                 {:else if dacBadgeState === 'active'}
-                  DAC Passthrough: Bit-perfect
+                  ✓ DAC Passthrough: Bit-perfect
                   {#if hardwareStatus?.hardware_sample_rate}
-                    <br><span class="setting-detail">{(hardwareStatus.hardware_sample_rate / 1000).toFixed(1)} kHz</span>
+                    <br><span class="setting-detail">{(hardwareStatus.hardware_sample_rate / 1000).toFixed(1)} kHz native</span>
                   {/if}
                 {:else}
-                  DAC Passthrough: Off
+                  DAC Passthrough: Disabled
                 {/if}
               </span>
             </div>

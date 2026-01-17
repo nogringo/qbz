@@ -765,6 +765,14 @@
     preferred_sample_rate: number | null;
   }
 
+  // Helper to get the current selected device sink name (or null for system default)
+  function getCurrentDeviceSinkName(): string | null {
+    if (outputDevice === 'System Default') {
+      return null;
+    }
+    return sinkDescriptionToName.get(outputDevice) ?? null;
+  }
+
   async function loadAudioDevices() {
     try {
       // Load PipeWire sinks - these have friendly descriptions already
@@ -828,8 +836,9 @@
         await invoke('set_pipewire_default_sink', { sinkName });
       }
 
-      // Reinitialize audio to use the new default
-      await invoke('reinit_audio_device', { device: null });
+      // Reinitialize audio to use the selected device
+      // IMPORTANT: Pass the actual sink name, not null
+      await invoke('reinit_audio_device', { device: deviceToStore });
 
       console.log('Audio output device changed:', description, '(sink:', sinkName ?? 'default', ')');
     } catch (err) {
@@ -841,8 +850,9 @@
     exclusiveMode = enabled;
     try {
       await invoke('set_audio_exclusive_mode', { enabled });
-      // Reinitialize audio to apply/release exclusive mode (uses PipeWire default)
-      await invoke('reinit_audio_device', { device: null });
+      // Reinitialize audio to apply/release exclusive mode
+      // IMPORTANT: Maintain the currently selected output device
+      await invoke('reinit_audio_device', { device: getCurrentDeviceSinkName() });
       console.log('Exclusive mode changed and audio reinitialized:', enabled);
     } catch (err) {
       console.error('Failed to change exclusive mode:', err);
@@ -861,8 +871,9 @@
 
     try {
       await invoke('set_audio_dac_passthrough', { enabled });
-      // DAC passthrough may also require reinit for proper effect (uses PipeWire default)
-      await invoke('reinit_audio_device', { device: null });
+      // DAC passthrough may also require reinit for proper effect
+      // IMPORTANT: Maintain the currently selected output device
+      await invoke('reinit_audio_device', { device: getCurrentDeviceSinkName() });
       console.log('DAC passthrough changed and audio reinitialized:', enabled);
     } catch (err) {
       console.error('Failed to change DAC passthrough:', err);
@@ -878,7 +889,8 @@
       console.log('Gapless playback enabled: disabled DAC passthrough');
       try {
         await invoke('set_audio_dac_passthrough', { enabled: false });
-        await invoke('reinit_audio_device', { device: null });
+        // IMPORTANT: Maintain the currently selected output device
+        await invoke('reinit_audio_device', { device: getCurrentDeviceSinkName() });
       } catch (err) {
         console.error('Failed to disable DAC passthrough:', err);
       }
@@ -894,7 +906,8 @@
       console.log('Crossfade enabled: disabled DAC passthrough');
       try {
         await invoke('set_audio_dac_passthrough', { enabled: false });
-        await invoke('reinit_audio_device', { device: null });
+        // IMPORTANT: Maintain the currently selected output device
+        await invoke('reinit_audio_device', { device: getCurrentDeviceSinkName() });
       } catch (err) {
         console.error('Failed to disable DAC passthrough:', err);
       }
