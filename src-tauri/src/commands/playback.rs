@@ -576,24 +576,45 @@ pub fn get_pipewire_sinks() -> Result<Vec<PipewireSink>, String> {
     let sinks: Vec<PipewireSink> = host
         .output_devices()
         .map_err(|e| format!("Failed to enumerate devices: {}", e))?
-        .filter_map(|device| {
-            device.name().ok().map(|name| {
-                let is_default = default_device_name.as_ref().map(|d| d == &name).unwrap_or(false);
+        .enumerate()
+        .filter_map(|(idx, device)| {
+            match device.name() {
+                Ok(name) => {
+                    let is_default = default_device_name.as_ref().map(|d| d == &name).unwrap_or(false);
 
-                // CRITICAL: Use CPAL device name as both name and description
-                // This ensures the name we save is the exact name CPAL can find later
-                PipewireSink {
-                    name: name.clone(),
-                    description: name, // CPAL names are already user-friendly in PipeWire
-                    volume: None,      // Volume not available via CPAL
-                    is_default,
+                    // Get detailed device info for logging
+                    let configs_info = device.supported_output_configs()
+                        .ok()
+                        .map(|configs| {
+                            let config_strs: Vec<String> = configs
+                                .take(3) // Just first 3 configs for brevity
+                                .map(|c| format!("{}ch/{}Hz", c.channels(), c.max_sample_rate().0))
+                                .collect();
+                            config_strs.join(", ")
+                        })
+                        .unwrap_or_else(|| "no configs".to_string());
+
+                    log::info!("  [{}] Device: '{}' (default: {}) - Configs: {}",
+                        idx, name, is_default, configs_info);
+
+                    // CRITICAL: Use CPAL device name as both name and description
+                    // This ensures the name we save is the exact name CPAL can find later
+                    Some(PipewireSink {
+                        name: name.clone(),
+                        description: name, // CPAL names are already user-friendly in PipeWire
+                        volume: None,      // Volume not available via CPAL
+                        is_default,
+                    })
                 }
-            })
+                Err(e) => {
+                    log::warn!("  [{}] Failed to get device name: {}", idx, e);
+                    None
+                }
+            }
         })
         .collect();
 
     log::info!("Found {} audio output devices via CPAL", sinks.len());
-    log::info!("Devices: {:?}", sinks.iter().map(|s| &s.name).collect::<Vec<_>>());
 
     Ok(sinks)
 }
