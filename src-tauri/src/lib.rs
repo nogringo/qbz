@@ -6,6 +6,7 @@
 pub mod api;
 pub mod api_cache;
 pub mod api_keys;
+pub mod audio;
 pub mod cache;
 pub mod cast;
 pub mod commands;
