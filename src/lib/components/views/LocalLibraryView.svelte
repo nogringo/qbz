@@ -119,6 +119,8 @@
     width: number;
     height: number;
     image_type: string;
+    release_title?: string;
+    release_year?: number;
   }
 
   interface Props {
@@ -2232,9 +2234,15 @@
                   class="discogs-option"
                   class:selected={selectedDiscogsImage === option.url}
                   onclick={() => selectedDiscogsImage = option.url}
+                  title={option.release_title ? `${option.release_title}${option.release_year ? ` (${option.release_year})` : ''}` : ''}
                 >
                   <img src={option.url} alt={`Option ${i + 1}`} />
-                  <span class="option-info">{option.width}x{option.height}</span>
+                  <div class="option-info">
+                    {#if option.release_title}
+                      <div class="release-title">{option.release_title}{#if option.release_year} ({option.release_year}){/if}</div>
+                    {/if}
+                    <div class="image-dims">{option.width}x{option.height}</div>
+                  </div>
                 </button>
               {/each}
             </div>
@@ -3655,10 +3663,26 @@
     left: 0;
     right: 0;
     padding: 4px 6px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.8);
     color: white;
     font-size: 10px;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .discogs-option .release-title {
+    font-weight: 500;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .discogs-option .image-dims {
+    opacity: 0.8;
+    font-size: 9px;
   }
 
   .modal-footer {

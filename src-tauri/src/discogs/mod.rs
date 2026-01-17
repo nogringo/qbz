@@ -40,6 +40,27 @@ pub struct DiscogsImageOption {
     pub height: u32,
     #[serde(rename = "type")]
     pub image_type: String,
+    pub release_title: Option<String>,
+    pub release_year: Option<u32>,
+}
+
+/// Release details from Discogs API
+#[derive(Debug, Deserialize)]
+struct ReleaseDetails {
+    id: u64,
+    title: String,
+    year: Option<u32>,
+    images: Option<Vec<ReleaseImage>>,
+}
+
+/// Image from release details
+#[derive(Debug, Deserialize)]
+struct ReleaseImage {
+    uri: String,
+    width: u32,
+    height: u32,
+    #[serde(rename = "type")]
+    image_type: String,
 }
 
 impl DiscogsClient {
@@ -145,8 +166,27 @@ impl DiscogsClient {
         None
     }
 
+    /// Get detailed release information including all images
+    async fn get_release_details(&self, release_id: u64) -> Result<ReleaseDetails, String> {
+        let url = format!("{}/release/{}", DISCOGS_PROXY_URL, release_id);
+
+        log::debug!("Fetching Discogs release details for ID: {}", release_id);
+
+        let response = self.client.get(&url).send().await
+            .map_err(|e| format!("Failed to fetch release details: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Failed to fetch release details: {}", response.status()));
+        }
+
+        let details: ReleaseDetails = response.json().await
+            .map_err(|e| format!("Failed to parse release details: {}", e))?;
+
+        Ok(details)
+    }
+
     /// Search for album artwork options
-    /// Returns up to 10 image options from the first matching release
+    /// Returns up to 10 image options, with detailed images from top 2 releases interleaved
     /// If catalog_number is provided, searches by that first, then falls back to artist + album
     pub async fn search_artwork_options(
         &self,
@@ -183,59 +223,108 @@ impl DiscogsClient {
         let search: SearchResponse = response.json().await
             .map_err(|e| format!("Failed to parse Discogs response: {}", e))?;
 
-        // Collect image options from search results
-        let mut images = Vec::new();
-        let mut seen_urls = std::collections::HashSet::new();
+        // Get IDs of top 2 relevant releases
+        let mut release_ids: Vec<u64> = Vec::new();
+        let mut other_results: Vec<&SearchResult> = Vec::new();
 
         for result in search.results.iter().take(20) {
             if result.result_type == "release" || result.result_type == "master" {
-                // Prefer cover image, fallback to thumbnail
-                let (image_url, width, height, img_type) = if let Some(cover) = &result.cover_image {
-                    if !cover.is_empty() && !cover.contains("spacer.gif") {
-                        (cover.clone(), 600, 600, "primary".to_string())
-                    } else if let Some(thumb) = &result.thumb {
-                        if !thumb.is_empty() && !thumb.contains("spacer.gif") {
-                            (thumb.clone(), 150, 150, "secondary".to_string())
-                        } else {
-                            continue;
-                        }
-                    } else {
-                        continue;
-                    }
-                } else if let Some(thumb) = &result.thumb {
-                    if !thumb.is_empty() && !thumb.contains("spacer.gif") {
-                        (thumb.clone(), 150, 150, "secondary".to_string())
-                    } else {
-                        continue;
-                    }
+                if release_ids.len() < 2 {
+                    release_ids.push(result.id);
                 } else {
-                    continue;
-                };
-
-                // Only add if we haven't seen this URL before
-                if seen_urls.insert(image_url.clone()) {
-                    images.push(DiscogsImageOption {
-                        url: image_url,
-                        width,
-                        height,
-                        image_type: img_type,
-                    });
-                }
-
-                // Stop once we have enough unique images
-                if images.len() >= 10 {
-                    break;
+                    other_results.push(result);
                 }
             }
         }
 
-        if images.is_empty() {
+        if release_ids.is_empty() {
+            return Err("No releases found on Discogs".to_string());
+        }
+
+        let mut all_images = Vec::new();
+        let mut seen_urls = std::collections::HashSet::new();
+
+        // Fetch detailed images from top 2 releases
+        for (idx, release_id) in release_ids.iter().enumerate() {
+            match self.get_release_details(*release_id).await {
+                Ok(details) => {
+                    if let Some(images) = details.images {
+                        let mut count = 0;
+                        for img in images {
+                            if !img.uri.is_empty()
+                                && !img.uri.contains("spacer.gif")
+                                && seen_urls.insert(img.uri.clone())
+                                && count < 4
+                            {
+                                all_images.push(DiscogsImageOption {
+                                    url: img.uri,
+                                    width: img.width,
+                                    height: img.height,
+                                    image_type: img.image_type,
+                                    release_title: Some(details.title.clone()),
+                                    release_year: details.year,
+                                });
+                                count += 1;
+                            }
+                        }
+                        log::debug!("Added {} images from release #{} ({})", count, idx + 1, details.title);
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Failed to fetch details for release {}: {}", release_id, e);
+                }
+            }
+        }
+
+        // Add up to 2 more images from other search results
+        for result in other_results.iter().take(10) {
+            if all_images.len() >= 10 {
+                break;
+            }
+
+            // Prefer cover image
+            let image_url = if let Some(cover) = &result.cover_image {
+                if !cover.is_empty() && !cover.contains("spacer.gif") {
+                    Some((cover.clone(), 600, 600, "primary".to_string()))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let image_url = image_url.or_else(|| {
+                result.thumb.as_ref().and_then(|thumb| {
+                    if !thumb.is_empty() && !thumb.contains("spacer.gif") {
+                        Some((thumb.clone(), 150, 150, "secondary".to_string()))
+                    } else {
+                        None
+                    }
+                })
+            });
+
+            if let Some((url, width, height, img_type)) = image_url {
+                if seen_urls.insert(url.clone()) {
+                    all_images.push(DiscogsImageOption {
+                        url,
+                        width,
+                        height,
+                        image_type: img_type,
+                        release_title: Some(result.title.clone()),
+                        release_year: None,
+                    });
+                }
+            }
+        }
+
+        if all_images.is_empty() {
             return Err("No artwork found on Discogs".to_string());
         }
 
         // Return up to 10 unique images
-        images.truncate(10);
-        Ok(images)
+        all_images.truncate(10);
+        log::info!("Returning {} artwork options from Discogs", all_images.len());
+        Ok(all_images)
     }
 
     /// Download image from URL and return local path
