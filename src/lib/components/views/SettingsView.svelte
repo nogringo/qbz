@@ -831,13 +831,9 @@
       // Save the preference
       await invoke('set_audio_output_device', { device: deviceToStore });
 
-      // If a specific device was selected, set it as the PipeWire default
-      if (sinkName) {
-        await invoke('set_pipewire_default_sink', { sinkName });
-      }
-
       // Reinitialize audio to use the selected device
       // IMPORTANT: Pass the actual sink name, not null
+      // This opens the specific device for QBZ without changing system default
       await invoke('reinit_audio_device', { device: deviceToStore });
 
       console.log('Audio output device changed:', description, '(sink:', sinkName ?? 'default', ')');
