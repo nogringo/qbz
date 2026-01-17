@@ -1,21 +1,14 @@
 //! Spotify playlist import
 
-use std::env;
-
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
 use serde_json::Value;
 
 use crate::playlist_import::errors::PlaylistImportError;
 use crate::playlist_import::models::{ImportPlaylist, ImportProvider, ImportTrack};
 use crate::playlist_import::providers::ProviderCredentials;
 
-const SPOTIFY_TOKEN_URL: &str = "https://accounts.spotify.com/api/token";
+// Cloudflare Workers proxy URL - handles credentials
+const SPOTIFY_PROXY_URL: &str = "https://qbz-api-proxy.blitzkriegfc.workers.dev/spotify";
 const SPOTIFY_API_BASE: &str = "https://api.spotify.com/v1";
-
-// Compile-time embedded credentials (from build environment)
-const EMBEDDED_CLIENT_ID: Option<&str> = option_env!("SPOTIFY_API_CLIENT_ID");
-const EMBEDDED_CLIENT_SECRET: Option<&str> = option_env!("SPOTIFY_API_CLIENT_SECRET");
 
 pub fn parse_playlist_id(url: &str) -> Option<String> {
     if let Some(rest) = url.strip_prefix("spotify:playlist:") {
@@ -256,28 +249,22 @@ async fn fetch_playlist_from_embed(playlist_id: &str) -> Result<ImportPlaylist, 
     })
 }
 
-async fn get_app_token(user_creds: Option<ProviderCredentials>) -> Result<String, PlaylistImportError> {
-    // Priority: user-provided > embedded > runtime env vars
-    let client_id = user_creds
-        .as_ref()
-        .and_then(|c| c.client_id.clone())
-        .or_else(|| EMBEDDED_CLIENT_ID.map(String::from))
-        .or_else(|| env::var("SPOTIFY_API_CLIENT_ID").ok())
-        .ok_or_else(|| PlaylistImportError::MissingCredentials("SPOTIFY_API_CLIENT_ID".to_string()))?;
-    let client_secret = user_creds
-        .as_ref()
-        .and_then(|c| c.client_secret.clone())
-        .or_else(|| EMBEDDED_CLIENT_SECRET.map(String::from))
-        .or_else(|| env::var("SPOTIFY_API_CLIENT_SECRET").ok())
-        .ok_or_else(|| PlaylistImportError::MissingCredentials("SPOTIFY_API_CLIENT_SECRET".to_string()))?;
+async fn get_app_token(_user_creds: Option<ProviderCredentials>) -> Result<String, PlaylistImportError> {
+    // Proxy handles credentials - user_creds ignored (compatibility)
+    let url = format!("{}/token", SPOTIFY_PROXY_URL);
 
-    let auth = STANDARD.encode(format!("{}:{}", client_id, client_secret));
-
-    let response: Value = reqwest::Client::new()
-        .post(SPOTIFY_TOKEN_URL)
-        .header("Authorization", format!("Basic {}", auth))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body("grant_type=client_credentials")
+    let response: Value = reqwest::Client::builder()
+        .default_headers({
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                reqwest::header::USER_AGENT,
+                reqwest::header::HeaderValue::from_static("QBZ/1.0.0"),
+            );
+            headers
+        })
+        .build()
+        .map_err(|e| PlaylistImportError::Http(e.to_string()))?
+        .get(&url)
         .send()
         .await
         .map_err(|e| PlaylistImportError::Http(e.to_string()))?
@@ -289,7 +276,7 @@ async fn get_app_token(user_creds: Option<ProviderCredentials>) -> Result<String
         .get("access_token")
         .and_then(|v| v.as_str())
         .map(|v| v.to_string())
-        .ok_or_else(|| PlaylistImportError::Parse("Spotify token missing access_token".to_string()))
+        .ok_or_else(|| PlaylistImportError::Parse("Spotify proxy missing access_token".to_string()))
 }
 
 fn join_artists(value: Option<&Value>) -> String {

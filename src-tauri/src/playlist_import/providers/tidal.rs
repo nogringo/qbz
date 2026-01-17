@@ -3,8 +3,6 @@
 use std::env;
 use std::time::Duration;
 
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
 use serde_json::Value;
 use tokio::time::sleep;
 
@@ -14,12 +12,9 @@ use crate::playlist_import::providers::ProviderCredentials;
 
 const RATE_LIMIT_DELAY_MS: u64 = 200; // Delay between API calls to avoid 429
 
-const TIDAL_TOKEN_URL: &str = "https://auth.tidal.com/v1/oauth2/token";
+// Cloudflare Workers proxy URL - handles credentials
+const TIDAL_PROXY_URL: &str = "https://qbz-api-proxy.blitzkriegfc.workers.dev/tidal";
 const TIDAL_API_BASE: &str = "https://openapi.tidal.com/v2";
-
-// Compile-time embedded credentials (from build environment)
-const EMBEDDED_CLIENT_ID: Option<&str> = option_env!("TIDAL_API_CLIENT_ID");
-const EMBEDDED_CLIENT_SECRET: Option<&str> = option_env!("TIDAL_API_CLIENT_SECRET");
 
 pub fn parse_playlist_id(url: &str) -> Option<String> {
     if !url.contains("tidal.com") {
@@ -336,45 +331,32 @@ fn parse_duration_ms(value: &str) -> Option<u64> {
     }
 }
 
-async fn get_app_token(user_creds: Option<ProviderCredentials>) -> Result<String, PlaylistImportError> {
-    // Priority: user-provided > embedded > runtime env vars
-    let client_id = user_creds
-        .as_ref()
-        .and_then(|c| c.client_id.clone())
-        .or_else(|| EMBEDDED_CLIENT_ID.map(String::from))
-        .or_else(|| env::var("TIDAL_API_CLIENT_ID").ok())
-        .ok_or_else(|| PlaylistImportError::MissingCredentials("TIDAL_API_CLIENT_ID".to_string()))?;
-    let client_secret = user_creds
-        .as_ref()
-        .and_then(|c| c.client_secret.clone())
-        .or_else(|| EMBEDDED_CLIENT_SECRET.map(String::from))
-        .or_else(|| env::var("TIDAL_API_CLIENT_SECRET").ok())
-        .ok_or_else(|| PlaylistImportError::MissingCredentials("TIDAL_API_CLIENT_SECRET".to_string()))?;
+async fn get_app_token(_user_creds: Option<ProviderCredentials>) -> Result<String, PlaylistImportError> {
+    // Proxy handles credentials - user_creds ignored (compatibility)
+    let url = format!("{}/token", TIDAL_PROXY_URL);
 
-    let auth = STANDARD.encode(format!("{}:{}", client_id, client_secret));
-
-    let resp = reqwest::Client::new()
-        .post(TIDAL_TOKEN_URL)
-        .header("Authorization", format!("Basic {}", auth))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body("grant_type=client_credentials")
+    let response: Value = reqwest::Client::builder()
+        .default_headers({
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                reqwest::header::USER_AGENT,
+                reqwest::header::HeaderValue::from_static("QBZ/1.0.0"),
+            );
+            headers
+        })
+        .build()
+        .map_err(|e| PlaylistImportError::Http(e.to_string()))?
+        .get(&url)
         .send()
         .await
-        .map_err(|e| PlaylistImportError::Http(e.to_string()))?;
-
-    let status = resp.status();
-    let body = resp.text().await.map_err(|e| PlaylistImportError::Parse(e.to_string()))?;
-
-    if !status.is_success() {
-        return Err(PlaylistImportError::Http(format!("Tidal auth failed: {} - {}", status, body)));
-    }
-
-    let response: Value = serde_json::from_str(&body)
-        .map_err(|e| PlaylistImportError::Parse(format!("Invalid JSON: {} - body: {}", e, &body[..body.len().min(200)])))?;
+        .map_err(|e| PlaylistImportError::Http(e.to_string()))?
+        .json()
+        .await
+        .map_err(|e| PlaylistImportError::Parse(e.to_string()))?;
 
     response
         .get("access_token")
         .and_then(|v| v.as_str())
         .map(|v| v.to_string())
-        .ok_or_else(|| PlaylistImportError::Parse(format!("Tidal token missing access_token. Response: {}", body)))
+        .ok_or_else(|| PlaylistImportError::Parse("Tidal proxy missing access_token".to_string()))
 }
