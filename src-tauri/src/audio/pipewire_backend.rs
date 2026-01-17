@@ -7,7 +7,13 @@
 //! - Does NOT change system default (only affects QBZ)
 
 use super::backend::{AlsaPlugin, AudioBackend, AudioBackendType, AudioDevice, BackendConfig, BackendResult};
-use rodio::{cpal::traits::{DeviceTrait, HostTrait}, OutputStream, OutputStreamHandle};
+use rodio::{
+    cpal::{
+        traits::{DeviceTrait, HostTrait},
+        BufferSize, SampleFormat, SampleRate, StreamConfig, SupportedBufferSize, SupportedStreamConfig,
+    },
+    OutputStream, OutputStreamHandle,
+};
 use std::process::Command;
 
 pub struct PipeWireBackend {
@@ -172,11 +178,67 @@ impl AudioBackend for PipeWireBackend {
         let device_name = device.name().unwrap_or_else(|_| "unknown".to_string());
         log::info!("[PipeWire Backend] Using CPAL device: {}", device_name);
 
-        // Create output stream (will route to current default sink)
-        let stream = OutputStream::try_from_device(&device)
-            .map_err(|e| format!("Failed to create output stream: {}", e))?;
+        // Create output stream with custom sample rate configuration
+        log::info!(
+            "[PipeWire Backend] Creating stream: {}Hz, {} channels, exclusive: {}",
+            config.sample_rate,
+            config.channels,
+            config.exclusive_mode
+        );
 
-        log::info!("[PipeWire Backend] ✓ Output stream created successfully");
+        // Create StreamConfig with desired sample rate
+        let stream_config = StreamConfig {
+            channels: config.channels,
+            sample_rate: SampleRate(config.sample_rate),
+            buffer_size: if config.exclusive_mode {
+                BufferSize::Fixed(512)  // Lower latency for exclusive mode
+            } else {
+                BufferSize::Default
+            },
+        };
+
+        // Check if device supports this configuration
+        let supported_configs = device
+            .supported_output_configs()
+            .map_err(|e| format!("Failed to get supported configs: {}", e))?;
+
+        let mut found_matching = false;
+        for range in supported_configs {
+            if range.channels() == config.channels
+                && config.sample_rate >= range.min_sample_rate().0
+                && config.sample_rate <= range.max_sample_rate().0
+            {
+                found_matching = true;
+                log::info!(
+                    "[PipeWire Backend] Device supports {}Hz (range: {}-{}Hz)",
+                    config.sample_rate,
+                    range.min_sample_rate().0,
+                    range.max_sample_rate().0
+                );
+                break;
+            }
+        }
+
+        if !found_matching {
+            log::warn!(
+                "[PipeWire Backend] Device may not support {}Hz, attempting anyway",
+                config.sample_rate
+            );
+        }
+
+        // Create SupportedStreamConfig
+        let supported_config = SupportedStreamConfig::new(
+            stream_config.channels,
+            stream_config.sample_rate,
+            SupportedBufferSize::Range { min: 64, max: 8192 },
+            SampleFormat::F32,
+        );
+
+        // Create OutputStream with custom config
+        let stream = OutputStream::try_from_device_config(&device, supported_config)
+            .map_err(|e| format!("Failed to create output stream at {}Hz: {}", config.sample_rate, e))?;
+
+        log::info!("[PipeWire Backend] ✓ Output stream created successfully at {}Hz", config.sample_rate);
 
         Ok(stream)
     }
