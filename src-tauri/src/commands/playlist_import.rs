@@ -13,7 +13,7 @@ pub async fn playlist_import_preview(
 ) -> Result<ImportPlaylist, String> {
     log::info!("Command: playlist_import_preview {}", url);
 
-    preview_public_playlist(&url, None, None)
+    preview_public_playlist(&url)
         .await
         .map_err(|e| e.to_string())
 }
@@ -33,8 +33,6 @@ pub async fn playlist_import_execute(
         &client,
         name_override.as_deref(),
         is_public.unwrap_or(false),
-        None,
-        None,
     )
     .await
     .map_err(|e| e.to_string())
