@@ -85,49 +85,6 @@ jobs:
             org.freedesktop.Sdk.Extension.node20//25.08 \
             org.freedesktop.Sdk.Extension.rust-stable//25.08
 
-      - name: Inject API secrets into Flatpak manifest
-        env:
-          SPOTIFY_API_CLIENT_ID: ${{ secrets.SPOTIFY_API_CLIENT_ID }}
-          SPOTIFY_API_CLIENT_SECRET: ${{ secrets.SPOTIFY_API_CLIENT_SECRET }}
-          TIDAL_API_CLIENT_ID: ${{ secrets.TIDAL_API_CLIENT_ID }}
-          TIDAL_API_CLIENT_SECRET: ${{ secrets.TIDAL_API_CLIENT_SECRET }}
-          DISCOGS_API_CLIENT_KEY: ${{ secrets.DISCOGS_API_CLIENT_KEY }}
-          DISCOGS_API_CLIENT_SECRET: ${{ secrets.DISCOGS_API_CLIENT_SECRET }}
-          LAST_FM_API_KEY: ${{ secrets.LAST_FM_API_KEY }}
-          LAST_FM_API_SHARED_SECRET: ${{ secrets.LAST_FM_API_SHARED_SECRET }}
-        run: |
-          # Inject env vars into the qbz module's build-options.env in the manifest
-          python3 << 'PY'
-          import yaml
-          import os
-
-          with open('packaging/flatpak/com.blitzkriegfc.qbz.yml', 'r') as f:
-              manifest = yaml.safe_load(f)
-
-          # Find the qbz module and add env vars
-          for module in manifest.get('modules', []):
-              if module.get('name') == 'qbz':
-                  if 'build-options' not in module:
-                      module['build-options'] = {}
-                  if 'env' not in module['build-options']:
-                      module['build-options']['env'] = {}
-
-                  env_vars = [
-                      'SPOTIFY_API_CLIENT_ID', 'SPOTIFY_API_CLIENT_SECRET',
-                      'TIDAL_API_CLIENT_ID', 'TIDAL_API_CLIENT_SECRET',
-                      'DISCOGS_API_CLIENT_KEY', 'DISCOGS_API_CLIENT_SECRET',
-                      'LAST_FM_API_KEY', 'LAST_FM_API_SHARED_SECRET'
-                  ]
-                  for var in env_vars:
-                      val = os.environ.get(var, '')
-                      if val:
-                          module['build-options']['env'][var] = val
-                  break
-
-          with open('packaging/flatpak/com.blitzkriegfc.qbz.yml', 'w') as f:
-              yaml.dump(manifest, f, default_flow_style=False, sort_keys=False)
-          PY
-
       - name: Build Flatpak
         run: |
           mkdir -p flatpak-build flatpak-repo dist
