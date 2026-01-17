@@ -315,7 +315,7 @@
           <div class="quality-indicator">
             <QualityBadge {quality} {bitDepth} {samplingRate} />
             <div class="audio-badges-row">
-              <AudioOutputBadges />
+              <AudioOutputBadges {samplingRate} />
             </div>
           </div>
         </div>

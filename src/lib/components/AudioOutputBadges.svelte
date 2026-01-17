@@ -2,7 +2,6 @@
   import { invoke } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
   import { getDevicePrettyName, isExternalDevice } from '$lib/utils/audioDeviceNames';
-  import { currentTrack } from '$lib/stores/playerStore';
 
   interface AudioSettings {
     output_device: string | null;
@@ -32,9 +31,10 @@
   // Props
   interface Props {
     showTooltips?: boolean;
+    samplingRate?: number; // Track sample rate in kHz (e.g., 192)
   }
 
-  let { showTooltips = true }: Props = $props();
+  let { showTooltips = true, samplingRate }: Props = $props();
 
   // State
   let settings = $state<AudioSettings | null>(null);
@@ -67,12 +67,6 @@
 
   const isExternal = $derived(currentDevice ? isExternalDevice(currentDevice) : false);
 
-  // Get track sample rate from metadata
-  const trackSampleRate = $derived.by(() => {
-    if (!$currentTrack) return null;
-    return $currentTrack.sampling_rate ?? null;
-  });
-
   // DAC badge state logic - 3 states: green, yellow, gray
   const dacBadgeState = $derived.by(() => {
     if (!settings?.dac_passthrough) {
@@ -85,9 +79,9 @@
     }
 
     // We have hardware info - check for resampling
-    if (trackSampleRate && hardwareStatus.hardware_sample_rate) {
+    if (samplingRate && hardwareStatus.hardware_sample_rate) {
       const hwRate = hardwareStatus.hardware_sample_rate;
-      const trackRate = trackSampleRate * 1000; // Convert kHz to Hz
+      const trackRate = samplingRate * 1000; // Convert kHz to Hz
 
       if (Math.abs(hwRate - trackRate) < 100) {
         // Rates match (within 100Hz tolerance)
@@ -111,9 +105,9 @@
       return 'DAC Passthrough desactivado - el sistema puede resamplear';
     }
 
-    if (dacBadgeState === 'warning' && hardwareStatus?.hardware_sample_rate && trackSampleRate) {
+    if (dacBadgeState === 'warning' && hardwareStatus?.hardware_sample_rate && samplingRate) {
       const hwRate = (hardwareStatus.hardware_sample_rate / 1000).toFixed(1);
-      return `⚠ DAC Passthrough activo pero hay resampling\nArchivo: ${trackSampleRate} kHz → Hardware: ${hwRate} kHz`;
+      return `⚠ DAC Passthrough activo pero hay resampling\nArchivo: ${samplingRate} kHz → Hardware: ${hwRate} kHz`;
     }
 
     if (hardwareStatus?.hardware_sample_rate) {
