@@ -2,16 +2,32 @@
 //!
 //! Stores user preferences for audio output device, exclusive mode, and DAC passthrough.
 
+use crate::audio::{AlsaPlugin, AudioBackendType};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioSettings {
     pub output_device: Option<String>,  // None = system default
     pub exclusive_mode: bool,
     pub dac_passthrough: bool,
     pub preferred_sample_rate: Option<u32>,  // None = auto
+    pub backend_type: Option<AudioBackendType>,  // None = auto-detect
+    pub alsa_plugin: Option<AlsaPlugin>,  // Only used when backend is ALSA
+}
+
+impl Default for AudioSettings {
+    fn default() -> Self {
+        Self {
+            output_device: None,
+            exclusive_mode: false,
+            dac_passthrough: false,
+            preferred_sample_rate: None,
+            backend_type: None,  // Auto-detect (PipeWire if available, else ALSA)
+            alsa_plugin: Some(AlsaPlugin::Hw),  // Default to hw (bit-perfect)
+        }
+    }
 }
 
 pub struct AudioSettingsStore {
@@ -37,11 +53,17 @@ impl AudioSettingsStore {
                 output_device TEXT,
                 exclusive_mode INTEGER NOT NULL DEFAULT 0,
                 dac_passthrough INTEGER NOT NULL DEFAULT 0,
-                preferred_sample_rate INTEGER
+                preferred_sample_rate INTEGER,
+                backend_type TEXT,
+                alsa_plugin TEXT
             );
             INSERT OR IGNORE INTO audio_settings (id, exclusive_mode, dac_passthrough)
             VALUES (1, 0, 0);"
         ).map_err(|e| format!("Failed to create audio settings table: {}", e))?;
+
+        // Migration: Add new columns if they don't exist (for existing databases)
+        let _ = conn.execute("ALTER TABLE audio_settings ADD COLUMN backend_type TEXT", []);
+        let _ = conn.execute("ALTER TABLE audio_settings ADD COLUMN alsa_plugin TEXT", []);
 
         Ok(Self { conn })
     }
@@ -49,14 +71,26 @@ impl AudioSettingsStore {
     pub fn get_settings(&self) -> Result<AudioSettings, String> {
         self.conn
             .query_row(
-                "SELECT output_device, exclusive_mode, dac_passthrough, preferred_sample_rate FROM audio_settings WHERE id = 1",
+                "SELECT output_device, exclusive_mode, dac_passthrough, preferred_sample_rate, backend_type, alsa_plugin FROM audio_settings WHERE id = 1",
                 [],
                 |row| {
+                    // Parse backend_type from JSON string
+                    let backend_type: Option<AudioBackendType> = row
+                        .get::<_, Option<String>>(4)?
+                        .and_then(|s| serde_json::from_str(&s).ok());
+
+                    // Parse alsa_plugin from JSON string
+                    let alsa_plugin: Option<AlsaPlugin> = row
+                        .get::<_, Option<String>>(5)?
+                        .and_then(|s| serde_json::from_str(&s).ok());
+
                     Ok(AudioSettings {
                         output_device: row.get(0)?,
                         exclusive_mode: row.get::<_, i64>(1)? != 0,
                         dac_passthrough: row.get::<_, i64>(2)? != 0,
                         preferred_sample_rate: row.get(3)?,
+                        backend_type,
+                        alsa_plugin,
                     })
                 },
             )
@@ -100,6 +134,36 @@ impl AudioSettingsStore {
                 params![rate.map(|r| r as i64)],
             )
             .map_err(|e| format!("Failed to set sample rate: {}", e))?;
+        Ok(())
+    }
+
+    pub fn set_backend_type(&self, backend: Option<AudioBackendType>) -> Result<(), String> {
+        let backend_json = backend
+            .map(|b| serde_json::to_string(&b))
+            .transpose()
+            .map_err(|e| format!("Failed to serialize backend type: {}", e))?;
+
+        self.conn
+            .execute(
+                "UPDATE audio_settings SET backend_type = ?1 WHERE id = 1",
+                params![backend_json],
+            )
+            .map_err(|e| format!("Failed to set backend type: {}", e))?;
+        Ok(())
+    }
+
+    pub fn set_alsa_plugin(&self, plugin: Option<AlsaPlugin>) -> Result<(), String> {
+        let plugin_json = plugin
+            .map(|p| serde_json::to_string(&p))
+            .transpose()
+            .map_err(|e| format!("Failed to serialize ALSA plugin: {}", e))?;
+
+        self.conn
+            .execute(
+                "UPDATE audio_settings SET alsa_plugin = ?1 WHERE id = 1",
+                params![plugin_json],
+            )
+            .map_err(|e| format!("Failed to set ALSA plugin: {}", e))?;
         Ok(())
     }
 }
@@ -160,4 +224,22 @@ pub fn set_audio_sample_rate(
 ) -> Result<(), String> {
     let store = state.store.lock().map_err(|e| format!("Lock error: {}", e))?;
     store.set_sample_rate(rate)
+}
+
+#[tauri::command]
+pub fn set_audio_backend_type(
+    state: tauri::State<'_, AudioSettingsState>,
+    backend_type: Option<AudioBackendType>,
+) -> Result<(), String> {
+    let store = state.store.lock().map_err(|e| format!("Lock error: {}", e))?;
+    store.set_backend_type(backend_type)
+}
+
+#[tauri::command]
+pub fn set_audio_alsa_plugin(
+    state: tauri::State<'_, AudioSettingsState>,
+    plugin: Option<AlsaPlugin>,
+) -> Result<(), String> {
+    let store = state.store.lock().map_err(|e| format!("Lock error: {}", e))?;
+    store.set_alsa_plugin(plugin)
 }

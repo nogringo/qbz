@@ -545,6 +545,8 @@ pub fn run() {
             config::audio_settings::set_audio_exclusive_mode,
             config::audio_settings::set_audio_dac_passthrough,
             config::audio_settings::set_audio_sample_rate,
+            config::audio_settings::set_audio_backend_type,
+            config::audio_settings::set_audio_alsa_plugin,
             // Audio backend commands
             commands::get_available_backends,
             commands::get_devices_for_backend,
