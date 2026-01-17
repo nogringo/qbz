@@ -23,12 +23,12 @@ where
 const LASTFM_API_URL: &str = "https://ws.audioscrobbler.com/2.0/";
 
 // Last.fm API credentials
+// Only API key can be embedded - secret must be user-provided for Flathub compliance
 // Checked in order:
 // 1. Compile-time environment variables (for release builds)
 // 2. Runtime environment variables (for development with .env)
 // Note: Supports both LAST_FM_* and LASTFM_* naming conventions
 const DEFAULT_API_KEY: Option<&str> = option_env!("LAST_FM_API_KEY");
-const DEFAULT_API_SECRET: Option<&str> = option_env!("LAST_FM_API_SHARED_SECRET");
 
 /// Get API key from compile-time or runtime environment
 fn get_api_key() -> Option<String> {
@@ -36,14 +36,6 @@ fn get_api_key() -> Option<String> {
         .map(String::from)
         .or_else(|| std::env::var("LAST_FM_API_KEY").ok())
         .or_else(|| std::env::var("LASTFM_API_KEY").ok())
-}
-
-/// Get API secret from compile-time or runtime environment
-fn get_api_secret() -> Option<String> {
-    DEFAULT_API_SECRET
-        .map(String::from)
-        .or_else(|| std::env::var("LAST_FM_API_SHARED_SECRET").ok())
-        .or_else(|| std::env::var("LASTFM_API_SECRET").ok())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,17 +73,19 @@ pub struct LastFmClient {
 
 impl Default for LastFmClient {
     fn default() -> Self {
+        // API key can be embedded, but secret must be user-provided
         Self::new(
             get_api_key().unwrap_or_default(),
-            get_api_secret().unwrap_or_default(),
+            String::new(), // Empty secret - user must provide via set_credentials
         )
     }
 }
 
 impl LastFmClient {
-    /// Check if embedded (build-time or runtime) credentials are available
+    /// Check if embedded API key is available
+    /// Note: API secret is never embedded and must be user-provided
     pub fn has_embedded_credentials() -> bool {
-        get_api_key().is_some() && get_api_secret().is_some()
+        get_api_key().is_some()
     }
 }
 
