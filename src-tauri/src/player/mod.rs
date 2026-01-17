@@ -590,7 +590,28 @@ impl Player {
             };
 
             // Helper to find and initialize audio device
+            // Try backend system first, fall back to legacy CPAL
             let init_device = |name: &Option<String>, state: &SharedState| -> Option<(OutputStream, rodio::OutputStreamHandle)> {
+                // Try backend system if configured
+                if let Ok(settings) = thread_settings.lock() {
+                    if settings.backend_type.is_some() {
+                        // Use a dummy sample rate/channels for reinit (will be set on next play)
+                        match try_init_stream_with_backend(&settings, 48000, 2) {
+                            Some(Ok(stream)) => {
+                                log::info!("Audio output initialized via backend system");
+                                return Some(stream);
+                            }
+                            Some(Err(e)) => {
+                                log::warn!("Backend system init failed: {}, falling back to legacy", e);
+                            }
+                            None => {
+                                // Backend not configured, continue to legacy path
+                            }
+                        }
+                    }
+                }
+
+                // Legacy CPAL path
                 let device = if let Some(ref name) = name {
                     log::info!("Looking for audio device: {}", name);
                     let found = host.output_devices()

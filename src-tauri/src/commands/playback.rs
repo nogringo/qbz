@@ -536,8 +536,20 @@ pub fn get_audio_output_status(
 pub fn reinit_audio_device(
     device: Option<String>,
     state: tauri::State<'_, crate::AppState>,
+    audio_settings_state: tauri::State<'_, crate::config::audio_settings::AudioSettingsState>,
 ) -> Result<(), String> {
     log::info!("Command: reinit_audio_device {:?}", device);
+
+    // Reload settings from database to ensure Player has latest config (including backend_type)
+    if let Ok(store) = audio_settings_state.store.lock() {
+        if let Ok(fresh_settings) = store.get_settings() {
+            if let Ok(mut player_settings) = state.player.audio_settings.lock() {
+                *player_settings = fresh_settings;
+                log::info!("Reloaded audio settings before reinit (backend_type: {:?})", player_settings.backend_type);
+            }
+        }
+    }
+
     state.player.reinit_device(device)
 }
 
