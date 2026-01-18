@@ -258,6 +258,12 @@
       ? 'Exclusive mode is only available with ALSA Direct backend. PipeWire is a multiplexed audio server and cannot provide true exclusive access.'
       : null
   );
+  let dacPassthroughDisabled = $derived(selectedBackend === 'ALSA Direct');
+  let dacPassthroughTooltipOverride = $derived(
+    dacPassthroughDisabled
+      ? 'DAC Passthrough uses pw-metadata to force PipeWire sample rates. It is not compatible with ALSA Direct backend. Use ALSA Direct for true bit-perfect playback without needing this setting.'
+      : null
+  );
   let gaplessDisabled = $derived(dacPassthrough);
   let gaplessTooltipOverride = $derived(
     gaplessDisabled
@@ -876,6 +882,14 @@
     const backendType = backendName === 'Auto' ? null : backend?.backend_type ?? null;
 
     // Auto-disable incompatible features
+    if (backendName === 'ALSA Direct') {
+      if (dacPassthrough) {
+        dacPassthrough = false;
+        await invoke('set_audio_dac_passthrough', { enabled: false });
+        console.log('[Audio] Disabled DAC Passthrough (incompatible with ALSA Direct)');
+      }
+    }
+
     if (backendName === 'PipeWire' || backendName === 'Auto') {
       if (exclusiveMode) {
         exclusiveMode = false;
@@ -892,10 +906,11 @@
       // Load devices for new backend
       if (backendType) {
         await loadBackendDevices(backendType);
-        // Reset to default device when switching backends
-        outputDevice = 'System Default';
-        await invoke('set_audio_output_device', { device: null });
       }
+
+      // Reset to default device when switching backends (always)
+      outputDevice = 'System Default';
+      await invoke('set_audio_output_device', { device: null });
 
       // Reinitialize audio
       await invoke('reinit_audio_device', { device: null });
@@ -1287,9 +1302,9 @@
     <div class="setting-row">
       <div class="label-with-tooltip">
         <span class="setting-label">{$t('settings.audio.dacPassthrough')}</span>
-        <Tooltip text={$t('settings.audio.dacPassthroughDesc')} />
+        <Tooltip text={dacPassthroughTooltipOverride ?? $t('settings.audio.dacPassthroughDesc')} />
       </div>
-      <Toggle enabled={dacPassthrough} onchange={handleDacPassthroughChange} />
+      <Toggle enabled={dacPassthrough} onchange={handleDacPassthroughChange} disabled={dacPassthroughDisabled} />
     </div>
     <div class="setting-row last">
       <span class="setting-label">{$t('settings.audio.currentSampleRate')}</span>
