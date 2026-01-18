@@ -1,8 +1,19 @@
 <script lang="ts">
+  import { invoke } from '@tauri-apps/api/core';
   import { X, Shuffle, SkipBack, Play, Pause, SkipForward, Repeat, Heart, List, Maximize2, MoreHorizontal, Cast } from 'lucide-svelte';
   import QualityBadge from './QualityBadge.svelte';
   import LyricsLines from './lyrics/LyricsLines.svelte';
   import { startActiveLineUpdates } from '$lib/stores/lyricsStore';
+
+  interface HardwareAudioStatus {
+    hardware_sample_rate: number | null;
+    hardware_format: string | null;
+    is_active: boolean;
+  }
+
+  interface AudioSettings {
+    dac_passthrough: boolean;
+  }
 
   interface LyricsLine {
     text: string;
@@ -89,9 +100,46 @@
   let volumeRef: HTMLDivElement | null = $state(null);
   let isDraggingProgress = $state(false);
   let isDraggingVolume = $state(false);
+  let hardwareSampleRate = $state<number | null>(null);
+  let dacPassthrough = $state(false);
 
   const progress = $derived((currentTime / duration) * 100 || 0);
   const hasLyrics = $derived(lyricsLines.length > 0);
+
+  // Use hardware sample rate when DAC passthrough is active, otherwise use track sample rate
+  const displaySamplingRate = $derived(
+    dacPassthrough && hardwareSampleRate
+      ? hardwareSampleRate / 1000  // Convert Hz to kHz
+      : samplingRate
+  );
+
+  // Poll hardware sample rate when DAC passthrough is active
+  $effect(() => {
+    if (!isOpen) return;
+
+    async function loadStatus() {
+      try {
+        const [settings, hwStatus] = await Promise.all([
+          invoke<AudioSettings>('get_audio_settings'),
+          invoke<HardwareAudioStatus>('get_hardware_audio_status').catch(() => null)
+        ]);
+        dacPassthrough = settings.dac_passthrough;
+        hardwareSampleRate = hwStatus?.hardware_sample_rate ?? null;
+      } catch (err) {
+        console.error('Failed to load audio status:', err);
+      }
+    }
+
+    loadStatus();
+
+    const pollInterval = setInterval(() => {
+      if (dacPassthrough) {
+        loadStatus();
+      }
+    }, 1000); // Poll every second when DAC passthrough is active
+
+    return () => clearInterval(pollInterval);
+  });
 
   // Ensure lyrics updates run when ExpandedPlayer is open with synced lyrics
   $effect(() => {
@@ -200,7 +248,7 @@
           <h2 class="artist">{artist}</h2>
           <h3 class="album">{album}</h3>
           <div class="quality-info">
-            <QualityBadge {quality} {bitDepth} {samplingRate} />
+            <QualityBadge {quality} {bitDepth} samplingRate={displaySamplingRate} />
           </div>
         </div>
 

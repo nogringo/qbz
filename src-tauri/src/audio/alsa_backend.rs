@@ -44,11 +44,11 @@ impl AlsaBackend {
         Ok(Self { host })
     }
 
-    /// Enumerate ALSA devices using aplay -L for complete device list
+    /// Enumerate ALSA devices using aplay -L, filtering only playback devices
     fn enumerate_alsa_devices(&self) -> BackendResult<Vec<AudioDevice>> {
         let mut devices = Vec::new();
 
-        // Use aplay -L to get all ALSA device names (including virtual devices)
+        // Use aplay -L to get all ALSA device names
         let output = Command::new("aplay")
             .arg("-L")
             .output()
@@ -62,12 +62,27 @@ impl AlsaBackend {
         let mut current_device: Option<String> = None;
         let mut current_description: Option<String> = None;
 
+        // Helper to check if device is valid for playback
+        let is_valid_device = |id: &str| -> bool {
+            // Only include actual hardware devices and useful virtual devices
+            id == "default"
+                || id == "pipewire"
+                || id == "pulse"
+                || id.starts_with("hw:")
+                || id.starts_with("plughw:")
+                || id.starts_with("sysdefault:CARD=")
+                || id.starts_with("default:CARD=")
+                || id.starts_with("front:CARD=")
+                || id.starts_with("surround")
+                || id.starts_with("hdmi:")
+                || id.starts_with("iec958:")
+        };
+
         for line in stdout.lines() {
             if line.is_empty() {
                 // Empty line marks end of device entry
                 if let (Some(id), Some(desc)) = (current_device.take(), current_description.take()) {
-                    // Skip null device
-                    if id != "null" {
+                    if is_valid_device(&id) {
                         let is_default = id == "default";
                         devices.push(AudioDevice {
                             id: id.clone(),
@@ -90,7 +105,7 @@ impl AlsaBackend {
 
         // Don't forget last device
         if let (Some(id), Some(desc)) = (current_device, current_description) {
-            if id != "null" {
+            if is_valid_device(&id) {
                 let is_default = id == "default";
                 devices.push(AudioDevice {
                     id: id.clone(),
@@ -102,7 +117,7 @@ impl AlsaBackend {
             }
         }
 
-        log::info!("[ALSA Backend] Enumerated {} devices via aplay -L", devices.len());
+        log::info!("[ALSA Backend] Enumerated {} devices via aplay -L (filtered)", devices.len());
         for (idx, dev) in devices.iter().enumerate() {
             log::info!("  [{}] {} - {}", idx, dev.name, dev.description.as_deref().unwrap_or(""));
         }
