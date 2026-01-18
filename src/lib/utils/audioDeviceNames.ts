@@ -6,7 +6,8 @@
 const CARD_NAMES: Record<string, string> = {
   'sofhdadsp': 'Intel HD Audio',
   'NVidia': 'NVIDIA GPU',
-  'CS201': 'USB Audio',  // Common USB audio chip
+  'CS201': 'Cambridge Audio USB',
+  'C20': 'Cambridge Audio',
   'Generic': 'Generic Audio',
   'PCH': 'Onboard Audio',
   'HDMI': 'HDMI Audio',
@@ -30,6 +31,29 @@ export function getDevicePrettyName(alsaName: string): string {
       return 'PulseAudio';
     case 'jack':
       return 'JACK Audio';
+  }
+
+  // Pattern: front:CARD=XXX,DEV=N
+  const frontMatch = alsaName.match(/^front:CARD=([^,]+),DEV=(\d+)$/);
+  if (frontMatch) {
+    const cardName = CARD_NAMES[frontMatch[1]] || frontMatch[1];
+    return `${cardName} Front Output`;
+  }
+
+  // Pattern: surround40, surround41, surround50, surround51, surround71:CARD=XXX,DEV=N
+  const surroundMatch = alsaName.match(/^surround(\d{2}):CARD=([^,]+),DEV=(\d+)$/);
+  if (surroundMatch) {
+    const channels = surroundMatch[1];
+    const cardName = CARD_NAMES[surroundMatch[2]] || surroundMatch[2];
+    const channelName = channels === '40' ? '4.0' : channels === '41' ? '4.1' : channels === '50' ? '5.0' : channels === '51' ? '5.1' : channels === '71' ? '7.1' : channels;
+    return `${cardName} Surround ${channelName}`;
+  }
+
+  // Pattern: iec958:CARD=XXX,DEV=N (S/PDIF)
+  const iec958Match = alsaName.match(/^iec958:CARD=([^,]+),DEV=(\d+)$/);
+  if (iec958Match) {
+    const cardName = CARD_NAMES[iec958Match[1]] || iec958Match[1];
+    return `${cardName} S/PDIF`;
   }
 
   // Pattern: hdmi:CARD=XXX,DEV=N

@@ -789,24 +789,10 @@
         }
       } else {
         selectedBackend = 'Auto';
-        // Auto mode: load devices from first available backend
-        // This allows showing proper device names with translation
-        if (availableBackends.length > 0) {
-          const firstBackend = availableBackends.find(b => b.is_available);
-          if (firstBackend) {
-            await loadBackendDevices(firstBackend.backend_type);
-
-            // Set selected device from backend devices
-            if (settings.output_device) {
-              const device = backendDevices.find(d => d.id === settings.output_device);
-              if (device) {
-                outputDevice = needsTranslation(device.name) ? getDevicePrettyName(device.name) : device.name;
-              } else {
-                outputDevice = 'System Default';
-              }
-            }
-          }
-        }
+        // Auto mode: always use System Default (no device selection)
+        // Device names from one backend (e.g., PipeWire) don't work in another (e.g., ALSA)
+        backendDevices = [];
+        outputDevice = 'System Default';
       }
 
       if (settings.alsa_plugin) {
@@ -925,13 +911,9 @@
       if (backendType) {
         await loadBackendDevices(backendType);
       } else {
-        // Auto mode: load devices from first available backend for device selection
-        if (availableBackends.length > 0) {
-          const firstBackend = availableBackends.find(b => b.is_available);
-          if (firstBackend) {
-            await loadBackendDevices(firstBackend.backend_type);
-          }
-        }
+        // Auto mode: no device selection (System Default only)
+        // Device IDs from different backends are incompatible
+        backendDevices = [];
       }
 
       // Reset to default device when switching backends (always)
