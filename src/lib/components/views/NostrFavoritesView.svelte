@@ -3,7 +3,7 @@
   import { Heart, Play, Music, Search, X } from 'lucide-svelte';
   import { fetchLikedTracks, unlikeTrack, type NostrMusicTrack } from '$lib/nostr/client';
   import { formatDuration } from '$lib/nostr/adapters';
-  import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds, playNostrTrackNext, playNostrTrackLater } from '$lib/nostr/trackUtils';
+  import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds, playNostrTrackNext, playNostrTrackLater, copyBlossomUrl, copyNaddr, copyZaptraxLink } from '$lib/nostr/trackUtils';
   import { getAuthState } from '$lib/stores/authStore';
   import { selectNostrArtist } from '$lib/stores/navigationStore';
   import { setQueue as setBackendQueue, setNostrTrackIds } from '$lib/stores/queueStore';
@@ -296,6 +296,9 @@
             <TrackMenu
               onPlayNext={() => playNostrTrackNext(track)}
               onPlayLater={() => playNostrTrackLater(track)}
+              onCopyBlossomUrl={() => copyBlossomUrl(track)}
+              onCopyNaddr={() => copyNaddr(track)}
+              onCopyZaptraxLink={() => copyZaptraxLink(track)}
               onGoToArtist={() => handleArtistClick(track.pubkey)}
             />
           </div>

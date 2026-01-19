@@ -24,6 +24,9 @@
     onRemoveFromPlaylist?: () => void;
     onShareQobuz?: () => void;
     onShareSonglink?: () => void;
+    onCopyBlossomUrl?: () => void;
+    onCopyNaddr?: () => void;
+    onCopyZaptraxLink?: () => void;
     onGoToAlbum?: () => void;
     onGoToArtist?: () => void;
   }
@@ -37,6 +40,9 @@
     onRemoveFromPlaylist,
     onShareQobuz,
     onShareSonglink,
+    onCopyBlossomUrl,
+    onCopyNaddr,
+    onCopyZaptraxLink,
     onGoToAlbum,
     onGoToArtist
   }: Props = $props();
@@ -66,8 +72,9 @@
   const hasPlayback = $derived(!!(onPlayNow || onPlayNext || onPlayLater));
   const hasLibrary = $derived(!!(onAddFavorite || onAddToPlaylist || onRemoveFromPlaylist));
   const hasShare = $derived(!!(onShareQobuz || onShareSonglink));
+  const hasCopy = $derived(!!(onCopyBlossomUrl || onCopyNaddr || onCopyZaptraxLink));
   const hasNav = $derived(!!(onGoToAlbum || onGoToArtist));
-  const hasMenu = $derived(hasPlayback || hasLibrary || hasShare || hasNav);
+  const hasMenu = $derived(hasPlayback || hasLibrary || hasShare || hasCopy || hasNav);
 
   function closeMenu() {
     isOpen = false;
@@ -232,7 +239,7 @@
           {/if}
         {/if}
 
-        {#if hasLibrary && (hasShare || hasNav)}
+        {#if hasLibrary && (hasShare || hasCopy || hasNav)}
           <div class="separator"></div>
         {/if}
 
@@ -271,7 +278,32 @@
           </div>
         {/if}
 
-        {#if hasShare && hasNav}
+        {#if hasShare && (hasCopy || hasNav)}
+          <div class="separator"></div>
+        {/if}
+
+        {#if hasCopy}
+          {#if onCopyBlossomUrl}
+            <button class="menu-item" onclick={() => handleAction(onCopyBlossomUrl)}>
+              <Link size={14} />
+              <span>Copy Blossom URL</span>
+            </button>
+          {/if}
+          {#if onCopyNaddr}
+            <button class="menu-item" onclick={() => handleAction(onCopyNaddr)}>
+              <Link size={14} />
+              <span>Copy naddr</span>
+            </button>
+          {/if}
+          {#if onCopyZaptraxLink}
+            <button class="menu-item" onclick={() => handleAction(onCopyZaptraxLink)}>
+              <Link size={14} />
+              <span>Copy Zaptrax link</span>
+            </button>
+          {/if}
+        {/if}
+
+        {#if hasCopy && hasNav}
           <div class="separator"></div>
         {/if}
 

@@ -6,7 +6,7 @@
   import { fetchArtistWithGossip, isFollowing, followPubkey, unfollowPubkey, type NostrArtist } from '$lib/nostr/client';
   import type { NostrMusicTrack } from '$lib/nostr/types';
   import { formatDuration } from '$lib/nostr/adapters';
-  import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds, playNostrTrackNext, playNostrTrackLater } from '$lib/nostr/trackUtils';
+  import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds, playNostrTrackNext, playNostrTrackLater, copyBlossomUrl, copyNaddr, copyZaptraxLink } from '$lib/nostr/trackUtils';
   import { getAuthState } from '$lib/stores/authStore';
   import { setQueue as setBackendQueue, setNostrTrackIds } from '$lib/stores/queueStore';
   import TrackMenu from '$lib/components/TrackMenu.svelte';
@@ -283,6 +283,9 @@
               <TrackMenu
                 onPlayNext={() => playNostrTrackNext(track)}
                 onPlayLater={() => playNostrTrackLater(track)}
+                onCopyBlossomUrl={() => copyBlossomUrl(track)}
+                onCopyNaddr={() => copyNaddr(track)}
+                onCopyZaptraxLink={() => copyZaptraxLink(track)}
               />
             </button>
           {/each}

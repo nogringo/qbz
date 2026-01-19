@@ -80,3 +80,24 @@ export async function playNostrTrackLater(track: NostrMusicTrack): Promise<boole
   const { addToQueue } = await import('$lib/stores/queueStore');
   return addToQueue(nostrToBackendTrack(track));
 }
+
+/**
+ * Copy Blossom URL to clipboard
+ */
+export async function copyBlossomUrl(track: NostrMusicTrack): Promise<void> {
+  await navigator.clipboard.writeText(track.url);
+}
+
+/**
+ * Copy naddr to clipboard
+ */
+export async function copyNaddr(track: NostrMusicTrack): Promise<void> {
+  await navigator.clipboard.writeText(track.naddr);
+}
+
+/**
+ * Copy Zaptrax link to clipboard
+ */
+export async function copyZaptraxLink(track: NostrMusicTrack): Promise<void> {
+  await navigator.clipboard.writeText(`https://zaptrax.app/track/${track.naddr}`);
+}
