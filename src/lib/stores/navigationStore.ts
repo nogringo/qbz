@@ -6,7 +6,7 @@
  * fetched data, but selectedPlaylistId is managed here as it's just an ID.
  */
 
-export type ViewType = 'home' | 'search' | 'library' | 'library-album' | 'settings' | 'album' | 'artist' | 'playlist' | 'playlist-manager' | 'favorites';
+export type ViewType = 'home' | 'search' | 'library' | 'library-album' | 'settings' | 'album' | 'artist' | 'nostr-artist' | 'playlist' | 'playlist-manager' | 'favorites';
 
 // Navigation state
 let activeView: ViewType = 'home';
@@ -18,6 +18,9 @@ let selectedPlaylistId: number | null = null;
 
 // Selected local album ID (for library-album view)
 let selectedLocalAlbumId: string | null = null;
+
+// Selected Nostr artist pubkey (for nostr-artist view)
+let selectedNostrArtistPubkey: string | null = null;
 
 // Listeners
 const listeners = new Set<() => void>();
@@ -152,6 +155,29 @@ export function getSelectedLocalAlbumId(): string | null {
   return selectedLocalAlbumId;
 }
 
+// ============ Nostr Artist Selection ============
+
+/**
+ * Navigate to Nostr artist detail view
+ */
+export function selectNostrArtist(pubkey: string): void {
+  const previousPubkey = selectedNostrArtistPubkey;
+  selectedNostrArtistPubkey = pubkey;
+
+  if (activeView === 'nostr-artist' && previousPubkey !== pubkey) {
+    notifyListeners();
+  } else {
+    navigateTo('nostr-artist');
+  }
+}
+
+/**
+ * Get selected Nostr artist pubkey
+ */
+export function getSelectedNostrArtistPubkey(): string | null {
+  return selectedNostrArtistPubkey;
+}
+
 // ============ Getters ============
 
 export function getActiveView(): ViewType {
@@ -166,6 +192,7 @@ export interface NavigationState {
   forwardHistory: ViewType[];
   selectedPlaylistId: number | null;
   selectedLocalAlbumId: string | null;
+  selectedNostrArtistPubkey: string | null;
   canGoBack: boolean;
   canGoForward: boolean;
 }
@@ -177,6 +204,7 @@ export function getNavigationState(): NavigationState {
     forwardHistory: [...forwardHistory],
     selectedPlaylistId,
     selectedLocalAlbumId,
+    selectedNostrArtistPubkey,
     canGoBack: viewHistory.length > 1,
     canGoForward: forwardHistory.length > 0
   };

@@ -38,6 +38,8 @@ export interface PlayingTrack {
   // Optional IDs for recommendation tracking
   albumId?: string;
   artistId?: number;
+  // Nostr artist pubkey (for navigating to artist page)
+  pubkey?: string;
 }
 
 interface BackendPlaybackState {

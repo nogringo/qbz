@@ -43,7 +43,8 @@ function queueTrackToPlayingTrack(track: QueueTrack): PlayingTrack {
     artwork: track.artwork || '',
     duration: track.duration,
     quality: 'Nostr',
-    isLocal: false
+    isLocal: false,
+    pubkey: track.pubkey
   };
 }
 

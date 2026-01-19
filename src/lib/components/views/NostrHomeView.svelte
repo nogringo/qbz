@@ -14,9 +14,10 @@
 
   interface Props {
     userName?: string;
+    onArtistClick?: (pubkey: string) => void;
   }
 
-  let { userName = 'Nostr User' }: Props = $props();
+  let { userName = 'Nostr User', onArtistClick }: Props = $props();
 
   // Data
   let tracks = $state<NostrMusicTrack[]>([]);
@@ -153,7 +154,23 @@
             {/if}
             <div class="track-info">
               <span class="track-title">{track.title}</span>
-              <span class="track-artist">{track.artist}</span>
+              <span
+                class="track-artist-link"
+                role="button"
+                tabindex="0"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onArtistClick?.(track.pubkey);
+                }}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.stopPropagation();
+                    onArtistClick?.(track.pubkey);
+                  }
+                }}
+              >
+                {track.artist}
+              </span>
             </div>
             {#if track.album}
               <span class="track-album">{track.album}</span>
@@ -375,12 +392,18 @@
     text-overflow: ellipsis;
   }
 
-  .track-artist {
+  .track-artist-link {
     font-size: 12px;
     color: var(--text-muted, #888);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  .track-artist-link:hover {
+    color: var(--text-primary, #fff);
+    text-decoration: underline;
   }
 
   .track-album {

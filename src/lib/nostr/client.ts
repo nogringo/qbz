@@ -388,6 +388,131 @@ export async function fetchTracksByGenre(
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+// ============ Gossip Functions (fetch from specific relays) ============
+
+/**
+ * Fetch profile from specific relays
+ */
+export async function fetchProfileFromRelays(pubkey: string, relays: string[]): Promise<NostrProfile | null> {
+  const p = getPool();
+  const filter: Filter = {
+    kinds: [PROFILE_KIND],
+    authors: [pubkey],
+    limit: 1
+  };
+
+  const events = await p.querySync(relays, filter);
+  if (events.length === 0) {
+    return null;
+  }
+
+  try {
+    const content = JSON.parse(events[0].content);
+    return {
+      pubkey,
+      name: content.name,
+      displayName: content.display_name,
+      picture: content.picture,
+      about: content.about,
+      nip05: content.nip05
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch NIP-65 relays from specific relays
+ */
+export async function fetchNip65RelaysFromRelays(pubkey: string, relays: string[]): Promise<Nip65Relay[]> {
+  const p = getPool();
+  const filter: Filter = {
+    kinds: [RELAY_LIST_KIND],
+    authors: [pubkey],
+    limit: 1
+  };
+
+  const events = await p.querySync(relays, filter);
+  if (events.length === 0) {
+    return [];
+  }
+
+  const result: Nip65Relay[] = [];
+  for (const tag of events[0].tags) {
+    if (tag[0] === 'r' && tag[1]) {
+      const url = tag[1];
+      const marker = tag[2];
+      result.push({
+        url,
+        read: !marker || marker === 'read',
+        write: !marker || marker === 'write'
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * Fetch tracks from specific relays
+ */
+export async function fetchTracksFromRelays(
+  pubkey: string,
+  relays: string[],
+  limit: number = 50
+): Promise<NostrMusicTrack[]> {
+  const p = getPool();
+  const filter: Filter = {
+    kinds: [MUSIC_TRACK_KIND],
+    authors: [pubkey],
+    limit
+  };
+
+  const events = await p.querySync(relays, filter);
+  return events
+    .map(parseMusicTrackEvent)
+    .filter((t): t is NostrMusicTrack => t !== null)
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/**
+ * Nostr Artist info (profile + tracks)
+ */
+export interface NostrArtist {
+  pubkey: string;
+  profile: NostrProfile | null;
+  tracks: NostrMusicTrack[];
+}
+
+/**
+ * Fetch artist using gossip model:
+ * 1. First fetch artist's NIP-65 from our relays
+ * 2. Then fetch their profile and tracks from their write relays
+ */
+export async function fetchArtistWithGossip(pubkey: string): Promise<NostrArtist> {
+  // Step 1: Get artist's NIP-65 relays from our connected relays
+  const nip65Relays = await fetchNip65Relays(pubkey);
+
+  // Extract write relays (where artist publishes)
+  const writeRelays = nip65Relays
+    .filter(r => r.write)
+    .map(r => r.url);
+
+  // Combine our relays with artist's write relays (deduplicated)
+  const allRelays = [...new Set([...connectedRelays, ...writeRelays])];
+
+  // Step 2: Fetch profile and tracks from combined relays
+  const [profile, tracks] = await Promise.all([
+    fetchProfileFromRelays(pubkey, allRelays),
+    fetchTracksFromRelays(pubkey, allRelays, 100)
+  ]);
+
+  return {
+    pubkey,
+    profile,
+    tracks
+  };
+}
+
 // ============ Subscribe Functions ============
 
 /**

@@ -80,6 +80,7 @@
     goBack as navGoBack,
     goForward as navGoForward,
     selectPlaylist,
+    selectNostrArtist,
     getNavigationState,
     type ViewType,
     type NavigationState
@@ -245,6 +246,7 @@
   import LoginView from '$lib/components/views/LoginView.svelte';
   import NostrLoginView from '$lib/components/views/NostrLoginView.svelte';
   import NostrHomeView from '$lib/components/views/NostrHomeView.svelte';
+  import NostrArtistView from '$lib/components/views/NostrArtistView.svelte';
   import HomeView from '$lib/components/views/HomeView.svelte';
   import SearchView from '$lib/components/views/SearchView.svelte';
   import SettingsView from '$lib/components/views/SettingsView.svelte';
@@ -287,6 +289,7 @@
   // View State (from navigationStore subscription)
   let activeView = $state<ViewType>('home');
   let selectedPlaylistId = $state<number | null>(null);
+  let selectedNostrArtistPubkey = $state<string | null>(null);
   // Album and Artist data are fetched, so kept local
   let selectedAlbum = $state<AlbumDetail | null>(null);
   let selectedArtist = $state<ArtistDetail | null>(null);
@@ -1691,6 +1694,7 @@
       const navState = getNavigationState();
       activeView = navState.activeView;
       selectedPlaylistId = navState.selectedPlaylistId;
+      selectedNostrArtistPubkey = navState.selectedNostrArtistPubkey;
     });
 
     // Subscribe to player state changes
@@ -1947,7 +1951,7 @@
       {#if activeView === 'home'}
         {#if userInfo?.authMethod === 'bunker' || userInfo?.authMethod === 'nsec'}
           <!-- Nostr user: show Nostr home view -->
-          <NostrHomeView userName={userInfo?.userName} />
+          <NostrHomeView userName={userInfo?.userName} onArtistClick={selectNostrArtist} />
         {:else if offlineStatus.isOffline}
           <OfflinePlaceholder
             reason={offlineStatus.reason}
@@ -2066,6 +2070,11 @@
           onTrackGoToAlbum={handleAlbumClick}
           onTrackGoToArtist={handleArtistClick}
           onPlaylistClick={selectPlaylist}
+        />
+      {:else if activeView === 'nostr-artist' && selectedNostrArtistPubkey}
+        <NostrArtistView
+          pubkey={selectedNostrArtistPubkey}
+          onBack={navGoBack}
         />
       {:else if activeView === 'library' || activeView === 'library-album'}
         <LocalLibraryView
@@ -2200,10 +2209,8 @@
         onToggleLyrics={toggleLyricsSidebar}
         lyricsActive={lyricsSidebarVisible}
         onArtistClick={() => {
-          if (currentTrack?.isLocal) {
-            showToast('Local track - search for artist in Search', 'info');
-          } else if (currentTrack?.artistId) {
-            handleArtistClick(currentTrack.artistId);
+          if (currentTrack?.pubkey) {
+            selectNostrArtist(currentTrack.pubkey);
           }
         }}
         onAlbumClick={() => {
