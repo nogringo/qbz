@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { ArrowLeft, Loader2, Play, Music, UserPlus, UserCheck } from 'lucide-svelte';
+  import { ArrowLeft, Loader2, Play, Music, UserPlus, UserCheck, Copy, Check } from 'lucide-svelte';
+  import { nprofileEncode } from 'nostr-tools/nip19';
+  import { getRelays } from '$lib/nostr/client';
   import { fetchArtistWithGossip, isFollowing, followPubkey, unfollowPubkey, type NostrArtist } from '$lib/nostr/client';
   import type { NostrMusicTrack } from '$lib/nostr/types';
   import {
@@ -26,6 +28,9 @@
   // Follow state
   let following = $state(false);
   let isFollowLoading = $state(false);
+
+  // Copy state
+  let copied = $state(false);
 
   // Player state
   let playerState = $state(getPlayerState());
@@ -84,6 +89,16 @@
     } finally {
       isFollowLoading = false;
     }
+  }
+
+  async function copyNprofile() {
+    const relays = getRelays().slice(0, 3); // Include up to 3 relays
+    const nprofile = nprofileEncode({ pubkey, relays });
+    await navigator.clipboard.writeText(nprofile);
+    copied = true;
+    setTimeout(() => {
+      copied = false;
+    }, 2000);
   }
 
   async function handlePlayTrack(track: NostrMusicTrack, index: number) {
@@ -156,21 +171,35 @@
         <div class="artist-stats">
           <span>{artist.tracks.length} tracks</span>
         </div>
-        <button
-          class="follow-btn"
-          class:following
-          onclick={handleFollow}
-          disabled={isFollowLoading}
-        >
-          {#if isFollowLoading}
-            <Loader2 size={16} class="spinner" />
-          {:else if following}
-            <UserCheck size={16} />
-          {:else}
-            <UserPlus size={16} />
-          {/if}
-          <span>{following ? 'Following' : 'Follow'}</span>
-        </button>
+        <div class="artist-actions">
+          <button
+            class="follow-btn"
+            class:following
+            onclick={handleFollow}
+            disabled={isFollowLoading}
+          >
+            {#if isFollowLoading}
+              <Loader2 size={16} class="spinner" />
+            {:else if following}
+              <UserCheck size={16} />
+            {:else}
+              <UserPlus size={16} />
+            {/if}
+            <span>{following ? 'Following' : 'Follow'}</span>
+          </button>
+          <button
+            class="copy-btn"
+            class:copied
+            onclick={copyNprofile}
+            title="Copy nprofile"
+          >
+            {#if copied}
+              <Check size={16} />
+            {:else}
+              <Copy size={16} />
+            {/if}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -334,11 +363,17 @@
     color: var(--text-muted, #888);
   }
 
+  .artist-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
   .follow-btn {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 8px;
     padding: 8px 16px;
     border-radius: 20px;
     font-size: 13px;
@@ -370,6 +405,30 @@
   .follow-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .copy-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 1px solid var(--text-muted, #888);
+    background: transparent;
+    color: var(--text-muted, #888);
+    transition: all 0.2s;
+  }
+
+  .copy-btn:hover {
+    border-color: var(--text-primary, #fff);
+    color: var(--text-primary, #fff);
+    background: var(--bg-secondary, #1a1a1a);
+  }
+
+  .copy-btn.copied {
+    border-color: #22c55e;
+    color: #22c55e;
   }
 
   /* Section */
