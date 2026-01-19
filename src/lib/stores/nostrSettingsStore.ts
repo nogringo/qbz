@@ -127,6 +127,37 @@ export function getMergedRelays(): string[] {
 }
 
 /**
+ * Get user's write relays for publishing (NIP-65 outbox model)
+ * Falls back to bootstrap relays if no NIP-65 write relays configured
+ */
+export function getUserWriteRelays(): string[] {
+  const nip65Relays = loadSavedNip65Relays();
+  const writeRelays = nip65Relays.filter(r => r.write).map(r => r.url);
+
+  // Fallback to bootstrap relays if no write relays configured
+  if (writeRelays.length === 0) {
+    return loadSavedRelays();
+  }
+
+  return writeRelays;
+}
+
+/**
+ * Get user's read relays for inbox (NIP-65 inbox model)
+ */
+export function getUserReadRelays(): string[] {
+  const nip65Relays = loadSavedNip65Relays();
+  const readRelays = nip65Relays.filter(r => r.read).map(r => r.url);
+
+  // Fallback to bootstrap relays if no read relays configured
+  if (readRelays.length === 0) {
+    return loadSavedRelays();
+  }
+
+  return readRelays;
+}
+
+/**
  * Initialize pool with merged relays (bootstrap + NIP-65)
  */
 export function initPoolWithMergedRelays(): void {

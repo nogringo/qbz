@@ -38,8 +38,10 @@ export interface PlayingTrack {
   // Optional IDs for recommendation tracking
   albumId?: string;
   artistId?: number;
-  // Nostr artist pubkey (for navigating to artist page)
+  // Nostr-specific fields
   pubkey?: string;
+  dTag?: string; // Nostr d-tag for addressable events
+  nostrEventId?: string; // Nostr event ID (for NIP-25 reactions)
 }
 
 interface BackendPlaybackState {

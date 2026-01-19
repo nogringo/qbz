@@ -44,7 +44,9 @@ function queueTrackToPlayingTrack(track: QueueTrack): PlayingTrack {
     duration: track.duration,
     quality: 'Nostr',
     isLocal: false,
-    pubkey: track.pubkey
+    pubkey: track.pubkey,
+    dTag: track.dTag,
+    nostrEventId: track.id
   };
 }
 

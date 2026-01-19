@@ -61,7 +61,8 @@
   } from '$lib/stores/authStore';
 
   // Nostr
-  import { initPool } from '$lib/nostr/client';
+  import { initPool, likeTrack, unlikeTrack, isTrackLiked, preloadLikedTracks } from '$lib/nostr/client';
+  import { retryPendingEvents } from '$lib/nostr/pendingEvents';
   import { getMergedRelays } from '$lib/stores/nostrSettingsStore';
   import {
     initPlayer as initNostrPlayer,
@@ -682,6 +683,41 @@
   async function toggleFavorite() {
     if (!currentTrack) return;
 
+    // Nostr track: use kind 7 reaction (NIP-25 compliant with e + a tags)
+    if (currentTrack.quality === 'Nostr' && currentTrack.nostrEventId && currentTrack.pubkey && currentTrack.dTag) {
+      const authState = getAuthState();
+      if (!authState.userInfo?.pubkey) {
+        showToast('Not logged in', 'error');
+        return;
+      }
+
+      // Optimistic UI update - the event exists once signed, broadcast can retry later
+      if (isFavorite) {
+        // Unlike: update UI immediately, broadcast deletion in background
+        setIsFavorite(false);
+        unlikeTrack(authState.userInfo.pubkey, currentTrack.pubkey, currentTrack.dTag)
+          .then(deleted => {
+            if (!deleted) {
+              console.warn('[Nostr] Like not found for deletion');
+            }
+          })
+          .catch(err => {
+            console.error('[Nostr] Failed to broadcast unlike:', err);
+            // Event exists locally, can retry later
+          });
+      } else {
+        // Like: update UI immediately, broadcast in background
+        setIsFavorite(true);
+        likeTrack(currentTrack.nostrEventId, currentTrack.pubkey, currentTrack.dTag)
+          .catch(err => {
+            console.error('[Nostr] Failed to broadcast like:', err);
+            // Event exists locally, can retry later
+          });
+      }
+      return;
+    }
+
+    // Qobuz track: use API
     const result = await toggleTrackFavorite(currentTrack.id, isFavorite);
     if (result.success) {
       setIsFavorite(result.isFavorite);
@@ -1620,12 +1656,24 @@
       const restored = await tryRestoreNostrSession();
       if (restored) {
         console.log('[Nostr] Session restored successfully');
+        // Preload liked tracks cache for instant like status
+        const authState = getAuthState();
+        if (authState.userInfo?.pubkey) {
+          preloadLikedTracks(authState.userInfo.pubkey).catch(err => {
+            console.warn('[Nostr] Failed to preload liked tracks:', err);
+          });
+        }
       }
     } catch (err) {
       console.error('[Nostr] Failed to restore session:', err);
     } finally {
       isInitializing = false;
     }
+
+    // Retry broadcasting any pending Nostr events
+    retryPendingEvents().catch(err => {
+      console.warn('[Nostr] Failed to retry pending events:', err);
+    });
 
     // Keyboard navigation
     document.addEventListener('keydown', handleKeydown);
@@ -1698,15 +1746,31 @@
     });
 
     // Subscribe to player state changes
+    let lastTrackId: number | null = null;
     const unsubscribePlayer = subscribePlayer(() => {
       const playerState = getPlayerState();
       const wasPlaying = isPlaying;
+      const previousTrackId = lastTrackId;
       currentTrack = playerState.currentTrack;
+      lastTrackId = currentTrack?.id ?? null;
       isPlaying = playerState.isPlaying;
       currentTime = playerState.currentTime;
       duration = playerState.duration;
       volume = playerState.volume;
       isFavorite = playerState.isFavorite;
+
+      // Check if Nostr track is liked when track changes
+      if (currentTrack && currentTrack.id !== previousTrackId) {
+        if (currentTrack.quality === 'Nostr' && currentTrack.pubkey && currentTrack.dTag && userInfo?.pubkey) {
+          isTrackLiked(userInfo.pubkey, currentTrack.pubkey, currentTrack.dTag).then(liked => {
+            if (currentTrack?.dTag === playerState.currentTrack?.dTag) {
+              setIsFavorite(liked);
+            }
+          });
+        } else {
+          setIsFavorite(false);
+        }
+      }
 
       // Save position during playback (debounced to every 5s)
       if (isPlaying && currentTrack && currentTime > 0) {
