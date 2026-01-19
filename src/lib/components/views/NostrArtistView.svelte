@@ -231,7 +231,9 @@
               <div class="track-index">
                 {#if isCurrentTrack(track) && playerState.isPlaying}
                   <div class="playing-indicator">
-                    <span></span><span></span><span></span>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
                   </div>
                 {:else}
                   {index + 1}
@@ -510,25 +512,41 @@
 
   .playing-indicator {
     display: flex;
-    align-items: flex-end;
-    justify-content: center;
+    align-items: center;
     gap: 2px;
-    height: 14px;
   }
 
-  .playing-indicator span {
+  .playing-indicator .bar {
     width: 3px;
-    background: var(--accent-primary, #6366f1);
-    animation: equalizer 0.5s ease-in-out infinite alternate;
+    background-color: var(--accent-primary);
+    border-radius: 9999px;
+    transform-origin: bottom;
+    animation: equalize 1s ease-in-out infinite;
   }
 
-  .playing-indicator span:nth-child(1) { height: 60%; animation-delay: 0s; }
-  .playing-indicator span:nth-child(2) { height: 100%; animation-delay: 0.2s; }
-  .playing-indicator span:nth-child(3) { height: 40%; animation-delay: 0.4s; }
+  .playing-indicator .bar:nth-child(1) {
+    height: 12px;
+  }
 
-  @keyframes equalizer {
-    from { height: 20%; }
-    to { height: 100%; }
+  .playing-indicator .bar:nth-child(2) {
+    height: 16px;
+    animation-delay: 0.15s;
+  }
+
+  .playing-indicator .bar:nth-child(3) {
+    height: 10px;
+    animation-delay: 0.3s;
+  }
+
+  @keyframes equalize {
+    0%, 100% {
+      transform: scaleY(0.5);
+      opacity: 0.7;
+    }
+    50% {
+      transform: scaleY(1);
+      opacity: 1;
+    }
   }
 
   .track-art, .track-art-placeholder {

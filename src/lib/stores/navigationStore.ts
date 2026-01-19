@@ -6,7 +6,7 @@
  * fetched data, but selectedPlaylistId is managed here as it's just an ID.
  */
 
-export type ViewType = 'home' | 'search' | 'library' | 'library-album' | 'settings' | 'album' | 'artist' | 'nostr-artist' | 'playlist' | 'playlist-manager' | 'favorites';
+export type ViewType = 'home' | 'search' | 'library' | 'library-album' | 'settings' | 'album' | 'artist' | 'nostr-artist' | 'playlist' | 'playlist-manager' | 'favorites' | 'nostr-favorites';
 
 // Navigation state
 let activeView: ViewType = 'home';

@@ -16,6 +16,9 @@ import {
   type TrackReference
 } from './types';
 
+// Re-export types for convenience
+export type { NostrMusicTrack, NostrPlaylist };
+
 // Nostr kinds
 const PROFILE_KIND = 0;
 const CONTACT_LIST_KIND = 3;
@@ -481,8 +484,9 @@ export async function unfollowPubkey(userPubkey: string, targetPubkey: string): 
 
 // ============ Reactions (Likes) ============
 
-// Cache for liked tracks - avoids fetching from relays on every track change
-let likedTracksCache: Set<string> | null = null;
+// Cache for liked tracks - maps "pubkey:dTag" to reaction event ID
+// This allows instant unlike without fetching from relays
+let likedTracksCache: Map<string, string> | null = null;
 let likedTracksCacheUserPubkey: string | null = null;
 
 /**
@@ -507,9 +511,9 @@ export function clearLikedTracksCache(): void {
 /**
  * Add a track to the liked cache (called after successful like)
  */
-function addToLikedCache(trackPubkey: string, trackDTag: string): void {
+function addToLikedCache(trackPubkey: string, trackDTag: string, reactionEventId: string): void {
   if (likedTracksCache) {
-    likedTracksCache.add(`${trackPubkey}:${trackDTag}`);
+    likedTracksCache.set(`${trackPubkey}:${trackDTag}`, reactionEventId);
   }
 }
 
@@ -520,6 +524,16 @@ function removeFromLikedCache(trackPubkey: string, trackDTag: string): void {
   if (likedTracksCache) {
     likedTracksCache.delete(`${trackPubkey}:${trackDTag}`);
   }
+}
+
+/**
+ * Get reaction event ID from cache (for unlike)
+ */
+function getReactionEventIdFromCache(trackPubkey: string, trackDTag: string): string | null {
+  if (likedTracksCache) {
+    return likedTracksCache.get(`${trackPubkey}:${trackDTag}`) || null;
+  }
+  return null;
 }
 
 /**
@@ -549,7 +563,7 @@ export async function likeTrack(trackEventId: string, trackPubkey: string, track
   });
 
   // Update cache immediately (event is signed, it exists)
-  addToLikedCache(trackPubkey, trackDTag);
+  addToLikedCache(trackPubkey, trackDTag, event.id);
 
   // NIP-65 Outbox Model:
   // 1. Publish to user's WRITE relays (where we store our content)
@@ -576,20 +590,53 @@ export async function likeTrack(trackEventId: string, trackPubkey: string, track
 
 /**
  * Fetch user's liked track 'a' tag references
- * Returns a Set of "pubkey:d-tag" strings
+ * Returns a Map of "pubkey:d-tag" -> reaction event ID
  */
-export async function fetchUserLikedTrackRefs(userPubkey: string): Promise<Set<string>> {
+export async function fetchUserLikedTrackRefs(userPubkey: string): Promise<Map<string, string>> {
   const p = getPool();
-  const filter: Filter = {
-    kinds: [REACTION_KIND],
-    authors: [userPubkey],
-    '#k': [String(MUSIC_TRACK_KIND)]
-  };
 
-  const events = await p.querySync(connectedRelays, filter);
-  const likedRefs = new Set<string>();
+  // Fetch reactions and deletions in parallel
+  // Note: Some relays don't support #k filter well, so we fetch all user deletions
+  const [reactionEvents, deletionEvents] = await Promise.all([
+    p.querySync(connectedRelays, {
+      kinds: [REACTION_KIND],
+      authors: [userPubkey],
+      '#k': [String(MUSIC_TRACK_KIND)]
+    }),
+    p.querySync(connectedRelays, {
+      kinds: [DELETION_KIND],
+      authors: [userPubkey]
+    })
+  ]);
 
-  for (const event of events) {
+  // Build set of deleted reaction event IDs
+  // Only consider deletions that target kind 7 (reactions)
+  const deletedEventIds = new Set<string>();
+  for (const deletion of deletionEvents) {
+    // Check if this deletion targets reactions (kind 7)
+    const kTags = deletion.tags.filter(t => t[0] === 'k').map(t => t[1]);
+    const targetsReactions = kTags.length === 0 || kTags.includes(String(REACTION_KIND));
+
+    if (targetsReactions) {
+      for (const tag of deletion.tags) {
+        if (tag[0] === 'e' && tag[1]) {
+          deletedEventIds.add(tag[1]);
+        }
+      }
+    }
+  }
+
+  console.log(`[Nostr] Found ${reactionEvents.length} reactions, ${deletionEvents.length} deletion events, ${deletedEventIds.size} deleted reaction IDs`);
+
+  // Map of "pubkey:d-tag" -> reaction event ID
+  const likedRefs = new Map<string, string>();
+
+  for (const event of reactionEvents) {
+    // Skip if this reaction was deleted
+    if (deletedEventIds.has(event.id)) {
+      continue;
+    }
+
     // Only count "+" reactions as likes
     if (event.content === '+' || event.content === '❤️' || event.content === '🤙') {
       for (const tag of event.tags) {
@@ -597,8 +644,9 @@ export async function fetchUserLikedTrackRefs(userPubkey: string): Promise<Set<s
           // 'a' tag format: "36787:pubkey:d-tag"
           const parts = tag[1].split(':');
           if (parts.length >= 3 && parts[0] === String(MUSIC_TRACK_KIND)) {
-            // Store as "pubkey:d-tag" for easier lookup
-            likedRefs.add(`${parts[1]}:${parts.slice(2).join(':')}`);
+            // Store as "pubkey:d-tag" -> event ID
+            const key = `${parts[1]}:${parts.slice(2).join(':')}`;
+            likedRefs.set(key, event.id);
           }
         }
       }
@@ -670,11 +718,11 @@ export async function unlikeTrack(
   const { addPendingEvent } = await import('./pendingEvents');
   const p = getPool();
 
-  // Find the reaction event to delete
-  const reactionEventId = await findUserReactionEventId(userPubkey, trackPubkey, trackDTag);
+  // Get reaction event ID from cache (no need to fetch - we already have it)
+  const reactionEventId = getReactionEventIdFromCache(trackPubkey, trackDTag);
 
   if (!reactionEventId) {
-    console.log('[Nostr] No reaction found to delete');
+    console.log('[Nostr] No reaction found in cache to delete');
     return false;
   }
 
@@ -724,6 +772,10 @@ export async function unlikeTrack(
 export async function fetchLikedTracks(userPubkey: string): Promise<NostrMusicTrack[]> {
   const likedRefs = await fetchUserLikedTrackRefs(userPubkey);
 
+  // Update global cache so unlike works correctly
+  likedTracksCache = likedRefs;
+  likedTracksCacheUserPubkey = userPubkey;
+
   if (likedRefs.size === 0) {
     return [];
   }
@@ -732,7 +784,7 @@ export async function fetchLikedTracks(userPubkey: string): Promise<NostrMusicTr
   const allTracks: NostrMusicTrack[] = [];
 
   // Fetch each liked track by pubkey and d-tag
-  for (const ref of likedRefs) {
+  for (const ref of likedRefs.keys()) {
     const [pubkey, ...dTagParts] = ref.split(':');
     const dTag = dTagParts.join(':');
 

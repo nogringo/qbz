@@ -255,6 +255,7 @@
   import ArtistDetailView from '$lib/components/views/ArtistDetailView.svelte';
   import PlaylistDetailView from '$lib/components/views/PlaylistDetailView.svelte';
   import FavoritesView from '$lib/components/views/FavoritesView.svelte';
+  import NostrFavoritesView from '$lib/components/views/NostrFavoritesView.svelte';
   import LocalLibraryView from '$lib/components/views/LocalLibraryView.svelte';
   import PlaylistManagerView from '$lib/components/views/PlaylistManagerView.svelte';
 
@@ -2221,6 +2222,8 @@
           onBack={navGoBack}
           onPlaylistSelect={selectPlaylist}
         />
+      {:else if activeView === 'nostr-favorites'}
+        <NostrFavoritesView />
       {/if}
     </main>
 

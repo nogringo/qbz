@@ -505,12 +505,12 @@
       </NavigationItem>
     </nav>
 
-    <!-- Favorites Section (standalone) -->
+    <!-- Favorites Section (standalone) - Nostr liked tracks -->
     <nav class="nav-section">
       <NavigationItem
         label={$t('nav.favorites')}
-        active={activeView === 'favorites'}
-        onclick={() => handleViewChange('favorites')}
+        active={activeView === 'nostr-favorites'}
+        onclick={() => handleViewChange('nostr-favorites')}
       >
         {#snippet icon()}<Heart size={14} />{/snippet}
       </NavigationItem>
