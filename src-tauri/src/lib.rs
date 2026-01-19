@@ -324,6 +324,7 @@ pub fn run() {
             commands::get_similar_artists,
             // Playback commands
             commands::play_track,
+            commands::play_track_url,
             commands::prefetch_track,
             commands::pause_playback,
             commands::resume_playback,

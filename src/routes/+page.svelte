@@ -868,7 +868,11 @@
       quality,
       bitDepth: track.bit_depth ?? undefined,
       samplingRate: track.sample_rate ?? undefined,
-      isLocal
+      isLocal,
+      // Nostr-specific fields
+      audioUrl: track.audio_url ?? undefined,
+      nostrEventId: track.nostr_event_id ?? undefined,
+      pubkey: track.nostr_pubkey ?? undefined
     }, { isLocal, showLoadingToast: false });
   }
 

@@ -28,6 +28,10 @@ export interface BackendQueueTrack {
   bit_depth: number | null;
   sample_rate: number | null;
   is_local?: boolean;
+  // Nostr-specific fields
+  audio_url?: string | null;
+  nostr_event_id?: string | null;
+  nostr_pubkey?: string | null;
 }
 
 interface BackendQueueState {
@@ -425,5 +429,33 @@ export function reset(): void {
   isShuffle = false;
   repeatMode = 'off';
   localTrackIds = new Set();
+  nostrTrackIds = new Set();
   notifyListeners();
+}
+
+// ============ Nostr Track Management ============
+
+// Track IDs that are Nostr tracks (have audio_url)
+let nostrTrackIds = new Set<number>();
+
+/**
+ * Check if a track is a Nostr track (has audio_url)
+ */
+export function isNostrTrack(trackId: number): boolean {
+  return nostrTrackIds.has(trackId);
+}
+
+/**
+ * Set Nostr track IDs (when playing Nostr tracks)
+ */
+export function setNostrTrackIds(trackIds: number[]): void {
+  nostrTrackIds = new Set(trackIds);
+  console.log(`Set ${trackIds.length} Nostr track IDs in queue`);
+}
+
+/**
+ * Clear Nostr track IDs
+ */
+export function clearNostrTrackIds(): void {
+  nostrTrackIds = new Set();
 }

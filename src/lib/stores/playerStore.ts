@@ -15,12 +15,6 @@ import {
   castSetVolume,
   castStop
 } from '$lib/stores/castStore';
-import {
-  togglePlay as nostrTogglePlay,
-  seek as nostrSeek,
-  setVolume as nostrSetVolume,
-  stop as nostrStop
-} from '$lib/nostr/player';
 
 // ============ Types ============
 
@@ -42,6 +36,7 @@ export interface PlayingTrack {
   pubkey?: string;
   dTag?: string; // Nostr d-tag for addressable events
   nostrEventId?: string; // Nostr event ID (for NIP-25 reactions)
+  audioUrl?: string; // Direct audio URL for Nostr/Blossom tracks
 }
 
 interface BackendPlaybackState {
@@ -172,6 +167,35 @@ export function setCurrentTrack(track: PlayingTrack | null): void {
 }
 
 /**
+ * Play a track from URL (for Nostr/Blossom tracks)
+ */
+export async function playTrackUrl(url: string, track: PlayingTrack): Promise<void> {
+  console.log('[Player] Playing Nostr track from URL:', url);
+
+  setCurrentTrack(track);
+  isPlaying = true;
+  notifyListeners();
+
+  try {
+    await invoke('play_track_url', { url, trackId: track.id });
+
+    // Update media controls
+    await invoke('set_media_metadata', {
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      durationSecs: track.duration,
+      coverUrl: track.artwork || null
+    });
+  } catch (err) {
+    console.error('[Player] Failed to play Nostr track:', err);
+    isPlaying = false;
+    notifyListeners();
+    throw err;
+  }
+}
+
+/**
  * Set favorite status
  */
 export function setIsFavorite(favorite: boolean): void {
@@ -235,10 +259,10 @@ export function hasPendingSessionRestore(): boolean {
 }
 
 /**
- * Check if current track is a Nostr track
+ * Check if current track is a Nostr track (has audioUrl)
  */
 function isNostrTrack(): boolean {
-  return currentTrack?.quality === 'Nostr';
+  return !!currentTrack?.audioUrl;
 }
 
 /**
@@ -246,12 +270,6 @@ function isNostrTrack(): boolean {
  */
 export async function togglePlay(): Promise<void> {
   if (!currentTrack) return;
-
-  // Nostr track: delegate to Nostr player
-  if (isNostrTrack()) {
-    nostrTogglePlay();
-    return;
-  }
 
   const newIsPlaying = !isPlaying;
   isPlaying = newIsPlaying;
@@ -273,8 +291,13 @@ export async function togglePlay(): Promise<void> {
         console.log('[Player] Loading restored track:', pendingSessionRestore.trackId);
         const savedPosition = pendingSessionRestore.position;
         pendingSessionRestore = null; // Clear before loading
-        // Load the track from Qobuz
-        await invoke('play_track', { trackId: currentTrack.id });
+
+        // Load the track - use URL for Nostr, Qobuz API for others
+        if (currentTrack.audioUrl) {
+          await invoke('play_track_url', { url: currentTrack.audioUrl, trackId: currentTrack.id });
+        } else {
+          await invoke('play_track', { trackId: currentTrack.id });
+        }
 
         // Seek to saved position after a short delay to let audio load
         if (savedPosition > 0) {
@@ -319,17 +342,12 @@ export async function seek(position: number): Promise<void> {
   notifyListeners();
 
   try {
-    // Nostr track: delegate to Nostr player
-    if (isNostrTrack()) {
-      nostrSeek(clampedPosition);
-      return;
-    }
-
     if (isCasting()) {
       await castSeek(Math.floor(clampedPosition));
       return;
     }
 
+    // All tracks use Rust backend for seek
     await invoke('seek', { position: Math.floor(clampedPosition) });
   } catch (err) {
     console.error('Failed to seek:', err);
@@ -345,17 +363,12 @@ export async function setVolume(newVolume: number): Promise<void> {
   notifyListeners();
 
   try {
-    // Nostr track: delegate to Nostr player (uses 0-1 scale)
-    if (isNostrTrack()) {
-      nostrSetVolume(clampedVolume / 100);
-      return;
-    }
-
     if (isCasting()) {
       await castSetVolume(clampedVolume);
       return;
     }
 
+    // All tracks use Rust backend for volume
     await invoke('set_volume', { volume: clampedVolume / 100 });
   } catch (err) {
     console.error('Failed to set volume:', err);
@@ -367,20 +380,10 @@ export async function setVolume(newVolume: number): Promise<void> {
  */
 export async function stop(): Promise<void> {
   try {
-    // Nostr track: delegate to Nostr player
-    if (isNostrTrack()) {
-      nostrStop();
-      isPlaying = false;
-      currentTrack = null;
-      currentTime = 0;
-      duration = 0;
-      notifyListeners();
-      return;
-    }
-
     if (isCasting()) {
       await castStop();
     } else {
+      // All tracks use Rust backend for stop
       await invoke('stop_playback');
     }
     isPlaying = false;

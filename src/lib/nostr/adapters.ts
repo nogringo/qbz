@@ -196,7 +196,7 @@ export function nostrPlaylistToPlaylistInfo(playlist: NostrPlaylist): PlaylistIn
  * Simple hash function to convert string to number
  * Used for compatibility with existing UI components that expect numeric IDs
  */
-function hashCode(str: string): number {
+export function hashStringToNumber(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
@@ -205,6 +205,9 @@ function hashCode(str: string): number {
   }
   return Math.abs(hash);
 }
+
+// Alias for internal use
+const hashCode = hashStringToNumber;
 
 // ============ Queue/Playback Helpers ============
 

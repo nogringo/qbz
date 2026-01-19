@@ -183,6 +183,80 @@ pub async fn prefetch_track(
     result
 }
 
+/// Play a track directly from URL (for Nostr/Blossom tracks)
+/// This bypasses the Qobuz API and downloads audio directly from the provided URL
+#[tauri::command]
+pub async fn play_track_url(
+    url: String,
+    track_id: u64,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    log::info!("Command: play_track_url {} (id: {})", url, track_id);
+
+    // Download audio from URL
+    let audio_data = download_audio(&url).await?;
+    log::info!("Downloaded {} bytes from URL", audio_data.len());
+
+    // Play using the existing player
+    state.player.play_data(audio_data, track_id)?;
+
+    // Prefetch next tracks if they have URLs
+    spawn_url_prefetch(state.audio_cache.clone(), &state.queue);
+
+    Ok(())
+}
+
+/// Prefetch upcoming Nostr/URL-based tracks
+fn spawn_url_prefetch(cache: Arc<AudioCache>, queue: &QueueManager) {
+    let upcoming_tracks = queue.peek_upcoming(PREFETCH_LOOKAHEAD);
+
+    if upcoming_tracks.is_empty() {
+        return;
+    }
+
+    let mut prefetched = 0;
+    const URL_PREFETCH_COUNT: usize = 2;
+
+    for track in upcoming_tracks {
+        if prefetched >= URL_PREFETCH_COUNT {
+            break;
+        }
+
+        // Only prefetch tracks with audio_url (Nostr tracks)
+        let Some(ref audio_url) = track.audio_url else {
+            continue;
+        };
+
+        let track_id = track.id;
+
+        if cache.contains(track_id) || cache.is_fetching(track_id) {
+            prefetched += 1;
+            continue;
+        }
+
+        cache.mark_fetching(track_id);
+        prefetched += 1;
+
+        let cache_clone = cache.clone();
+        let url = audio_url.clone();
+
+        log::info!("Prefetching Nostr track: {} - {}", track_id, track.title);
+
+        tokio::spawn(async move {
+            match download_audio(&url).await {
+                Ok(data) => {
+                    cache_clone.insert(track_id, data);
+                    log::info!("URL prefetch complete for track {}", track_id);
+                }
+                Err(e) => {
+                    log::warn!("URL prefetch failed for track {}: {}", track_id, e);
+                }
+            }
+            cache_clone.unmark_fetching(track_id);
+        });
+    }
+}
+
 /// Download audio from URL
 async fn download_audio(url: &str) -> Result<Vec<u8>, String> {
     use std::time::Duration;

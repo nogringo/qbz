@@ -26,6 +26,15 @@ pub struct QueueTrack {
     /// Whether this is a local library track (not from Qobuz)
     #[serde(default)]
     pub is_local: bool,
+    /// Direct audio URL for Nostr/Blossom tracks (bypasses Qobuz API)
+    #[serde(default)]
+    pub audio_url: Option<String>,
+    /// Nostr event ID (string) - stored separately since id is u64
+    #[serde(default)]
+    pub nostr_event_id: Option<String>,
+    /// Nostr pubkey for track attribution
+    #[serde(default)]
+    pub nostr_pubkey: Option<String>,
 }
 
 /// Repeat mode options

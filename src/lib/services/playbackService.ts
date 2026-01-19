@@ -113,6 +113,9 @@ export async function playTrack(
       // Use appropriate local playback command
       if (isLocal) {
         await invoke('library_play_track', { trackId: track.id });
+      } else if (track.audioUrl) {
+        // Nostr track - play from URL
+        await invoke('play_track_url', { url: track.audioUrl, trackId: track.id });
       } else {
         await invoke('play_track', { trackId: track.id });
       }
@@ -157,8 +160,25 @@ export async function playTrack(
     // Update Last.fm
     await updateLastfmNowPlaying(track.title, track.artist, track.album, track.duration, track.id);
 
-    // Check favorite status (only for Qobuz tracks)
-    if (!isLocal) {
+    // Check favorite status
+    if (track.audioUrl && track.pubkey && track.dTag) {
+      // Nostr track - check Nostr likes
+      try {
+        const { isTrackLiked } = await import('$lib/nostr/client');
+        const { getAuthState } = await import('$lib/stores/authStore');
+        const authState = getAuthState();
+        if (authState.userInfo?.pubkey) {
+          const isFav = await isTrackLiked(authState.userInfo.pubkey, track.pubkey, track.dTag);
+          setIsFavorite(isFav);
+        } else {
+          setIsFavorite(false);
+        }
+      } catch (err) {
+        console.error('Failed to check Nostr favorite status:', err);
+        setIsFavorite(false);
+      }
+    } else if (!isLocal) {
+      // Qobuz track - check Qobuz favorites
       const isFav = await checkTrackFavorite(track.id);
       setIsFavorite(isFav);
     } else {

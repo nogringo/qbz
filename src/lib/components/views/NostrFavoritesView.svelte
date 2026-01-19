@@ -3,13 +3,15 @@
   import { Heart, Play, Music, Search, X } from 'lucide-svelte';
   import { fetchLikedTracks, unlikeTrack, type NostrMusicTrack } from '$lib/nostr/client';
   import { formatDuration } from '$lib/nostr/adapters';
-  import { setQueue as setNostrQueue } from '$lib/nostr/player';
+  import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds } from '$lib/nostr/trackUtils';
   import { getAuthState } from '$lib/stores/authStore';
   import { selectNostrArtist } from '$lib/stores/navigationStore';
+  import { setQueue as setBackendQueue, setNostrTrackIds } from '$lib/stores/queueStore';
   import {
     subscribe as subscribePlayer,
     getPlayerState,
     setIsFavorite,
+    playTrackUrl,
     type PlayingTrack
   } from '$lib/stores/playerStore';
 
@@ -83,15 +85,35 @@
   }
 
   async function handleTrackClick(track: NostrMusicTrack, index: number) {
-    // Set queue with all filtered tracks and play from clicked index
-    await setNostrQueue(filteredTracks, index);
+    // Convert all tracks to backend format
+    const backendTracks = filteredTracks.map(nostrToBackendTrack);
+
+    // Track which IDs are Nostr tracks
+    setNostrTrackIds(getNostrTrackIds(filteredTracks));
+
+    // Set queue in Rust backend
+    await setBackendQueue(backendTracks, index);
+
+    // Play the clicked track
+    await playTrackUrl(track.url, nostrToPlayingTrack(track));
   }
 
   async function handlePlayAll() {
     if (filteredTracks.length === 0) return;
 
-    // Set the queue and play from index 0
-    await setNostrQueue(filteredTracks, 0);
+    const firstTrack = filteredTracks[0];
+
+    // Convert all tracks to backend format
+    const backendTracks = filteredTracks.map(nostrToBackendTrack);
+
+    // Track which IDs are Nostr tracks
+    setNostrTrackIds(getNostrTrackIds(filteredTracks));
+
+    // Set queue in Rust backend
+    await setBackendQueue(backendTracks, 0);
+
+    // Play the first track
+    await playTrackUrl(firstTrack.url, nostrToPlayingTrack(firstTrack));
   }
 
   function handleArtistClick(pubkey: string) {

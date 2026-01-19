@@ -5,13 +5,15 @@
   import { getRelays } from '$lib/nostr/client';
   import { fetchArtistWithGossip, isFollowing, followPubkey, unfollowPubkey, type NostrArtist } from '$lib/nostr/client';
   import type { NostrMusicTrack } from '$lib/nostr/types';
-  import {
-    setQueue,
-    getState as getPlayerState,
-    subscribe as subscribePlayer,
-    formatTime
-  } from '$lib/nostr/player';
+  import { formatDuration } from '$lib/nostr/adapters';
+  import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds } from '$lib/nostr/trackUtils';
   import { getAuthState } from '$lib/stores/authStore';
+  import { setQueue as setBackendQueue, setNostrTrackIds } from '$lib/stores/queueStore';
+  import {
+    subscribe as subscribePlayer,
+    getPlayerState,
+    playTrackUrl
+  } from '$lib/stores/playerStore';
 
   interface Props {
     pubkey: string;
@@ -102,19 +104,45 @@
   }
 
   async function handlePlayTrack(track: NostrMusicTrack, index: number) {
-    if (artist) {
-      await setQueue(artist.tracks, index);
-    }
+    if (!artist) return;
+
+    // Convert all tracks to backend format
+    const backendTracks = artist.tracks.map(nostrToBackendTrack);
+
+    // Track which IDs are Nostr tracks
+    setNostrTrackIds(getNostrTrackIds(artist.tracks));
+
+    // Set queue in Rust backend
+    await setBackendQueue(backendTracks, index);
+
+    // Play the clicked track
+    await playTrackUrl(track.url, nostrToPlayingTrack(track));
   }
 
   async function handlePlayAll() {
-    if (artist && artist.tracks.length > 0) {
-      await setQueue(artist.tracks, 0);
-    }
+    if (!artist || artist.tracks.length === 0) return;
+
+    const firstTrack = artist.tracks[0];
+
+    // Convert all tracks to backend format
+    const backendTracks = artist.tracks.map(nostrToBackendTrack);
+
+    // Track which IDs are Nostr tracks
+    setNostrTrackIds(getNostrTrackIds(artist.tracks));
+
+    // Set queue in Rust backend
+    await setBackendQueue(backendTracks, 0);
+
+    // Play the first track
+    await playTrackUrl(firstTrack.url, nostrToPlayingTrack(firstTrack));
   }
 
   function isCurrentTrack(track: NostrMusicTrack): boolean {
-    return playerState.currentTrack?.id === track.id;
+    return playerState.currentTrack?.nostrEventId === track.id;
+  }
+
+  function formatTime(seconds: number | undefined): string {
+    return formatDuration(seconds);
   }
 
   function getDisplayName(): string {

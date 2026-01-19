@@ -3,14 +3,15 @@
   import { Loader2, Play, Music, List } from 'lucide-svelte';
   import { fetchRecentTracks, fetchPlaylistsByOwner } from '$lib/nostr/client';
   import type { NostrMusicTrack, NostrPlaylist } from '$lib/nostr/types';
-  import {
-    initPlayer,
-    setQueue,
-    getState as getPlayerState,
-    subscribe as subscribePlayer,
-    formatTime
-  } from '$lib/nostr/player';
+  import { formatDuration } from '$lib/nostr/adapters';
+  import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds } from '$lib/nostr/trackUtils';
   import { getAuthState } from '$lib/stores/authStore';
+  import { setQueue as setBackendQueue, setNostrTrackIds } from '$lib/stores/queueStore';
+  import {
+    subscribe as subscribePlayer,
+    getPlayerState,
+    playTrackUrl
+  } from '$lib/stores/playerStore';
 
   interface Props {
     userName?: string;
@@ -42,7 +43,6 @@
   const greeting = getGreeting();
 
   onMount(() => {
-    initPlayer();
     loadData();
 
     // Subscribe to player state changes (reactive, no polling)
@@ -83,18 +83,43 @@
   }
 
   async function handlePlayTrack(track: NostrMusicTrack, index: number) {
-    // Set queue starting from clicked track
-    await setQueue(tracks, index);
+    // Convert all tracks to backend format
+    const backendTracks = tracks.map(nostrToBackendTrack);
+
+    // Track which IDs are Nostr tracks
+    setNostrTrackIds(getNostrTrackIds(tracks));
+
+    // Set queue in Rust backend
+    await setBackendQueue(backendTracks, index);
+
+    // Play the clicked track
+    await playTrackUrl(track.url, nostrToPlayingTrack(track));
   }
 
   async function handlePlayAll() {
-    if (tracks.length > 0) {
-      await setQueue(tracks, 0);
-    }
+    if (tracks.length === 0) return;
+
+    const firstTrack = tracks[0];
+
+    // Convert all tracks to backend format
+    const backendTracks = tracks.map(nostrToBackendTrack);
+
+    // Track which IDs are Nostr tracks
+    setNostrTrackIds(getNostrTrackIds(tracks));
+
+    // Set queue in Rust backend
+    await setBackendQueue(backendTracks, 0);
+
+    // Play the first track
+    await playTrackUrl(firstTrack.url, nostrToPlayingTrack(firstTrack));
   }
 
   function isCurrentTrack(track: NostrMusicTrack): boolean {
-    return playerState.currentTrack?.id === track.id;
+    return playerState.currentTrack?.nostrEventId === track.id;
+  }
+
+  function formatTime(seconds: number | undefined): string {
+    return formatDuration(seconds);
   }
 </script>
 
