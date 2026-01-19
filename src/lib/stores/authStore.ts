@@ -91,7 +91,7 @@ export async function tryRestoreNostrSession(): Promise<boolean> {
 /**
  * Set logged in state from Nostr user
  */
-async function setLoggedInNostr(user: NostrUser): Promise<void> {
+export async function setLoggedInNostr(user: NostrUser): Promise<void> {
   isLoggedIn = true;
   userInfo = {
     userName: user.npub.slice(0, 12) + '...',

@@ -53,6 +53,7 @@
     subscribe as subscribeAuth,
     setLoggedIn,
     setLoggedOut,
+    setLoggedInNostr,
     getAuthState,
     tryRestoreNostrSession,
     logoutNostr,
@@ -1405,13 +1406,8 @@
   /**
    * Handle Nostr login success
    */
-  function handleNostrLoginSuccess(user: { pubkey: string; npub: string; method: 'bunker' | 'nsec' }) {
-    setLoggedIn({
-      userName: user.npub.slice(0, 12) + '...',
-      pubkey: user.pubkey,
-      npub: user.npub,
-      authMethod: user.method
-    });
+  async function handleNostrLoginSuccess(user: { pubkey: string; npub: string; method: 'bunker' | 'nsec' }) {
+    await setLoggedInNostr(user);
     showToast('Connected to Nostr!', 'success');
   }
 
