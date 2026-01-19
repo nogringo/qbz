@@ -149,3 +149,35 @@ pub async fn set_api_locale(locale: String, state: State<'_, AppState>) -> Resul
     client.set_locale(locale).await;
     Ok(())
 }
+
+// === Nostr session persistence commands ===
+
+#[derive(serde::Serialize)]
+pub struct NostrSessionResponse {
+    pub method: String,
+    pub data: String,
+}
+
+/// Save Nostr session to system keyring
+#[tauri::command]
+pub fn save_nostr_session(method: String, data: String) -> Result<(), String> {
+    credentials::save_nostr_session(&method, &data)
+}
+
+/// Load Nostr session from system keyring
+#[tauri::command]
+pub fn load_nostr_session() -> Result<Option<NostrSessionResponse>, String> {
+    match credentials::load_nostr_session()? {
+        Some(session) => Ok(Some(NostrSessionResponse {
+            method: session.method,
+            data: session.data,
+        })),
+        None => Ok(None),
+    }
+}
+
+/// Clear saved Nostr session from system keyring
+#[tauri::command]
+pub fn clear_nostr_session() -> Result<(), String> {
+    credentials::clear_nostr_session()
+}

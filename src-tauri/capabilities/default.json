@@ -5,7 +5,6 @@
   "windows": ["main", "miniplayer"],
   "permissions": [
     "core:default",
-    "stronghold:default",
     "core:window:default",
     "core:window:allow-start-dragging",
     "core:window:allow-minimize",

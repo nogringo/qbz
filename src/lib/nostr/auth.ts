@@ -3,22 +3,14 @@
  *
  * Supports two authentication methods:
  * - Bunker (NIP-46) - Remote signing, more secure
- * - nsec - Direct private key, stored securely in Stronghold
+ * - nsec - Direct private key, stored securely in system keyring
  */
 
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
-import { nsecEncode, npubEncode, decode } from 'nostr-tools/nip19';
+import { npubEncode, decode } from 'nostr-tools/nip19';
 import { BunkerSigner, parseBunkerInput } from 'nostr-tools/nip46';
 import type { EventTemplate, VerifiedEvent } from 'nostr-tools/pure';
-import { Stronghold, Client as StrongholdClient } from '@tauri-apps/plugin-stronghold';
-import { appDataDir } from '@tauri-apps/api/path';
-
-// Stronghold configuration
-const VAULT_NAME = 'nostr-vault';
-const AUTH_METHOD_KEY = 'auth_method';
-const AUTH_DATA_KEY = 'auth_data';
-let stronghold: Stronghold | null = null;
-let strongholdClient: StrongholdClient | null = null;
+import { invoke } from '@tauri-apps/api/core';
 
 export type AuthMethod = 'bunker' | 'nsec';
 
@@ -57,6 +49,9 @@ class NsecSigner implements Signer {
 let currentUser: NostrUser | null = null;
 let currentSigner: Signer | null = null;
 let bunkerInstance: BunkerSigner | null = null;
+
+// Restore session guard (prevent multiple concurrent calls)
+let restoreSessionPromise: Promise<NostrUser | null> | null = null;
 
 // Listeners
 const listeners = new Set<() => void>();
@@ -128,9 +123,7 @@ export async function loginWithNsec(nsecOrHex: string): Promise<NostrUser> {
     method: 'nsec'
   };
 
-  // Save to Stronghold (encrypted)
   await saveSession('nsec', nsecOrHex);
-
   notifyListeners();
   return currentUser;
 }
@@ -196,14 +189,24 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Try to restore session from Stronghold
+ * Try to restore session from keyring
+ * Uses a guard to prevent multiple concurrent calls
  */
 export async function restoreSession(): Promise<NostrUser | null> {
-  const session = await loadSession();
+  if (currentUser) return currentUser;
+  if (restoreSessionPromise) return restoreSessionPromise;
 
-  if (!session) {
-    return null;
+  restoreSessionPromise = doRestoreSession();
+  try {
+    return await restoreSessionPromise;
+  } finally {
+    restoreSessionPromise = null;
   }
+}
+
+async function doRestoreSession(): Promise<NostrUser | null> {
+  const session = await loadSession();
+  if (!session) return null;
 
   try {
     if (session.method === 'nsec') {
@@ -213,7 +216,6 @@ export async function restoreSession(): Promise<NostrUser | null> {
     }
   } catch (error) {
     console.error('Failed to restore session:', error);
-    // Clear invalid session
     await clearSession();
   }
 
@@ -230,80 +232,42 @@ export async function signEvent(event: EventTemplate): Promise<VerifiedEvent> {
   return currentSigner.signEvent(event);
 }
 
-// ============ Stronghold Helpers ============
+// ============ Session Storage (System Keyring) ============
 
-/**
- * Initialize Stronghold vault
- */
-async function initStronghold(): Promise<void> {
-  if (stronghold) return;
-
-  const dataDir = await appDataDir();
-  const vaultPath = `${dataDir}/nostr.stronghold`;
-
-  // Use a fixed password derived from the app - in production you might want user input
-  // The actual encryption uses Argon2 in the Rust side
-  stronghold = await Stronghold.load(vaultPath, 'nostr-music-player');
-
-  // Get or create a client for the vault
-  try {
-    strongholdClient = await stronghold.loadClient(VAULT_NAME);
-  } catch {
-    strongholdClient = await stronghold.createClient(VAULT_NAME);
-  }
+interface NostrSessionResponse {
+  method: string;
+  data: string;
 }
 
 /**
- * Save session to Stronghold (encrypted)
+ * Save session to system keyring
  */
 async function saveSession(method: AuthMethod, data: string): Promise<void> {
-  await initStronghold();
-  if (!strongholdClient) throw new Error('Stronghold not initialized');
-
-  const store = strongholdClient.getStore();
-  await store.insert(AUTH_METHOD_KEY, Array.from(new TextEncoder().encode(method)));
-  await store.insert(AUTH_DATA_KEY, Array.from(new TextEncoder().encode(data)));
-  await stronghold!.save();
+  await invoke('save_nostr_session', { method, data });
 }
 
 /**
- * Load session from Stronghold
+ * Load session from system keyring
  */
 async function loadSession(): Promise<{ method: AuthMethod; data: string } | null> {
   try {
-    await initStronghold();
-    if (!strongholdClient) return null;
-
-    const store = strongholdClient.getStore();
-    const methodBytes = await store.get(AUTH_METHOD_KEY);
-    const dataBytes = await store.get(AUTH_DATA_KEY);
-
-    if (!methodBytes || !dataBytes) return null;
-
-    const method = new TextDecoder().decode(new Uint8Array(methodBytes)) as AuthMethod;
-    const data = new TextDecoder().decode(new Uint8Array(dataBytes));
-
-    return { method, data };
+    const session = await invoke<NostrSessionResponse | null>('load_nostr_session');
+    if (!session) return null;
+    return { method: session.method as AuthMethod, data: session.data };
   } catch (err) {
-    console.error('Failed to load session from Stronghold:', err);
+    console.error('Failed to load session:', err);
     return null;
   }
 }
 
 /**
- * Clear session from Stronghold
+ * Clear session from system keyring
  */
 async function clearSession(): Promise<void> {
   try {
-    await initStronghold();
-    if (!strongholdClient) return;
-
-    const store = strongholdClient.getStore();
-    await store.remove(AUTH_METHOD_KEY);
-    await store.remove(AUTH_DATA_KEY);
-    await stronghold!.save();
+    await invoke('clear_nostr_session');
   } catch (err) {
-    console.error('Failed to clear Stronghold session:', err);
+    console.error('Failed to clear session:', err);
   }
 }
 

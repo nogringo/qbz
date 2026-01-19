@@ -14,7 +14,9 @@ use std::path::PathBuf;
 
 const SERVICE_NAME: &str = "qbz";
 const QOBUZ_CREDENTIALS_KEY: &str = "qobuz-credentials";
+const NOSTR_CREDENTIALS_KEY: &str = "nostr-credentials";
 const FALLBACK_FILE_NAME: &str = ".qbz-auth";
+const NOSTR_FALLBACK_FILE_NAME: &str = ".nostr-auth";
 
 // Simple XOR key for obfuscation (not encryption, just to avoid plain text)
 const OBFUSCATION_KEY: &[u8] = b"QbzNixAudiophile2024";
@@ -23,6 +25,12 @@ const OBFUSCATION_KEY: &[u8] = b"QbzNixAudiophile2024";
 pub struct QobuzCredentials {
     pub email: String,
     pub password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NostrSession {
+    pub method: String, // "nsec" or "bunker"
+    pub data: String,   // nsec key or bunker URI
 }
 
 /// Get the fallback credentials file path
@@ -209,6 +217,152 @@ pub fn clear_qobuz_credentials() -> Result<(), String> {
 
     // Also clear fallback
     clear_fallback()?;
+
+    Ok(())
+}
+
+// ============ Nostr Credentials ============
+
+/// Get the fallback Nostr credentials file path
+fn get_nostr_fallback_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|p| p.join("qbz").join(NOSTR_FALLBACK_FILE_NAME))
+}
+
+/// Save Nostr session to fallback file
+fn save_nostr_to_fallback(session: &NostrSession) -> Result<(), String> {
+    let path = get_nostr_fallback_path().ok_or("Could not determine config directory")?;
+
+    // Ensure directory exists
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    }
+
+    let json = serde_json::to_string(session)
+        .map_err(|e| format!("Failed to serialize session: {}", e))?;
+
+    let obfuscated = obfuscate(json.as_bytes());
+    let encoded = BASE64.encode(&obfuscated);
+
+    fs::write(&path, encoded)
+        .map_err(|e| format!("Failed to write session file: {}", e))?;
+
+    log::info!("Nostr session saved to fallback file");
+    Ok(())
+}
+
+/// Load Nostr session from fallback file
+fn load_nostr_from_fallback() -> Result<Option<NostrSession>, String> {
+    let path = match get_nostr_fallback_path() {
+        Some(p) => p,
+        None => return Ok(None),
+    };
+
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    let encoded = fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read session file: {}", e))?;
+
+    let obfuscated = BASE64.decode(encoded.trim())
+        .map_err(|e| format!("Failed to decode session: {}", e))?;
+
+    let json_bytes = obfuscate(&obfuscated);
+    let json = String::from_utf8(json_bytes)
+        .map_err(|e| format!("Failed to decode session: {}", e))?;
+
+    let session: NostrSession = serde_json::from_str(&json)
+        .map_err(|e| format!("Failed to parse session: {}", e))?;
+
+    log::info!("Nostr session loaded from fallback file, method: {}", session.method);
+    Ok(Some(session))
+}
+
+/// Clear Nostr fallback file
+fn clear_nostr_fallback() -> Result<(), String> {
+    if let Some(path) = get_nostr_fallback_path() {
+        if path.exists() {
+            fs::remove_file(&path)
+                .map_err(|e| format!("Failed to remove session file: {}", e))?;
+            log::info!("Nostr fallback session file removed");
+        }
+    }
+    Ok(())
+}
+
+/// Save Nostr session - saves to both file (primary) and keyring (secondary)
+pub fn save_nostr_session(method: &str, data: &str) -> Result<(), String> {
+    log::info!("Attempting to save Nostr session, method: {}", method);
+
+    let session = NostrSession {
+        method: method.to_string(),
+        data: data.to_string(),
+    };
+
+    // Always save to file first (more reliable)
+    save_nostr_to_fallback(&session)?;
+
+    // Also try keyring as secondary
+    if let Ok(entry) = Entry::new(SERVICE_NAME, NOSTR_CREDENTIALS_KEY) {
+        let json = serde_json::to_string(&session).unwrap_or_default();
+        if let Err(e) = entry.set_password(&json) {
+            log::debug!("Keyring save failed (not critical): {}", e);
+        } else {
+            log::debug!("Also saved to keyring");
+        }
+    }
+
+    Ok(())
+}
+
+/// Load Nostr session - tries keyring first, then fallback
+pub fn load_nostr_session() -> Result<Option<NostrSession>, String> {
+    log::info!("Attempting to load Nostr session");
+
+    // Try keyring first
+    if let Ok(entry) = Entry::new(SERVICE_NAME, NOSTR_CREDENTIALS_KEY) {
+        match entry.get_password() {
+            Ok(json) => {
+                if let Ok(session) = serde_json::from_str::<NostrSession>(&json) {
+                    log::info!("Successfully loaded Nostr session from keyring, method: {}", session.method);
+                    return Ok(Some(session));
+                }
+            }
+            Err(keyring::Error::NoEntry) => {
+                log::debug!("No Nostr session in keyring, checking fallback...");
+            }
+            Err(e) => {
+                log::warn!("Keyring load failed ({}), checking fallback...", e);
+            }
+        }
+    } else {
+        log::warn!("Keyring not available, checking fallback...");
+    }
+
+    // Try fallback file
+    load_nostr_from_fallback()
+}
+
+/// Clear saved Nostr session (both keyring and fallback)
+pub fn clear_nostr_session() -> Result<(), String> {
+    // Try to clear keyring
+    if let Ok(entry) = Entry::new(SERVICE_NAME, NOSTR_CREDENTIALS_KEY) {
+        match entry.delete_credential() {
+            Ok(()) => {
+                log::info!("Nostr session cleared from keyring");
+            }
+            Err(keyring::Error::NoEntry) => {
+                // Already cleared, that's fine
+            }
+            Err(e) => {
+                log::warn!("Failed to clear keyring: {}", e);
+            }
+        }
+    }
+
+    // Also clear fallback
+    clear_nostr_fallback()?;
 
     Ok(())
 }
