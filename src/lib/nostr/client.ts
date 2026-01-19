@@ -18,6 +18,7 @@ import {
 
 // Nostr kinds
 const PROFILE_KIND = 0;
+const CONTACT_LIST_KIND = 3;
 const RELAY_LIST_KIND = 10002; // NIP-65
 
 // Default relays for music content
@@ -386,6 +387,90 @@ export async function fetchTracksByGenre(
     .map(parseMusicTrackEvent)
     .filter((t): t is NostrMusicTrack => t !== null)
     .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// ============ Contact List (Following) ============
+
+/**
+ * Fetch user's contact list (kind 3)
+ * Returns array of followed pubkeys
+ */
+export async function fetchContactList(pubkey: string): Promise<string[]> {
+  const p = getPool();
+  const filter: Filter = {
+    kinds: [CONTACT_LIST_KIND],
+    authors: [pubkey],
+    limit: 1
+  };
+
+  const events = await p.querySync(connectedRelays, filter);
+  if (events.length === 0) {
+    return [];
+  }
+
+  // Extract pubkeys from 'p' tags
+  const followedPubkeys: string[] = [];
+  for (const tag of events[0].tags) {
+    if (tag[0] === 'p' && tag[1]) {
+      followedPubkeys.push(tag[1]);
+    }
+  }
+
+  return followedPubkeys;
+}
+
+/**
+ * Check if user is following a specific pubkey
+ */
+export async function isFollowing(userPubkey: string, targetPubkey: string): Promise<boolean> {
+  const following = await fetchContactList(userPubkey);
+  return following.includes(targetPubkey);
+}
+
+/**
+ * Publish updated contact list
+ * Note: This replaces the entire contact list
+ */
+export async function publishContactList(followedPubkeys: string[]): Promise<void> {
+  const { signEvent } = await import('./auth');
+  const p = getPool();
+
+  // Build tags: [["p", pubkey], ["p", pubkey], ...]
+  const tags: string[][] = followedPubkeys.map(pk => ['p', pk]);
+
+  const event = await signEvent({
+    kind: CONTACT_LIST_KIND,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: ''
+  });
+
+  // Publish to connected relays
+  await Promise.all(connectedRelays.map(relay => p.publish([relay], event)));
+}
+
+/**
+ * Follow a pubkey (add to contact list)
+ */
+export async function followPubkey(userPubkey: string, targetPubkey: string): Promise<void> {
+  const following = await fetchContactList(userPubkey);
+
+  if (!following.includes(targetPubkey)) {
+    following.push(targetPubkey);
+    await publishContactList(following);
+  }
+}
+
+/**
+ * Unfollow a pubkey (remove from contact list)
+ */
+export async function unfollowPubkey(userPubkey: string, targetPubkey: string): Promise<void> {
+  const following = await fetchContactList(userPubkey);
+  const filtered = following.filter(pk => pk !== targetPubkey);
+
+  if (filtered.length !== following.length) {
+    await publishContactList(filtered);
+  }
 }
 
 // ============ Gossip Functions (fetch from specific relays) ============

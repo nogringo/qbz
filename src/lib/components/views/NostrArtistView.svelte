@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { ArrowLeft, Loader2, Play, Music } from 'lucide-svelte';
-  import { fetchArtistWithGossip, type NostrArtist } from '$lib/nostr/client';
+  import { ArrowLeft, Loader2, Play, Music, UserPlus, UserCheck } from 'lucide-svelte';
+  import { fetchArtistWithGossip, isFollowing, followPubkey, unfollowPubkey, type NostrArtist } from '$lib/nostr/client';
   import type { NostrMusicTrack } from '$lib/nostr/types';
   import {
     setQueue,
@@ -9,6 +9,7 @@
     subscribe as subscribePlayer,
     formatTime
   } from '$lib/nostr/player';
+  import { getAuthState } from '$lib/stores/authStore';
 
   interface Props {
     pubkey: string;
@@ -22,11 +23,16 @@
   let isLoading = $state(true);
   let error = $state<string | null>(null);
 
+  // Follow state
+  let following = $state(false);
+  let isFollowLoading = $state(false);
+
   // Player state
   let playerState = $state(getPlayerState());
 
   onMount(() => {
     loadArtist();
+    checkFollowStatus();
 
     const unsubscribe = subscribePlayer(() => {
       playerState = getPlayerState();
@@ -46,6 +52,37 @@
       error = 'Failed to load artist';
     } finally {
       isLoading = false;
+    }
+  }
+
+  async function checkFollowStatus() {
+    const authState = getAuthState();
+    if (!authState.userInfo?.pubkey) return;
+
+    try {
+      following = await isFollowing(authState.userInfo.pubkey, pubkey);
+    } catch (err) {
+      console.error('Failed to check follow status:', err);
+    }
+  }
+
+  async function handleFollow() {
+    const authState = getAuthState();
+    if (!authState.userInfo?.pubkey || isFollowLoading) return;
+
+    isFollowLoading = true;
+    try {
+      if (following) {
+        await unfollowPubkey(authState.userInfo.pubkey, pubkey);
+        following = false;
+      } else {
+        await followPubkey(authState.userInfo.pubkey, pubkey);
+        following = true;
+      }
+    } catch (err) {
+      console.error('Failed to follow/unfollow:', err);
+    } finally {
+      isFollowLoading = false;
     }
   }
 
@@ -119,6 +156,21 @@
         <div class="artist-stats">
           <span>{artist.tracks.length} tracks</span>
         </div>
+        <button
+          class="follow-btn"
+          class:following
+          onclick={handleFollow}
+          disabled={isFollowLoading}
+        >
+          {#if isFollowLoading}
+            <Loader2 size={16} class="spinner" />
+          {:else if following}
+            <UserCheck size={16} />
+          {:else}
+            <UserPlus size={16} />
+          {/if}
+          <span>{following ? 'Following' : 'Follow'}</span>
+        </button>
       </div>
     </div>
 
@@ -280,6 +332,44 @@
   .artist-stats {
     font-size: 13px;
     color: var(--text-muted, #888);
+  }
+
+  .follow-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--text-muted, #888);
+    background: transparent;
+    color: var(--text-primary, #fff);
+    transition: all 0.2s;
+    width: fit-content;
+  }
+
+  .follow-btn:hover:not(:disabled) {
+    border-color: var(--text-primary, #fff);
+    background: var(--bg-secondary, #1a1a1a);
+  }
+
+  .follow-btn.following {
+    border-color: var(--accent-primary, #6366f1);
+    color: var(--accent-primary, #6366f1);
+  }
+
+  .follow-btn.following:hover:not(:disabled) {
+    border-color: #ef4444;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .follow-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /* Section */
