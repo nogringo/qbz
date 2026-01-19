@@ -19,8 +19,11 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-clipboard-manager": "^2",
     "@tauri-apps/plugin-dialog": "^2.5.0",
+    "@tauri-apps/plugin-http": "^2.5.6",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-stronghold": "^2.3.1",
     "lucide-svelte": "^0.562.0",
+    "nostr-tools": "^2.19.4",
     "svelte-i18n": "^4.0.0"
   },
   "devDependencies": {

@@ -5,6 +5,7 @@
   "windows": ["main", "miniplayer"],
   "permissions": [
     "core:default",
+    "stronghold:default",
     "core:window:default",
     "core:window:allow-start-dragging",
     "core:window:allow-minimize",
@@ -32,6 +33,13 @@
     "opener:default",
     "dialog:default",
     "clipboard-manager:default",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://*" },
+        { "url": "http://*" }
+      ]
+    }
   ]
 }

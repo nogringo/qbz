@@ -15,6 +15,12 @@ import {
   castSetVolume,
   castStop
 } from '$lib/stores/castStore';
+import {
+  togglePlay as nostrTogglePlay,
+  seek as nostrSeek,
+  setVolume as nostrSetVolume,
+  stop as nostrStop
+} from '$lib/nostr/player';
 
 // ============ Types ============
 
@@ -178,6 +184,22 @@ export function setIsSkipping(skipping: boolean): void {
 }
 
 /**
+ * Set current time directly (for external players like Nostr)
+ */
+export function setCurrentTime(time: number): void {
+  currentTime = time;
+  notifyListeners();
+}
+
+/**
+ * Set duration directly (for external players like Nostr)
+ */
+export function setDuration(dur: number): void {
+  duration = dur;
+  notifyListeners();
+}
+
+/**
  * Mark queue as ended (prevents spam when no more tracks)
  */
 export function setQueueEnded(ended: boolean): void {
@@ -209,10 +231,23 @@ export function hasPendingSessionRestore(): boolean {
 }
 
 /**
+ * Check if current track is a Nostr track
+ */
+function isNostrTrack(): boolean {
+  return currentTrack?.quality === 'Nostr';
+}
+
+/**
  * Toggle play/pause
  */
 export async function togglePlay(): Promise<void> {
   if (!currentTrack) return;
+
+  // Nostr track: delegate to Nostr player
+  if (isNostrTrack()) {
+    nostrTogglePlay();
+    return;
+  }
 
   const newIsPlaying = !isPlaying;
   isPlaying = newIsPlaying;
@@ -280,6 +315,12 @@ export async function seek(position: number): Promise<void> {
   notifyListeners();
 
   try {
+    // Nostr track: delegate to Nostr player
+    if (isNostrTrack()) {
+      nostrSeek(clampedPosition);
+      return;
+    }
+
     if (isCasting()) {
       await castSeek(Math.floor(clampedPosition));
       return;
@@ -300,6 +341,12 @@ export async function setVolume(newVolume: number): Promise<void> {
   notifyListeners();
 
   try {
+    // Nostr track: delegate to Nostr player (uses 0-1 scale)
+    if (isNostrTrack()) {
+      nostrSetVolume(clampedVolume / 100);
+      return;
+    }
+
     if (isCasting()) {
       await castSetVolume(clampedVolume);
       return;
@@ -316,6 +363,17 @@ export async function setVolume(newVolume: number): Promise<void> {
  */
 export async function stop(): Promise<void> {
   try {
+    // Nostr track: delegate to Nostr player
+    if (isNostrTrack()) {
+      nostrStop();
+      isPlaying = false;
+      currentTrack = null;
+      currentTime = 0;
+      duration = 0;
+      notifyListeners();
+      return;
+    }
+
     if (isCasting()) {
       await castStop();
     } else {

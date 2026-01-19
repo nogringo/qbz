@@ -54,8 +54,19 @@
     setLoggedIn,
     setLoggedOut,
     getAuthState,
+    tryRestoreNostrSession,
+    logoutNostr,
     type UserInfo
   } from '$lib/stores/authStore';
+
+  // Nostr
+  import { initPool } from '$lib/nostr/client';
+  import {
+    initPlayer as initNostrPlayer,
+    destroyPlayer as destroyNostrPlayer,
+    next as nostrNext,
+    previous as nostrPrevious
+  } from '$lib/nostr/player';
 
   // Favorites state management
   import { loadFavorites } from '$lib/stores/favoritesStore';
@@ -230,6 +241,8 @@
 
   // Views
   import LoginView from '$lib/components/views/LoginView.svelte';
+  import NostrLoginView from '$lib/components/views/NostrLoginView.svelte';
+  import NostrHomeView from '$lib/components/views/NostrHomeView.svelte';
   import HomeView from '$lib/components/views/HomeView.svelte';
   import SearchView from '$lib/components/views/SearchView.svelte';
   import SettingsView from '$lib/components/views/SettingsView.svelte';
@@ -683,6 +696,13 @@
   async function handleSkipBack() {
     const playerState = getPlayerState();
     if (!playerState.currentTrack || playerState.isSkipping) return;
+
+    // Nostr track: delegate to Nostr player
+    if (playerState.currentTrack.quality === 'Nostr') {
+      await nostrPrevious();
+      return;
+    }
+
     // If more than 3 seconds in, restart track; otherwise go to previous
     if (playerState.currentTime > 3) {
       handleSeek(0);
@@ -709,6 +729,12 @@
   async function handleSkipForward() {
     const playerState = getPlayerState();
     if (!playerState.currentTrack || playerState.isSkipping) return;
+
+    // Nostr track: delegate to Nostr player
+    if (playerState.currentTrack.quality === 'Nostr') {
+      await nostrNext();
+      return;
+    }
 
     setIsSkipping(true);
     try {
@@ -1375,20 +1401,45 @@
     }
   }
 
+  /**
+   * Handle Nostr login success
+   */
+  function handleNostrLoginSuccess(user: { pubkey: string; npub: string; method: 'bunker' | 'nsec' }) {
+    setLoggedIn({
+      userName: user.npub.slice(0, 12) + '...',
+      subscription: 'Nostr',
+      pubkey: user.pubkey,
+      npub: user.npub,
+      authMethod: user.method
+    });
+    showToast('Connected to Nostr!', 'success');
+  }
+
   async function handleLogout() {
     try {
-      await invoke('logout');
-      // Clear saved credentials from keyring
-      try {
-        await invoke('clear_saved_credentials');
-        console.log('Credentials cleared from keyring');
-      } catch (clearErr) {
-        console.error('Failed to clear credentials:', clearErr);
-        // Don't block logout if clearing fails
+      // Check if this is a Nostr user
+      const isNostrUser = userInfo?.authMethod === 'bunker' || userInfo?.authMethod === 'nsec';
+
+      if (isNostrUser) {
+        // Nostr logout
+        destroyNostrPlayer();
+        await logoutNostr();
+      } else {
+        // Qobuz logout
+        await invoke('logout');
+        // Clear saved credentials from keyring
+        try {
+          await invoke('clear_saved_credentials');
+          console.log('Credentials cleared from keyring');
+        } catch (clearErr) {
+          console.error('Failed to clear credentials:', clearErr);
+          // Don't block logout if clearing fails
+        }
+        // Clear session state
+        await clearSession();
+        setLoggedOut();
       }
-      // Clear session state
-      await clearSession();
-      setLoggedOut();
+
       currentTrack = null;
       isPlaying = false;
       showToast('Logged out successfully', 'info');
@@ -1491,8 +1542,9 @@
 
   // Playback state polling - managed by playerStore
   // Start/stop polling based on whether there's a current track
+  // Skip for Nostr tracks (they sync directly via player.ts)
   $effect(() => {
-    if (currentTrack) {
+    if (currentTrack && currentTrack.quality !== 'Nostr') {
       startPolling();
     } else {
       stopPolling();
@@ -1554,9 +1606,23 @@
     return albumDownloadCache.get(albumId) || false;
   }
 
-  onMount(() => {
+  onMount(async () => {
     // Bootstrap app (theme, mouse nav, Last.fm restore)
     const { cleanup: cleanupBootstrap } = bootstrapApp();
+
+    // Initialize Nostr (pool and player)
+    initPool();
+    initNostrPlayer();
+
+    // Try to restore Nostr session
+    try {
+      const restored = await tryRestoreNostrSession();
+      if (restored) {
+        console.log('[Nostr] Session restored successfully');
+      }
+    } catch (err) {
+      console.error('[Nostr] Failed to restore session:', err);
+    }
 
     // Keyboard navigation
     document.addEventListener('keydown', handleKeydown);
@@ -1846,7 +1912,7 @@
 </script>
 
 {#if !isLoggedIn}
-  <LoginView onLoginSuccess={handleLoginSuccess} onStartOffline={handleStartOffline} />
+  <NostrLoginView onLoginSuccess={handleNostrLoginSuccess} />
 {:else}
   <div class="app">
     <!-- Custom Title Bar (CSD) -->
@@ -1875,7 +1941,10 @@
     <!-- Main Content -->
     <main class="main-content">
       {#if activeView === 'home'}
-        {#if offlineStatus.isOffline}
+        {#if userInfo?.authMethod === 'bunker' || userInfo?.authMethod === 'nsec'}
+          <!-- Nostr user: show Nostr home view -->
+          <NostrHomeView userName={userInfo?.userName} />
+        {:else if offlineStatus.isOffline}
           <OfflinePlaceholder
             reason={offlineStatus.reason}
             onGoToLibrary={() => navigateTo('library')}

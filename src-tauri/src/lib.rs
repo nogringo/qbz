@@ -198,6 +198,20 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_stronghold::Builder::new(|password| {
+            // Hash the password for vault encryption using Argon2 (fast params)
+            use argon2::{Argon2, Params, Algorithm, Version};
+            // Reduced params: 4MB memory, 2 iterations, 1 thread (~10-50ms)
+            let params = Params::new(4096, 2, 1, Some(32)).expect("Invalid Argon2 params");
+            let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+            let salt: &[u8; 16] = b"nostr_music_app!";
+            let mut output = [0u8; 32];
+            argon2
+                .hash_password_into(password.as_bytes(), salt, &mut output)
+                .expect("Argon2 hash failed");
+            output.to_vec()
+        }).build())
         .manage(AppState::with_device_and_settings(saved_device, audio_settings))
         .setup(|app| {
             // Initialize system tray icon
