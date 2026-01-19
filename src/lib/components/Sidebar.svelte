@@ -46,7 +46,6 @@
     onAboutClick?: () => void;
     onLogout?: () => void;
     userName?: string;
-    subscription?: string;
   }
 
   let {
@@ -60,8 +59,7 @@
     onSettingsClick,
     onAboutClick,
     onLogout,
-    userName = 'User',
-    subscription = 'Qobuz'
+    userName = 'User'
   }: Props = $props();
 
   let userPlaylists = $state<Playlist[]>([]);
@@ -665,7 +663,6 @@
   <div class="user-section">
     <UserCard
       username={userName}
-      {subscription}
       onSettingsClick={onSettingsClick ?? (() => handleViewChange('settings'))}
       {onAboutClick}
     />

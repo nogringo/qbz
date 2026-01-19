@@ -48,8 +48,7 @@
     onBack?: () => void;
     onLogout?: () => void;
     userName?: string;
-    userEmail?: string;
-    subscription?: string;
+    picture?: string;
   }
 
   interface CacheStats {
@@ -72,7 +71,7 @@
     is_active: boolean;
   }
 
-  let { onBack, onLogout, userName = 'User', userEmail = '', subscription = 'Qobuz' }: Props = $props();
+  let { onBack, onLogout, userName = 'User', picture }: Props = $props();
 
   // Cache state (memory cache)
   let cacheStats = $state<CacheStats | null>(null);
@@ -1300,13 +1299,13 @@
   <section class="section">
     <h3 class="section-title">{$t('settings.account.title')}</h3>
     <div class="account-card">
-      <div class="avatar">{userName.charAt(0).toUpperCase()}</div>
+      {#if picture}
+        <img class="avatar" src={picture} alt={userName} />
+      {:else}
+        <div class="avatar">{userName.charAt(0).toUpperCase()}</div>
+      {/if}
       <div class="account-info">
         <div class="username">{userName}</div>
-        {#if userEmail}
-          <div class="email">{userEmail}</div>
-        {/if}
-        <div class="subscription">{subscription}</div>
       </div>
       <button class="logout-btn" onclick={onLogout}>{$t('settings.account.logout')}</button>
     </div>
@@ -1951,6 +1950,8 @@
     color: white;
     font-size: 24px;
     font-weight: 600;
+    object-fit: cover;
+    flex-shrink: 0;
   }
 
   .account-info {
@@ -1963,15 +1964,6 @@
     color: var(--text-primary);
   }
 
-  .email {
-    font-size: 14px;
-    color: var(--text-muted);
-  }
-
-  .subscription {
-    font-size: 14px;
-    color: var(--accent-primary);
-  }
 
   .logout-btn {
     padding: 8px 24px;

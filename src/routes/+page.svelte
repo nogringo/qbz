@@ -1407,7 +1407,6 @@
   function handleNostrLoginSuccess(user: { pubkey: string; npub: string; method: 'bunker' | 'nsec' }) {
     setLoggedIn({
       userName: user.npub.slice(0, 12) + '...',
-      subscription: 'Nostr',
       pubkey: user.pubkey,
       npub: user.npub,
       authMethod: user.method
@@ -1932,8 +1931,7 @@
       onSettingsClick={() => navigateTo('settings')}
       onAboutClick={() => isAboutModalOpen = true}
       onLogout={handleLogout}
-      userName={userInfo?.userName || 'User'}
-      subscription={userInfo?.subscription || 'Qobuz'}
+      userName={userInfo?.userName ?? 'User'}
     />
 
     <!-- Content Area (main + lyrics sidebar) -->
@@ -2003,7 +2001,7 @@
           onBack={navGoBack}
           onLogout={handleLogout}
           userName={userInfo?.userName}
-          subscription={userInfo?.subscription}
+          picture={userInfo?.picture}
         />
       {:else if activeView === 'album' && selectedAlbum}
         <AlbumDetailView

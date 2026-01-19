@@ -14,10 +14,12 @@ import {
   restoreSession,
   type NostrUser
 } from '$lib/nostr/auth';
+import { fetchProfile, initPool } from '$lib/nostr/client';
 
 export interface UserInfo {
   userName: string;
-  subscription: string;
+  subscription?: string;
+  picture?: string;
   // Nostr-specific
   pubkey?: string;
   npub?: string;
@@ -63,7 +65,7 @@ export function getUserInfo(): UserInfo | null {
  */
 export async function loginNostrBunker(bunkerUri: string): Promise<void> {
   const user = await loginWithBunker(bunkerUri);
-  setLoggedInNostr(user);
+  await setLoggedInNostr(user);
 }
 
 /**
@@ -71,7 +73,7 @@ export async function loginNostrBunker(bunkerUri: string): Promise<void> {
  */
 export async function loginNostrNsec(nsec: string): Promise<void> {
   const user = await loginWithNsec(nsec);
-  setLoggedInNostr(user);
+  await setLoggedInNostr(user);
 }
 
 /**
@@ -80,7 +82,7 @@ export async function loginNostrNsec(nsec: string): Promise<void> {
 export async function tryRestoreNostrSession(): Promise<boolean> {
   const user = await restoreSession();
   if (user) {
-    setLoggedInNostr(user);
+    await setLoggedInNostr(user);
     return true;
   }
   return false;
@@ -89,16 +91,31 @@ export async function tryRestoreNostrSession(): Promise<boolean> {
 /**
  * Set logged in state from Nostr user
  */
-function setLoggedInNostr(user: NostrUser): void {
+async function setLoggedInNostr(user: NostrUser): Promise<void> {
   isLoggedIn = true;
   userInfo = {
     userName: user.npub.slice(0, 12) + '...',
-    subscription: 'Nostr',
     pubkey: user.pubkey,
     npub: user.npub,
     authMethod: user.method
   };
   notifyListeners();
+
+  // Fetch profile to get display name and picture
+  try {
+    initPool();
+    const profile = await fetchProfile(user.pubkey);
+    if (profile) {
+      userInfo = {
+        ...userInfo!,
+        userName: profile.displayName || profile.name || userInfo!.userName,
+        picture: profile.picture
+      };
+      notifyListeners();
+    }
+  } catch (err) {
+    console.error('Failed to fetch profile:', err);
+  }
 }
 
 /**

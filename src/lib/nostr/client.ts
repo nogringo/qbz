@@ -16,6 +16,9 @@ import {
   type TrackReference
 } from './types';
 
+// Nostr kinds
+const PROFILE_KIND = 0;
+
 // Default relays for music content
 const DEFAULT_RELAYS = [
   'wss://relay.damus.io',
@@ -23,6 +26,16 @@ const DEFAULT_RELAYS = [
   'wss://nos.lol',
   'wss://relay.snort.social'
 ];
+
+// Profile type
+export interface NostrProfile {
+  pubkey: string;
+  name?: string;
+  displayName?: string;
+  picture?: string;
+  about?: string;
+  nip05?: string;
+}
 
 // Pool instance
 let pool: SimplePool | null = null;
@@ -74,6 +87,37 @@ export function closePool(): void {
 }
 
 // ============ Fetch Functions ============
+
+/**
+ * Fetch user profile (kind 0)
+ */
+export async function fetchProfile(pubkey: string): Promise<NostrProfile | null> {
+  const p = getPool();
+  const filter: Filter = {
+    kinds: [PROFILE_KIND],
+    authors: [pubkey],
+    limit: 1
+  };
+
+  const events = await p.querySync(connectedRelays, filter);
+  if (events.length === 0) {
+    return null;
+  }
+
+  try {
+    const content = JSON.parse(events[0].content);
+    return {
+      pubkey,
+      name: content.name,
+      displayName: content.display_name,
+      picture: content.picture,
+      about: content.about,
+      nip05: content.nip05
+    };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Fetch music tracks by pubkey (artist)

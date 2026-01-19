@@ -3,12 +3,11 @@
 
   interface Props {
     username: string;
-    subscription: string;
     onSettingsClick: () => void;
     onAboutClick?: () => void;
   }
 
-  let { username, subscription, onSettingsClick, onAboutClick }: Props = $props();
+  let { username, onSettingsClick, onAboutClick }: Props = $props();
 </script>
 
 <div class="user-card">
@@ -28,7 +27,6 @@
   <!-- User Info -->
   <div class="user-info">
     <div class="username">{username}</div>
-    <div class="subscription">{subscription}</div>
   </div>
 
   <!-- Settings Button -->
@@ -110,13 +108,6 @@
     white-space: nowrap;
   }
 
-  .subscription {
-    font-size: 10px;
-    color: var(--accent-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 
   .action-btn {
     width: 22px;
