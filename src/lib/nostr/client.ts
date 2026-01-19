@@ -18,6 +18,7 @@ import {
 
 // Nostr kinds
 const PROFILE_KIND = 0;
+const RELAY_LIST_KIND = 10002; // NIP-65
 
 // Default relays for music content
 const DEFAULT_RELAYS = [
@@ -35,6 +36,13 @@ export interface NostrProfile {
   picture?: string;
   about?: string;
   nip05?: string;
+}
+
+// NIP-65 Relay type
+export interface Nip65Relay {
+  url: string;
+  read: boolean;
+  write: boolean;
 }
 
 // Pool instance
@@ -117,6 +125,43 @@ export async function fetchProfile(pubkey: string): Promise<NostrProfile | null>
   } catch {
     return null;
   }
+}
+
+/**
+ * Fetch user's NIP-65 relay list (kind 10002)
+ */
+export async function fetchNip65Relays(pubkey: string): Promise<Nip65Relay[]> {
+  const p = getPool();
+  const filter: Filter = {
+    kinds: [RELAY_LIST_KIND],
+    authors: [pubkey],
+    limit: 1
+  };
+
+  const events = await p.querySync(connectedRelays, filter);
+  if (events.length === 0) {
+    return [];
+  }
+
+  // Parse relay tags from the event
+  // Format: ["r", "wss://relay.example.com", "read"] or ["r", "wss://relay.example.com", "write"]
+  // or just ["r", "wss://relay.example.com"] for both read and write
+  const relays: Nip65Relay[] = [];
+
+  for (const tag of events[0].tags) {
+    if (tag[0] === 'r' && tag[1]) {
+      const url = tag[1];
+      const marker = tag[2]; // "read", "write", or undefined (both)
+
+      relays.push({
+        url,
+        read: !marker || marker === 'read',
+        write: !marker || marker === 'write'
+      });
+    }
+  }
+
+  return relays;
 }
 
 /**

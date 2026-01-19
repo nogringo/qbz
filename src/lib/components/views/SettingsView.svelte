@@ -43,6 +43,14 @@
     type OfflineSettings
   } from '$lib/stores/offlineStore';
   import { showToast } from '$lib/stores/toastStore';
+  import {
+    loadSavedRelays,
+    updateRelays,
+    resetRelaysToDefault,
+    getDefaultRelays
+  } from '$lib/stores/nostrSettingsStore';
+  import { fetchNip65Relays, type Nip65Relay } from '$lib/nostr/client';
+  import { getUserInfo } from '$lib/stores/authStore';
 
   interface Props {
     onBack?: () => void;
@@ -93,8 +101,15 @@
   let offlineSettings = $state<OfflineSettings>(getOfflineSettings());
   let isCheckingNetwork = $state(false);
 
+  // Nostr settings
+  let nostrRelays = $state<string[]>(loadSavedRelays());
+  let newRelayInput = $state('');
+  let nip65Relays = $state<Nip65Relay[]>([]);
+  let isLoadingNip65 = $state(false);
+
   // Section navigation
   let settingsViewEl: HTMLDivElement;
+  let nostrSection: HTMLElement;
   let audioSection: HTMLElement;
   let playbackSection: HTMLElement;
   let offlineModeSection: HTMLElement;
@@ -104,10 +119,11 @@
   let integrationsSection: HTMLElement;
   let storageSection: HTMLElement;
   let lyricsSection: HTMLElement;
-  let activeSection = $state('audio');
+  let activeSection = $state('nostr');
 
   // Navigation section definitions (static, refs resolved at click/scroll time)
   const navSectionDefs = [
+    { id: 'nostr', label: 'Nostr' },
     { id: 'audio', label: 'Audio' },
     { id: 'playback', label: 'Playback' },
     { id: 'offline', label: 'Offline' },
@@ -122,6 +138,7 @@
   // Get section element by id (resolved at call time, not definition time)
   function getSectionEl(id: string): HTMLElement | undefined {
     switch (id) {
+      case 'nostr': return nostrSection;
       case 'audio': return audioSection;
       case 'playback': return playbackSection;
       case 'offline': return offlineModeSection;
@@ -383,6 +400,9 @@
       const match = zoomOptions.find(option => Math.abs((zoomMap[option] ?? 1) - parsed) < 0.01);
       zoomLevel = match || '100%';
     }
+
+    // Load NIP-65 relays
+    loadNip65Relays();
 
     // Load library settings
     const savedFetchArtistImages = localStorage.getItem('qbz-fetch-artist-images');
@@ -1260,6 +1280,59 @@
     localStorage.setItem('qbz-theme', themeValue);
   }
 
+  // Load NIP-65 relays
+  async function loadNip65Relays() {
+    const userInfo = getUserInfo();
+    if (!userInfo?.pubkey) return;
+
+    isLoadingNip65 = true;
+    try {
+      nip65Relays = await fetchNip65Relays(userInfo.pubkey);
+    } catch (err) {
+      console.error('Failed to load NIP-65 relays:', err);
+    } finally {
+      isLoadingNip65 = false;
+    }
+  }
+
+  // Nostr relay handlers
+  function handleAddRelay() {
+    const relay = newRelayInput.trim();
+    if (!relay) return;
+
+    if (!relay.startsWith('wss://') && !relay.startsWith('ws://')) {
+      showToast('Relay URL must start with wss:// or ws://', 'error');
+      return;
+    }
+
+    if (nostrRelays.includes(relay)) {
+      showToast('Relay already exists', 'error');
+      return;
+    }
+
+    nostrRelays = [...nostrRelays, relay];
+    updateRelays(nostrRelays);
+    newRelayInput = '';
+    showToast('Relay added', 'success');
+  }
+
+  function handleRemoveRelay(relay: string) {
+    if (nostrRelays.length <= 1) {
+      showToast('Must have at least one relay', 'error');
+      return;
+    }
+
+    nostrRelays = nostrRelays.filter(r => r !== relay);
+    updateRelays(nostrRelays);
+    showToast('Relay removed', 'success');
+  }
+
+  function handleResetRelays() {
+    resetRelaysToDefault();
+    nostrRelays = getDefaultRelays();
+    showToast('Relays reset to defaults', 'success');
+  }
+
   async function handleZoomChange(value: string) {
     zoomLevel = value;
     const zoom = zoomMap[value] ?? 1;
@@ -1323,6 +1396,85 @@
       </button>
     {/each}
   </nav>
+
+  <!-- Nostr Section -->
+  <section class="section" bind:this={nostrSection}>
+    <h3 class="section-title">Nostr</h3>
+
+    <!-- NIP-65 Relays (My Relays) -->
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-label">My Relays (NIP-65)</span>
+        <span class="setting-desc">Your published relay preferences</span>
+      </div>
+    </div>
+    {#if isLoadingNip65}
+      <div class="relay-list">
+        <div class="relay-item loading">
+          <span class="relay-url">Loading...</span>
+        </div>
+      </div>
+    {:else if nip65Relays.length === 0}
+      <div class="relay-list">
+        <div class="relay-item empty">
+          <span class="relay-url muted">No NIP-65 relay list published</span>
+        </div>
+      </div>
+    {:else}
+      <div class="relay-list">
+        {#each nip65Relays as relay}
+          <div class="relay-item">
+            <span class="relay-url">{relay.url}</span>
+            <div class="relay-markers">
+              {#if relay.read && relay.write}
+                <span class="relay-marker both">R/W</span>
+              {:else if relay.read}
+                <span class="relay-marker read">R</span>
+              {:else if relay.write}
+                <span class="relay-marker write">W</span>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    <!-- Bootstrap Relays -->
+    <div class="setting-row section-separator">
+      <div class="setting-info">
+        <span class="setting-label">Bootstrap Relays</span>
+        <span class="setting-desc">Relays used to discover and fetch content</span>
+      </div>
+    </div>
+    <div class="relay-list">
+      {#each nostrRelays as relay}
+        <div class="relay-item">
+          <span class="relay-url">{relay}</span>
+          <button
+            class="relay-remove-btn"
+            onclick={() => handleRemoveRelay(relay)}
+            title="Remove relay"
+          >
+            ×
+          </button>
+        </div>
+      {/each}
+    </div>
+    <div class="relay-add-row">
+      <input
+        type="text"
+        class="relay-input"
+        bind:value={newRelayInput}
+        placeholder="wss://relay.example.com"
+        onkeydown={(e) => e.key === 'Enter' && handleAddRelay()}
+      />
+      <button class="relay-add-btn" onclick={handleAddRelay}>Add</button>
+    </div>
+    <div class="setting-row last">
+      <span class="setting-label">Reset to Defaults</span>
+      <button class="secondary-btn" onclick={handleResetRelays}>Reset</button>
+    </div>
+  </section>
 
   <!-- Audio Section -->
   <section class="section" bind:this={audioSection}>
@@ -2127,6 +2279,161 @@
     border-color: var(--text-primary);
     color: var(--text-primary);
     background-color: var(--bg-hover);
+  }
+
+  .secondary-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--text-muted);
+    background: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .secondary-btn:hover {
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
+  }
+
+  .section-separator {
+    margin-top: 24px;
+  }
+
+  /* Nostr relay styles */
+  .relay-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .relay-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background-color: var(--bg-tertiary);
+    border-radius: 8px;
+  }
+
+  .relay-url {
+    font-size: 13px;
+    font-family: monospace;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .relay-remove-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 150ms ease;
+    flex-shrink: 0;
+  }
+
+  .relay-remove-btn:hover {
+    color: #ff6b6b;
+    background-color: rgba(255, 107, 107, 0.1);
+  }
+
+  .relay-item.loading,
+  .relay-item.empty {
+    justify-content: center;
+  }
+
+  .relay-url.muted {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .relay-markers {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .relay-marker {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .relay-marker.both {
+    background-color: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+  }
+
+  .relay-marker.read {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+  }
+
+  .relay-marker.write {
+    background-color: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+  }
+
+  .relay-add-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .relay-input {
+    flex: 1;
+    padding: 10px 12px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: monospace;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 150ms ease;
+  }
+
+  .relay-input:focus {
+    border-color: var(--accent-primary);
+  }
+
+  .relay-input::placeholder {
+    color: var(--text-muted);
+    font-family: monospace;
+  }
+
+  .relay-add-btn {
+    padding: 10px 20px;
+    background-color: var(--accent-primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+
+  .relay-add-btn:hover {
+    background-color: var(--accent-hover);
   }
 
   /* Last.fm styles */
