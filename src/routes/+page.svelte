@@ -276,6 +276,7 @@
 
   // Auth State (from authStore subscription)
   let isLoggedIn = $state(false);
+  let isInitializing = $state(true);
   let userInfo = $state<UserInfo | null>(null);
 
   // Offline State (from offlineStore subscription)
@@ -1621,6 +1622,8 @@
       }
     } catch (err) {
       console.error('[Nostr] Failed to restore session:', err);
+    } finally {
+      isInitializing = false;
     }
 
     // Keyboard navigation
@@ -1910,7 +1913,12 @@
   } : null);
 </script>
 
-{#if !isLoggedIn}
+{#if isInitializing}
+  <div class="loading-screen">
+    <img src="/icons/AppIcons/android/72x72.png" alt="QBZ" class="loading-logo" />
+    <div class="loading-spinner"></div>
+  </div>
+{:else if !isLoggedIn}
   <NostrLoginView onLoginSuccess={handleNostrLoginSuccess} />
 {:else}
   <div class="app">
@@ -2347,6 +2355,37 @@
 {/if}
 
 <style>
+  .loading-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: var(--bg-primary, #0f0f0f);
+    gap: 24px;
+  }
+
+  .loading-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+  }
+
+  .loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--bg-tertiary, #333);
+    border-top-color: var(--accent-purple, #8b5cf6);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   .app {
     display: flex;
     flex-direction: column;
