@@ -64,3 +64,19 @@ export function nostrTracksToBackendQueue(tracks: NostrMusicTrack[]): BackendQue
 export function getNostrTrackIds(tracks: NostrMusicTrack[]): number[] {
   return tracks.map(t => hashStringToNumber(t.id));
 }
+
+/**
+ * Add Nostr track to play next in queue
+ */
+export async function playNostrTrackNext(track: NostrMusicTrack): Promise<boolean> {
+  const { addToQueueNext } = await import('$lib/stores/queueStore');
+  return addToQueueNext(nostrToBackendTrack(track));
+}
+
+/**
+ * Add Nostr track to end of queue
+ */
+export async function playNostrTrackLater(track: NostrMusicTrack): Promise<boolean> {
+  const { addToQueue } = await import('$lib/stores/queueStore');
+  return addToQueue(nostrToBackendTrack(track));
+}

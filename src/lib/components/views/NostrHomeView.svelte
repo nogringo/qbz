@@ -4,9 +4,10 @@
   import { fetchRecentTracks, fetchPlaylistsByOwner } from '$lib/nostr/client';
   import type { NostrMusicTrack, NostrPlaylist } from '$lib/nostr/types';
   import { formatDuration } from '$lib/nostr/adapters';
-  import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds } from '$lib/nostr/trackUtils';
+  import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds, playNostrTrackNext, playNostrTrackLater } from '$lib/nostr/trackUtils';
   import { getAuthState } from '$lib/stores/authStore';
   import { setQueue as setBackendQueue, setNostrTrackIds } from '$lib/stores/queueStore';
+  import TrackMenu from '$lib/components/TrackMenu.svelte';
   import {
     subscribe as subscribePlayer,
     getPlayerState,
@@ -203,6 +204,11 @@
               <span class="track-album">{track.album}</span>
             {/if}
             <span class="track-duration">{track.duration ? formatTime(track.duration) : '--:--'}</span>
+            <TrackMenu
+              onPlayNext={() => playNostrTrackNext(track)}
+              onPlayLater={() => playNostrTrackLater(track)}
+              onGoToArtist={() => onArtistClick?.(track.pubkey)}
+            />
           </button>
         {/each}
       </div>
