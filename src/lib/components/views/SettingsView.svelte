@@ -45,12 +45,12 @@
   import { showToast } from '$lib/stores/toastStore';
   import {
     loadSavedRelays,
+    loadSavedNip65Relays,
     updateRelays,
     resetRelaysToDefault,
     getDefaultRelays
   } from '$lib/stores/nostrSettingsStore';
-  import { fetchNip65Relays, type Nip65Relay } from '$lib/nostr/client';
-  import { getUserInfo } from '$lib/stores/authStore';
+  import type { Nip65Relay } from '$lib/nostr/client';
 
   interface Props {
     onBack?: () => void;
@@ -104,8 +104,7 @@
   // Nostr settings
   let nostrRelays = $state<string[]>(loadSavedRelays());
   let newRelayInput = $state('');
-  let nip65Relays = $state<Nip65Relay[]>([]);
-  let isLoadingNip65 = $state(false);
+  let nip65Relays = $state<Nip65Relay[]>(loadSavedNip65Relays());
 
   // Section navigation
   let settingsViewEl: HTMLDivElement;
@@ -400,9 +399,6 @@
       const match = zoomOptions.find(option => Math.abs((zoomMap[option] ?? 1) - parsed) < 0.01);
       zoomLevel = match || '100%';
     }
-
-    // Load NIP-65 relays
-    loadNip65Relays();
 
     // Load library settings
     const savedFetchArtistImages = localStorage.getItem('qbz-fetch-artist-images');
@@ -1280,21 +1276,6 @@
     localStorage.setItem('qbz-theme', themeValue);
   }
 
-  // Load NIP-65 relays
-  async function loadNip65Relays() {
-    const userInfo = getUserInfo();
-    if (!userInfo?.pubkey) return;
-
-    isLoadingNip65 = true;
-    try {
-      nip65Relays = await fetchNip65Relays(userInfo.pubkey);
-    } catch (err) {
-      console.error('Failed to load NIP-65 relays:', err);
-    } finally {
-      isLoadingNip65 = false;
-    }
-  }
-
   // Nostr relay handlers
   function handleAddRelay() {
     const relay = newRelayInput.trim();
@@ -1408,13 +1389,7 @@
         <span class="setting-desc">Your published relay preferences</span>
       </div>
     </div>
-    {#if isLoadingNip65}
-      <div class="relay-list">
-        <div class="relay-item loading">
-          <span class="relay-url">Loading...</span>
-        </div>
-      </div>
-    {:else if nip65Relays.length === 0}
+    {#if nip65Relays.length === 0}
       <div class="relay-list">
         <div class="relay-item empty">
           <span class="relay-url muted">No NIP-65 relay list published</span>
@@ -2353,7 +2328,6 @@
     background-color: rgba(255, 107, 107, 0.1);
   }
 
-  .relay-item.loading,
   .relay-item.empty {
     justify-content: center;
   }

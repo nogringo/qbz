@@ -62,7 +62,7 @@
 
   // Nostr
   import { initPool } from '$lib/nostr/client';
-  import { loadSavedRelays } from '$lib/stores/nostrSettingsStore';
+  import { getMergedRelays } from '$lib/stores/nostrSettingsStore';
   import {
     initPlayer as initNostrPlayer,
     destroyPlayer as destroyNostrPlayer,
@@ -1608,8 +1608,8 @@
     const { cleanup: cleanupBootstrap } = bootstrapApp();
 
     // Initialize Nostr (pool and player)
-    const savedRelays = loadSavedRelays();
-    initPool(savedRelays);
+    const relays = getMergedRelays();
+    initPool(relays);
     initNostrPlayer();
 
     // Try to restore Nostr session

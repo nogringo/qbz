@@ -14,7 +14,8 @@ import {
   restoreSession,
   type NostrUser
 } from '$lib/nostr/auth';
-import { fetchProfile, initPool } from '$lib/nostr/client';
+import { fetchProfile, fetchNip65Relays, initPool } from '$lib/nostr/client';
+import { saveNip65Relays, clearNip65Relays, initPoolWithMergedRelays } from '$lib/stores/nostrSettingsStore';
 
 export interface UserInfo {
   userName: string;
@@ -101,9 +102,11 @@ export async function setLoggedInNostr(user: NostrUser): Promise<void> {
   };
   notifyListeners();
 
-  // Fetch profile to get display name and picture
+  // Fetch profile and NIP-65 relays
   try {
     initPool();
+
+    // Fetch profile
     const profile = await fetchProfile(user.pubkey);
     if (profile) {
       userInfo = {
@@ -113,8 +116,13 @@ export async function setLoggedInNostr(user: NostrUser): Promise<void> {
       };
       notifyListeners();
     }
+
+    // Fetch and save NIP-65 relays, then reinit pool with merged relays
+    const nip65Relays = await fetchNip65Relays(user.pubkey);
+    saveNip65Relays(nip65Relays);
+    initPoolWithMergedRelays();
   } catch (err) {
-    console.error('Failed to fetch profile:', err);
+    console.error('Failed to fetch profile or NIP-65:', err);
   }
 }
 
@@ -123,6 +131,7 @@ export async function setLoggedInNostr(user: NostrUser): Promise<void> {
  */
 export async function logoutNostr(): Promise<void> {
   await nostrLogout();
+  clearNip65Relays();
   setLoggedOut();
 }
 
