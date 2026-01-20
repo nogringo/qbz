@@ -255,9 +255,11 @@
         {/if}
       </button>
 
-      <button class="control-btn" onclick={onAddToPlaylist} title={$t('actions.addToPlaylist')}>
-        <Plus size={16} />
-      </button>
+      {#if quality === 'Nostr'}
+        <button class="control-btn" onclick={onAddToPlaylist} title={$t('actions.addToPlaylist')}>
+          <Plus size={16} />
+        </button>
+      {/if}
 
       <button
         class="control-btn"

@@ -6,7 +6,7 @@
  * fetched data, but selectedPlaylistId is managed here as it's just an ID.
  */
 
-export type ViewType = 'home' | 'search' | 'library' | 'library-album' | 'settings' | 'album' | 'artist' | 'nostr-artist' | 'playlist' | 'playlist-manager' | 'favorites' | 'nostr-favorites';
+export type ViewType = 'home' | 'search' | 'library' | 'library-album' | 'settings' | 'album' | 'artist' | 'nostr-artist' | 'nostr-playlist' | 'playlist' | 'playlist-manager' | 'favorites' | 'nostr-favorites';
 
 // Navigation state
 let activeView: ViewType = 'home';
@@ -21,6 +21,9 @@ let selectedLocalAlbumId: string | null = null;
 
 // Selected Nostr artist pubkey (for nostr-artist view)
 let selectedNostrArtistPubkey: string | null = null;
+
+// Selected Nostr playlist (for nostr-playlist view)
+let selectedNostrPlaylist: { pubkey: string; dTag: string } | null = null;
 
 // Listeners
 const listeners = new Set<() => void>();
@@ -178,6 +181,35 @@ export function getSelectedNostrArtistPubkey(): string | null {
   return selectedNostrArtistPubkey;
 }
 
+// ============ Nostr Playlist Selection ============
+
+/**
+ * Navigate to Nostr playlist detail view
+ */
+export function selectNostrPlaylist(pubkey: string, dTag: string): void {
+  const previous = selectedNostrPlaylist;
+  selectedNostrPlaylist = { pubkey, dTag };
+
+  if (activeView === 'nostr-playlist' && previous?.pubkey === pubkey && previous?.dTag === dTag) {
+    // Same playlist, no navigation needed
+    return;
+  }
+
+  if (activeView === 'nostr-playlist') {
+    // Different playlist, notify listeners to reload
+    notifyListeners();
+  } else {
+    navigateTo('nostr-playlist');
+  }
+}
+
+/**
+ * Get selected Nostr playlist
+ */
+export function getSelectedNostrPlaylist(): { pubkey: string; dTag: string } | null {
+  return selectedNostrPlaylist;
+}
+
 // ============ Getters ============
 
 export function getActiveView(): ViewType {
@@ -193,6 +225,7 @@ export interface NavigationState {
   selectedPlaylistId: number | null;
   selectedLocalAlbumId: string | null;
   selectedNostrArtistPubkey: string | null;
+  selectedNostrPlaylist: { pubkey: string; dTag: string } | null;
   canGoBack: boolean;
   canGoForward: boolean;
 }
@@ -205,6 +238,7 @@ export function getNavigationState(): NavigationState {
     selectedPlaylistId,
     selectedLocalAlbumId,
     selectedNostrArtistPubkey,
+    selectedNostrPlaylist,
     canGoBack: viewHistory.length > 1,
     canGoForward: forwardHistory.length > 0
   };

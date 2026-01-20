@@ -11,10 +11,13 @@ import {
   PLAYLIST_KIND,
   parseMusicTrackEvent,
   parsePlaylistEvent,
+  createTrackReference,
+  parseTrackReference,
   type NostrMusicTrack,
   type NostrPlaylist,
   type TrackReference,
-  type CreateMusicTrackInput
+  type CreateMusicTrackInput,
+  type CreatePlaylistInput
 } from './types';
 
 // Re-export types for convenience
@@ -301,6 +304,52 @@ export async function fetchTracksByRefs(
 }
 
 /**
+ * Try to decrypt a private playlist's content
+ * Returns the playlist with decrypted trackRefs and description if successful
+ */
+async function tryDecryptPlaylist(playlist: NostrPlaylist): Promise<NostrPlaylist> {
+  // Only try to decrypt if private and has content
+  if (!playlist.isPrivate || !playlist.content) {
+    return playlist;
+  }
+
+  try {
+    const { nip44Decrypt, getCurrentUser } = await import('./auth');
+    const currentUser = getCurrentUser();
+
+    // Only decrypt our own playlists
+    if (!currentUser || currentUser.pubkey !== playlist.pubkey) {
+      return playlist;
+    }
+
+    const decrypted = await nip44Decrypt(playlist.content);
+    const data = JSON.parse(decrypted) as {
+      description?: string;
+      trackRefs?: string[];
+    };
+
+    // Parse track refs from decrypted data
+    if (data.trackRefs && Array.isArray(data.trackRefs)) {
+      playlist.trackRefs = data.trackRefs
+        .map(ref => parseTrackReference(ref))
+        .filter((r): r is TrackReference => r !== null);
+    }
+
+    if (data.description) {
+      playlist.description = data.description;
+    }
+
+    playlist.isEncrypted = true;
+  } catch (err) {
+    // Failed to decrypt - not our playlist or invalid content
+    console.log('[Nostr] Could not decrypt private playlist:', playlist.id, err);
+    playlist.trackRefs = [];
+  }
+
+  return playlist;
+}
+
+/**
  * Fetch playlists by pubkey (owner)
  */
 export async function fetchPlaylistsByOwner(
@@ -315,10 +364,25 @@ export async function fetchPlaylistsByOwner(
   };
 
   const events = await p.querySync(connectedRelays, filter);
-  return events
+  const playlists = events
     .map(parsePlaylistEvent)
-    .filter((pl): pl is NostrPlaylist => pl !== null)
+    .filter((pl): pl is NostrPlaylist => pl !== null);
+
+  // Deduplicate by d-tag, keeping the most recent version
+  const playlistMap = new Map<string, NostrPlaylist>();
+  for (const pl of playlists) {
+    const key = `${pl.pubkey}:${pl.d}`;
+    const existing = playlistMap.get(key);
+    if (!existing || pl.createdAt > existing.createdAt) {
+      playlistMap.set(key, pl);
+    }
+  }
+
+  const deduplicated = Array.from(playlistMap.values())
     .sort((a, b) => b.createdAt - a.createdAt);
+
+  // Try to decrypt private playlists
+  return Promise.all(deduplicated.map(tryDecryptPlaylist));
 }
 
 /**
@@ -341,7 +405,13 @@ export async function fetchPlaylist(
     return null;
   }
 
-  return parsePlaylistEvent(events[0]);
+  const playlist = parsePlaylistEvent(events[0]);
+  if (!playlist) {
+    return null;
+  }
+
+  // Try to decrypt if private
+  return tryDecryptPlaylist(playlist);
 }
 
 /**
@@ -1008,10 +1078,12 @@ export function subscribeToPlaylists(
   };
 
   const sub = p.subscribe(connectedRelays, filter, {
-    onevent(event: Event) {
+    async onevent(event: Event) {
       const playlist = parsePlaylistEvent(event);
       if (playlist) {
-        onPlaylist(playlist);
+        // Try to decrypt if private
+        const decrypted = await tryDecryptPlaylist(playlist);
+        onPlaylist(decrypted);
       }
     }
   });
@@ -1144,4 +1216,173 @@ export async function publishMusicTrack(input: CreateMusicTrackInput): Promise<N
   }
 
   return track;
+}
+
+// ============ Playlist Publishing Functions ============
+
+/**
+ * Generate a unique d-tag for a playlist
+ * Format: title-timestamp (slugified)
+ */
+function generatePlaylistDTag(title: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50);
+  const timestamp = Date.now().toString(36);
+  return `${slug}-${timestamp}`;
+}
+
+/**
+ * Build, sign, and publish a playlist event
+ * Common logic for both create and update operations
+ */
+async function buildAndPublishPlaylistEvent(
+  dTag: string,
+  input: CreatePlaylistInput
+): Promise<NostrPlaylist> {
+  const { signEvent, nip44Encrypt } = await import('./auth');
+  const { getUserWriteRelays } = await import('$lib/stores/nostrSettingsStore');
+  const p = getPool();
+
+  // Build tags
+  const tags: string[][] = [
+    ['d', dTag],
+    ['title', input.title],
+    ['t', 'playlist'], // Required category tag
+    ['alt', `Playlist: ${input.title}`]
+  ];
+
+  // Optional image tag (always in tags, even for private)
+  if (input.image) {
+    tags.push(['image', input.image]);
+  }
+
+  // Category tags
+  if (input.categories && input.categories.length > 0) {
+    for (const category of input.categories) {
+      tags.push(['t', category.toLowerCase()]);
+    }
+  }
+
+  let content = '';
+
+  // Handle private vs public playlists
+  if (input.isPublic === false) {
+    // Private playlist: encrypt description + track refs in content
+    tags.push(['private', 'true']);
+
+    const privateData = {
+      description: input.description || '',
+      trackRefs: (input.trackRefs || []).map(ref => createTrackReference(ref.pubkey, ref.dTag))
+    };
+    content = await nip44Encrypt(JSON.stringify(privateData));
+    // Do NOT add 'a' tags for private playlists
+  } else {
+    // Public playlist
+    tags.push(['public', 'true']);
+
+    if (input.description) {
+      tags.push(['description', input.description]);
+    }
+
+    // Track references as 'a' tags (public only)
+    if (input.trackRefs && input.trackRefs.length > 0) {
+      for (const ref of input.trackRefs) {
+        tags.push(['a', createTrackReference(ref.pubkey, ref.dTag)]);
+      }
+    }
+
+    content = input.description || '';
+  }
+
+  // Sign and publish
+  const event = await signEvent({
+    kind: PLAYLIST_KIND,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content
+  });
+
+  const userWriteRelays = getUserWriteRelays();
+  console.log('[Nostr] Publishing playlist to relays:', userWriteRelays);
+  await Promise.all(userWriteRelays.map(relay => p.publish([relay], event)));
+
+  // Parse result
+  const playlist = parsePlaylistEvent(event);
+  if (!playlist) {
+    throw new Error('Failed to parse playlist event');
+  }
+
+  // If private, restore the trackRefs that we just encrypted
+  if (input.isPublic === false && input.trackRefs) {
+    playlist.trackRefs = input.trackRefs;
+    playlist.description = input.description;
+    playlist.isEncrypted = true;
+  }
+
+  return playlist;
+}
+
+/**
+ * Publish a new playlist event (kind 34139)
+ *
+ * @param input Playlist data
+ * @returns The published playlist parsed from the event
+ */
+export async function publishPlaylist(input: CreatePlaylistInput): Promise<NostrPlaylist> {
+  const dTag = generatePlaylistDTag(input.title);
+  return buildAndPublishPlaylistEvent(dTag, input);
+}
+
+/**
+ * Update an existing playlist (replaceable event)
+ * Uses the same d-tag to replace the previous version
+ *
+ * @param dTag The d-tag of the playlist to update
+ * @param input Updated playlist data
+ * @returns The updated playlist parsed from the event
+ */
+export async function updatePlaylist(dTag: string, input: CreatePlaylistInput): Promise<NostrPlaylist> {
+  return buildAndPublishPlaylistEvent(dTag, input);
+}
+
+/**
+ * Delete a playlist (publish kind 5 deletion event)
+ * NIP-09 compliant deletion
+ *
+ * @param playlistEventId The event ID of the playlist to delete
+ * @param playlistDTag The d-tag of the playlist (for 'a' tag reference)
+ * @param playlistPubkey The pubkey of the playlist owner
+ */
+export async function deletePlaylist(
+  playlistEventId: string,
+  playlistDTag: string,
+  playlistPubkey: string
+): Promise<void> {
+  const { signEvent } = await import('./auth');
+  const { getUserWriteRelays } = await import('$lib/stores/nostrSettingsStore');
+  const p = getPool();
+
+  // Build the 'a' tag reference for addressable event deletion
+  const aTagValue = `${PLAYLIST_KIND}:${playlistPubkey}:${playlistDTag}`;
+
+  // Create deletion event (kind 5)
+  const event = await signEvent({
+    kind: DELETION_KIND,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ['e', playlistEventId],
+      ['a', aTagValue],
+      ['k', String(PLAYLIST_KIND)]
+    ],
+    content: 'Playlist deleted'
+  });
+
+  // Publish to user's write relays
+  const userWriteRelays = getUserWriteRelays();
+  console.log('[Nostr] Deleting playlist from relays:', userWriteRelays);
+
+  await Promise.all(userWriteRelays.map(relay => p.publish([relay], event)));
 }

@@ -247,10 +247,6 @@
             },
             onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(track) : undefined,
             onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(track) : undefined,
-            onAddToPlaylist: onAddTrackToPlaylist ? () => onAddTrackToPlaylist(track.id) : undefined,
-            onShareQobuz: onTrackShareQobuz ? () => onTrackShareQobuz(track.id) : undefined,
-            onShareSonglink: onTrackShareSonglink ? () => onTrackShareSonglink(track) : undefined,
-            onGoToAlbum: onTrackGoToAlbum ? () => onTrackGoToAlbum(album.id) : undefined,
             onGoToArtist: album.artistId && onTrackGoToArtist ? () => onTrackGoToArtist(album.artistId!) : undefined
           }}
         />

@@ -16,6 +16,12 @@
     type PlayingTrack
   } from '$lib/stores/playerStore';
 
+  interface Props {
+    onAddToNostrPlaylist?: (track: NostrMusicTrack) => void;
+  }
+
+  let { onAddToNostrPlaylist }: Props = $props();
+
   let likedTracks = $state<NostrMusicTrack[]>([]);
   let loading = $state(false);
   let error = $state<string | null>(null);
@@ -300,6 +306,7 @@
               onCopyNaddr={() => copyNaddr(track)}
               onCopyZaptraxLink={() => copyZaptraxLink(track)}
               onGoToArtist={() => handleArtistClick(track.pubkey)}
+              onAddToNostrPlaylist={() => onAddToNostrPlaylist?.(track)}
             />
           </div>
         {/each}

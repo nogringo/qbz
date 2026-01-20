@@ -1,15 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import {
-    ChevronRight,
     MoreHorizontal,
     Play,
     ListPlus,
     ListEnd,
     Heart,
     ListMusic,
-    Share2,
-    Disc3,
     User,
     Link,
     Trash2
@@ -20,14 +17,11 @@
     onPlayNext?: () => void;
     onPlayLater?: () => void;
     onAddFavorite?: () => void;
-    onAddToPlaylist?: () => void;
+    onAddToNostrPlaylist?: () => void;
     onRemoveFromPlaylist?: () => void;
-    onShareQobuz?: () => void;
-    onShareSonglink?: () => void;
     onCopyBlossomUrl?: () => void;
     onCopyNaddr?: () => void;
     onCopyZaptraxLink?: () => void;
-    onGoToAlbum?: () => void;
     onGoToArtist?: () => void;
   }
 
@@ -36,26 +30,19 @@
     onPlayNext,
     onPlayLater,
     onAddFavorite,
-    onAddToPlaylist,
+    onAddToNostrPlaylist,
     onRemoveFromPlaylist,
-    onShareQobuz,
-    onShareSonglink,
     onCopyBlossomUrl,
     onCopyNaddr,
     onCopyZaptraxLink,
-    onGoToAlbum,
     onGoToArtist
   }: Props = $props();
 
   let isOpen = $state(false);
-  let shareOpen = $state(false);
   let menuRef: HTMLDivElement | null = null;
   let triggerRef: HTMLButtonElement | null = null;
   let menuEl: HTMLDivElement | null = null;
-  let shareTriggerRef: HTMLDivElement | null = null;
-  let submenuEl: HTMLDivElement | null = null;
   let menuStyle = $state('');
-  let submenuStyle = $state('');
 
   // Portal action - moves element to body to escape stacking context
   function portal(node: HTMLElement) {
@@ -70,15 +57,13 @@
   }
 
   const hasPlayback = $derived(!!(onPlayNow || onPlayNext || onPlayLater));
-  const hasLibrary = $derived(!!(onAddFavorite || onAddToPlaylist || onRemoveFromPlaylist));
-  const hasShare = $derived(!!(onShareQobuz || onShareSonglink));
+  const hasLibrary = $derived(!!(onAddFavorite || onAddToNostrPlaylist || onRemoveFromPlaylist));
   const hasCopy = $derived(!!(onCopyBlossomUrl || onCopyNaddr || onCopyZaptraxLink));
-  const hasNav = $derived(!!(onGoToAlbum || onGoToArtist));
-  const hasMenu = $derived(hasPlayback || hasLibrary || hasShare || hasCopy || hasNav);
+  const hasNav = $derived(!!onGoToArtist);
+  const hasMenu = $derived(hasPlayback || hasLibrary || hasCopy || hasNav);
 
   function closeMenu() {
     isOpen = false;
-    shareOpen = false;
   }
 
   function handleClickOutside(event: MouseEvent) {
@@ -115,35 +100,6 @@
     menuStyle = `left: ${left}px; top: ${top}px;`;
   }
 
-  async function setSubmenuPosition() {
-    await tick();
-    if (!shareTriggerRef || !submenuEl) return;
-
-    const triggerRect = shareTriggerRef.getBoundingClientRect();
-    const submenuRect = submenuEl.getBoundingClientRect();
-    const padding = 8;
-
-    const spaceRight = window.innerWidth - triggerRect.right;
-    const openRight = spaceRight >= submenuRect.width + padding;
-
-    let left = openRight
-      ? triggerRect.right + 6
-      : triggerRect.left - submenuRect.width - 6;
-    let top = triggerRect.top - 6;
-
-    if (left < padding) left = padding;
-    if (left + submenuRect.width > window.innerWidth - padding) {
-      left = Math.max(padding, window.innerWidth - submenuRect.width - padding);
-    }
-
-    if (top + submenuRect.height > window.innerHeight - padding) {
-      top = window.innerHeight - submenuRect.height - padding;
-    }
-    if (top < padding) top = padding;
-
-    submenuStyle = `left: ${left}px; top: ${top}px;`;
-  }
-
   function handleAction(action?: () => void) {
     if (!action) return;
     action();
@@ -154,10 +110,7 @@
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       const handleResize = () => setMenuPosition();
-      const handleScroll = () => {
-        setMenuPosition();
-        if (shareOpen) setSubmenuPosition();
-      };
+      const handleScroll = () => setMenuPosition();
 
       window.addEventListener('resize', handleResize);
       window.addEventListener('scroll', handleScroll, true);
@@ -183,7 +136,6 @@
       onclick={(e) => {
         e.stopPropagation();
         isOpen = !isOpen;
-        shareOpen = false;
         if (isOpen) setMenuPosition();
       }}
       aria-label="Track actions"
@@ -214,7 +166,7 @@
           {/if}
         {/if}
 
-        {#if hasPlayback && (hasLibrary || hasShare || hasNav)}
+        {#if hasPlayback && (hasLibrary || hasCopy || hasNav)}
           <div class="separator"></div>
         {/if}
 
@@ -225,8 +177,8 @@
               <span>Add to favorites</span>
             </button>
           {/if}
-          {#if onAddToPlaylist}
-            <button class="menu-item" onclick={() => handleAction(onAddToPlaylist)}>
+          {#if onAddToNostrPlaylist}
+            <button class="menu-item" onclick={() => handleAction(onAddToNostrPlaylist)}>
               <ListMusic size={14} />
               <span>Add to playlist</span>
             </button>
@@ -239,46 +191,7 @@
           {/if}
         {/if}
 
-        {#if hasLibrary && (hasShare || hasCopy || hasNav)}
-          <div class="separator"></div>
-        {/if}
-
-        {#if hasShare}
-          <div
-            class="menu-item submenu-trigger"
-            bind:this={shareTriggerRef}
-            onmouseenter={() => {
-              shareOpen = true;
-              setSubmenuPosition();
-            }}
-            onclick={() => {
-              shareOpen = !shareOpen;
-              if (shareOpen) setSubmenuPosition();
-            }}
-          >
-            <Share2 size={14} />
-            <span>Share</span>
-            <ChevronRight size={14} class="chevron" />
-            {#if shareOpen}
-              <div class="submenu" bind:this={submenuEl} style={submenuStyle}>
-                {#if onShareQobuz}
-                  <button class="menu-item" onclick={() => handleAction(onShareQobuz)}>
-                    <Link size={14} />
-                    <span>Qobuz link</span>
-                  </button>
-                {/if}
-                {#if onShareSonglink}
-                  <button class="menu-item" onclick={() => handleAction(onShareSonglink)}>
-                    <Link size={14} />
-                    <span>Song.link</span>
-                  </button>
-                {/if}
-              </div>
-            {/if}
-          </div>
-        {/if}
-
-        {#if hasShare && (hasCopy || hasNav)}
+        {#if hasLibrary && (hasCopy || hasNav)}
           <div class="separator"></div>
         {/if}
 
@@ -308,12 +221,6 @@
         {/if}
 
         {#if hasNav}
-          {#if onGoToAlbum}
-            <button class="menu-item" onclick={() => handleAction(onGoToAlbum)}>
-              <Disc3 size={14} />
-              <span>Go to album</span>
-            </button>
-          {/if}
           {#if onGoToArtist}
             <button class="menu-item" onclick={() => handleAction(onGoToArtist)}>
               <User size={14} />
@@ -381,10 +288,6 @@
     flex: 1;
   }
 
-  .menu-item :global(.chevron) {
-    margin-left: auto;
-  }
-
   .menu-item:hover {
     background-color: var(--bg-hover);
     color: var(--text-primary);
@@ -403,19 +306,5 @@
     height: 1px;
     background-color: var(--bg-hover);
     margin: 4px 0;
-  }
-
-  .submenu-trigger {
-    position: relative;
-  }
-
-  .submenu {
-    position: fixed;
-    min-width: 150px;
-    background-color: var(--bg-tertiary);
-    border-radius: 8px;
-    padding: 2px 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    z-index: 100000;
   }
 </style>

@@ -82,7 +82,9 @@
     goForward as navGoForward,
     selectPlaylist,
     selectNostrArtist,
+    selectNostrPlaylist,
     getNavigationState,
+    getSelectedNostrPlaylist,
     type ViewType,
     type NavigationState
   } from '$lib/stores/navigationStore';
@@ -248,6 +250,7 @@
   import NostrLoginView from '$lib/components/views/NostrLoginView.svelte';
   import NostrHomeView from '$lib/components/views/NostrHomeView.svelte';
   import NostrArtistView from '$lib/components/views/NostrArtistView.svelte';
+  import NostrPlaylistDetailView from '$lib/components/views/NostrPlaylistDetailView.svelte';
   import HomeView from '$lib/components/views/HomeView.svelte';
   import SearchView from '$lib/components/views/SearchView.svelte';
   import SettingsView from '$lib/components/views/SettingsView.svelte';
@@ -268,6 +271,7 @@
   import CastPicker from '$lib/components/CastPicker.svelte';
   import LyricsSidebar from '$lib/components/lyrics/LyricsSidebar.svelte';
   import OfflinePlaceholder from '$lib/components/OfflinePlaceholder.svelte';
+  import NostrPlaylistModal from '$lib/components/NostrPlaylistModal.svelte';
 
   // Offline state
   import {
@@ -292,6 +296,9 @@
   let activeView = $state<ViewType>('home');
   let selectedPlaylistId = $state<number | null>(null);
   let selectedNostrArtistPubkey = $state<string | null>(null);
+  let selectedNostrPlaylist = $state<{ pubkey: string; dTag: string } | null>(null);
+  let nostrPlaylistRefreshKey = $state(0);
+  let nostrPlaylistUpdatedData = $state<{ playlist: import('$lib/nostr/types').NostrPlaylist; tracks: import('$lib/nostr/types').NostrMusicTrack[] } | null>(null);
   // Album and Artist data are fetched, so kept local
   let selectedAlbum = $state<AlbumDetail | null>(null);
   let selectedArtist = $state<ArtistDetail | null>(null);
@@ -314,9 +321,16 @@
   let isPlaylistImportOpen = $state(false);
   let isAboutModalOpen = $state(false);
   let userPlaylists = $state<{ id: number; name: string; tracks_count: number }[]>([]);
+
+  // Nostr playlist modal state
+  let isNostrPlaylistModalOpen = $state(false);
+  let nostrPlaylistModalMode = $state<'create' | 'edit' | 'addTrack'>('create');
+  let nostrPlaylistForEdit = $state<import('$lib/nostr/types').NostrPlaylist | null>(null);
+  let nostrPlaylistTracksForEdit = $state<import('$lib/nostr/types').NostrMusicTrack[]>([]);
+  let nostrTrackToAdd = $state<import('$lib/nostr/types').NostrMusicTrack | null>(null);
   
   // Sidebar reference for refreshing playlists
-  let sidebarRef: { getPlaylists: () => { id: number; name: string; tracks_count: number }[], refreshPlaylists: () => void } | undefined;
+  let sidebarRef: { getPlaylists: () => { id: number; name: string; tracks_count: number }[], refreshPlaylists: () => void, refreshNostrPlaylists: () => void } | undefined;
 
   // Playback State (from playerStore subscription)
   let currentTrack = $state<PlayingTrack | null>(null);
@@ -728,11 +742,23 @@
     }
   }
 
-  // Add to Playlist handler for Now Playing track
+  // Add to Playlist handler for Now Playing track (Nostr only)
   function openAddToPlaylistModal() {
     if (!currentTrack) return;
-    userPlaylists = sidebarRef?.getPlaylists() ?? [];
-    openPlaylistModal('addTrack', [currentTrack.id]);
+    if (!currentTrack.nostrEventId || !currentTrack.pubkey || !currentTrack.dTag) return;
+
+    // Create minimal NostrMusicTrack from PlayingTrack
+    const nostrTrack: import('$lib/nostr/types').NostrMusicTrack = {
+      id: currentTrack.nostrEventId,
+      pubkey: currentTrack.pubkey,
+      d: currentTrack.dTag,
+      title: currentTrack.title,
+      artist: currentTrack.artist ?? 'Unknown Artist',
+      url: currentTrack.audioUrl ?? '',
+      naddr: '',
+      createdAt: 0
+    };
+    openNostrPlaylistAddTrack(nostrTrack);
   }
 
   // Skip track handlers - wired to backend queue via queueStore
@@ -1321,6 +1347,48 @@
     openPlaylistImport();
   }
 
+  // Nostr Playlist Modal Functions
+  function openNostrPlaylistCreate() {
+    nostrPlaylistModalMode = 'create';
+    nostrPlaylistForEdit = null;
+    nostrPlaylistTracksForEdit = [];
+    nostrTrackToAdd = null;
+    isNostrPlaylistModalOpen = true;
+  }
+
+  function openNostrPlaylistEdit(playlist: import('$lib/nostr/types').NostrPlaylist, tracks: import('$lib/nostr/types').NostrMusicTrack[]) {
+    nostrPlaylistModalMode = 'edit';
+    nostrPlaylistForEdit = playlist;
+    nostrPlaylistTracksForEdit = tracks;
+    nostrTrackToAdd = null;
+    isNostrPlaylistModalOpen = true;
+  }
+
+  function openNostrPlaylistAddTrack(track: import('$lib/nostr/types').NostrMusicTrack) {
+    nostrPlaylistModalMode = 'addTrack';
+    nostrPlaylistForEdit = null;
+    nostrPlaylistTracksForEdit = [];
+    nostrTrackToAdd = track;
+    isNostrPlaylistModalOpen = true;
+  }
+
+  function closeNostrPlaylistModal() {
+    isNostrPlaylistModalOpen = false;
+  }
+
+  function handleNostrPlaylistSuccess(playlist?: import('$lib/nostr/types').NostrPlaylist) {
+    showToast(nostrPlaylistModalMode === 'create' ? 'Playlist created' : nostrPlaylistModalMode === 'edit' ? 'Playlist updated' : 'Track added', 'success');
+    // Refresh Nostr playlists in sidebar
+    sidebarRef?.refreshNostrPlaylists();
+    // Optimistic UI: pass updated data directly to the view (instant, no loading)
+    if (nostrPlaylistModalMode === 'edit' && playlist) {
+      nostrPlaylistUpdatedData = {
+        playlist,
+        tracks: nostrPlaylistTracksForEdit
+      };
+    }
+  }
+
   function handlePlaylistImported(summary: { qobuz_playlist_id?: number | null }) {
     sidebarRef?.refreshPlaylists();
     sidebarRef?.refreshPlaylistSettings();
@@ -1748,6 +1816,7 @@
       activeView = navState.activeView;
       selectedPlaylistId = navState.selectedPlaylistId;
       selectedNostrArtistPubkey = navState.selectedNostrArtistPubkey;
+      selectedNostrPlaylist = navState.selectedNostrPlaylist;
     });
 
     // Subscribe to player state changes
@@ -2002,9 +2071,12 @@
       bind:this={sidebarRef}
       {activeView}
       {selectedPlaylistId}
+      {selectedNostrPlaylist}
       onNavigate={navigateTo}
       onPlaylistSelect={selectPlaylist}
+      onNostrPlaylistSelect={selectNostrPlaylist}
       onCreatePlaylist={openCreatePlaylist}
+      onCreateNostrPlaylist={openNostrPlaylistCreate}
       onImportPlaylist={openImportPlaylist}
       onPlaylistManagerClick={() => navigateTo('playlist-manager')}
       onSettingsClick={() => navigateTo('settings')}
@@ -2020,7 +2092,7 @@
       {#if activeView === 'home'}
         {#if userInfo?.authMethod === 'bunker' || userInfo?.authMethod === 'nsec'}
           <!-- Nostr user: show Nostr home view -->
-          <NostrHomeView userName={userInfo?.userName} onArtistClick={selectNostrArtist} />
+          <NostrHomeView userName={userInfo?.userName} onArtistClick={selectNostrArtist} onPlaylistClick={selectNostrPlaylist} onAddToNostrPlaylist={openNostrPlaylistAddTrack} />
         {:else if offlineStatus.isOffline}
           <OfflinePlaceholder
             reason={offlineStatus.reason}
@@ -2145,6 +2217,17 @@
           pubkey={selectedNostrArtistPubkey}
           onBack={navGoBack}
         />
+      {:else if activeView === 'nostr-playlist' && selectedNostrPlaylist}
+        <NostrPlaylistDetailView
+          pubkey={selectedNostrPlaylist.pubkey}
+          dTag={selectedNostrPlaylist.dTag}
+          onBack={navGoBack}
+          onArtistClick={selectNostrArtist}
+          onEditPlaylist={openNostrPlaylistEdit}
+          onAddToNostrPlaylist={openNostrPlaylistAddTrack}
+          initialData={nostrPlaylistUpdatedData}
+          onInitialDataConsumed={() => nostrPlaylistUpdatedData = null}
+        />
       {:else if activeView === 'library' || activeView === 'library-album'}
         <LocalLibraryView
           onTrackPlay={handleLocalTrackPlay}
@@ -2227,7 +2310,7 @@
           onPlaylistSelect={selectPlaylist}
         />
       {:else if activeView === 'nostr-favorites'}
-        <NostrFavoritesView />
+        <NostrFavoritesView onAddToNostrPlaylist={openNostrPlaylistAddTrack} />
       {/if}
     </main>
 
@@ -2418,6 +2501,17 @@
     <AboutModal
       isOpen={isAboutModalOpen}
       onClose={() => isAboutModalOpen = false}
+    />
+
+    <!-- Nostr Playlist Modal -->
+    <NostrPlaylistModal
+      isOpen={isNostrPlaylistModalOpen}
+      mode={nostrPlaylistModalMode}
+      onClose={closeNostrPlaylistModal}
+      onSuccess={handleNostrPlaylistSuccess}
+      playlist={nostrPlaylistForEdit ?? undefined}
+      tracks={nostrPlaylistTracksForEdit}
+      trackToAdd={nostrTrackToAdd ?? undefined}
     />
 
     <!-- Cast Picker -->

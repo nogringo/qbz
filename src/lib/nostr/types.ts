@@ -93,6 +93,7 @@ export interface NostrPlaylist {
   isPublic: boolean;
   isPrivate: boolean;
   isCollaborative: boolean;
+  isEncrypted?: boolean; // true if content was encrypted and successfully decrypted
   categories: string[]; // From 't' tags
 
   // Track references (ordered)
@@ -259,7 +260,7 @@ export function parsePlaylistEvent(event: Event): NostrPlaylist | null {
  * Parse a track reference string
  * Format: 36787:<pubkey>:<d-tag>
  */
-function parseTrackReference(ref: string): TrackReference | null {
+export function parseTrackReference(ref: string): TrackReference | null {
   const parts = ref.split(':');
   if (parts.length !== 3) {
     return null;
@@ -324,4 +325,21 @@ export interface CreateMusicTrackInput {
 
   // Optional zap splits
   zapSplits?: ZapSplit[];
+}
+
+// ============ Playlist Publishing ============
+
+/**
+ * Input for creating/updating a playlist event
+ */
+export interface CreatePlaylistInput {
+  // Required fields
+  title: string;
+
+  // Optional fields
+  description?: string;
+  image?: string; // Playlist artwork URL
+  trackRefs?: TrackReference[];
+  categories?: string[]; // Genre/category tags
+  isPublic?: boolean; // Default true
 }

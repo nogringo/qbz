@@ -13,6 +13,8 @@
     type OfflineStatus,
     type OfflineSettings
   } from '$lib/stores/offlineStore';
+  import { fetchPlaylistsByOwner, type NostrPlaylist } from '$lib/nostr/client';
+  import { getAuthState } from '$lib/stores/authStore';
 
   interface Playlist {
     id: number;
@@ -37,9 +39,12 @@
   interface Props {
     activeView: string;
     selectedPlaylistId?: number | null;
+    selectedNostrPlaylist?: { pubkey: string; dTag: string } | null;
     onNavigate: (view: string) => void;
     onPlaylistSelect?: (playlistId: number) => void;
+    onNostrPlaylistSelect?: (pubkey: string, dTag: string) => void;
     onCreatePlaylist?: () => void;
+    onCreateNostrPlaylist?: () => void;
     onImportPlaylist?: () => void;
     onPlaylistManagerClick?: () => void;
     onSettingsClick?: () => void;
@@ -51,9 +56,12 @@
   let {
     activeView,
     selectedPlaylistId = null,
+    selectedNostrPlaylist = null,
     onNavigate,
     onPlaylistSelect,
+    onNostrPlaylistSelect,
     onCreatePlaylist,
+    onCreateNostrPlaylist,
     onImportPlaylist,
     onPlaylistManagerClick,
     onSettingsClick,
@@ -68,6 +76,11 @@
   let playlistsLoading = $state(false);
   let playlistsCollapsed = $state(false);
   let localLibraryCollapsed = $state(false);
+
+  // Nostr playlists state
+  let nostrPlaylists = $state<NostrPlaylist[]>([]);
+  let nostrPlaylistsLoading = $state(false);
+  let nostrPlaylistsCollapsed = $state(false);
 
   // Offline state
   let offlineStatus = $state<OfflineStatus>(getOfflineStatus());
@@ -284,6 +297,10 @@
     loadUserPlaylists();
   }
 
+  export function refreshNostrPlaylists() {
+    loadNostrPlaylists();
+  }
+
   export function refreshPlaylistSettings() {
     loadPlaylistSettings();
   }
@@ -416,6 +433,7 @@
     loadUserPlaylists();
     loadPlaylistSettings();
     loadLocalTrackCounts();
+    loadNostrPlaylists();
 
     // Subscribe to offline state changes
     const unsubscribeOffline = subscribeOffline(() => {
@@ -467,6 +485,25 @@
     }
   }
 
+  async function loadNostrPlaylists() {
+    const authState = getAuthState();
+    // Only load Nostr playlists for Nostr users
+    if (authState.userInfo?.authMethod !== 'bunker' && authState.userInfo?.authMethod !== 'nsec') {
+      return;
+    }
+
+    if (!authState.userInfo?.pubkey) return;
+
+    nostrPlaylistsLoading = true;
+    try {
+      nostrPlaylists = await fetchPlaylistsByOwner(authState.userInfo.pubkey);
+    } catch (err) {
+      console.error('Failed to load Nostr playlists:', err);
+    } finally {
+      nostrPlaylistsLoading = false;
+    }
+  }
+
   function handleViewChange(view: string) {
     onNavigate(view);
   }
@@ -475,6 +512,18 @@
     if (onPlaylistSelect) {
       onPlaylistSelect(playlist.id);
     }
+  }
+
+  function handleNostrPlaylistClick(playlist: NostrPlaylist) {
+    if (onNostrPlaylistSelect) {
+      onNostrPlaylistSelect(playlist.pubkey, playlist.d);
+    }
+  }
+
+  // Check if user is a Nostr user
+  function isNostrUser(): boolean {
+    const authState = getAuthState();
+    return authState.userInfo?.authMethod === 'bunker' || authState.userInfo?.authMethod === 'nsec';
   }
 </script>
 
@@ -517,125 +566,53 @@
     </nav>
 
     <!-- Playlists Section -->
-    <div class="section playlists-section">
-      <div class="playlists-header">
-        <div class="section-header">{$t('nav.playlists')}</div>
-        <div class="header-actions" bind:this={menuRef}>
-          <button class="icon-btn" onclick={onCreatePlaylist} title={$t('playlist.createNew')}>
-            <Plus size={14} />
-          </button>
-          <button
-            class="icon-btn"
-            bind:this={triggerRef}
-            onclick={(e) => { e.stopPropagation(); toggleMenu(); }}
-            title={$t('actions.more')}
-          >
-            <MoreHorizontal size={14} />
-          </button>
-          <button class="icon-btn" onclick={() => playlistsCollapsed = !playlistsCollapsed} title={playlistsCollapsed ? $t('actions.open') : $t('actions.close')}>
-            {#if playlistsCollapsed}
-              <ChevronDown size={14} />
-            {:else}
-              <ChevronUp size={14} />
-            {/if}
-          </button>
-        </div>
-      </div>
-
-      <!-- Dropdown Menu -->
-      {#if menuOpen}
-        <div class="dropdown-menu" bind:this={menuEl} style={menuStyle}>
-          <!-- Sort by submenu trigger -->
-          <div
-            class="menu-item has-submenu"
-            bind:this={sortTriggerRef}
-            role="button"
-            tabindex="0"
-            onmouseenter={openSubmenu}
-            onmouseleave={closeSubmenuDelayed}
-          >
-            <ArrowUpDown size={14} />
-            <span class="menu-label">{$t('library.sortBy')}</span>
-            <ChevronRight size={14} class="submenu-arrow" />
+    <div class="section nostr-playlists-section">
+        <div class="playlists-header">
+          <div class="section-header">{$t('nav.playlists')}</div>
+          <div class="header-actions">
+            <button class="icon-btn" onclick={onCreateNostrPlaylist} title={$t('playlist.createNew')}>
+              <Plus size={14} />
+            </button>
+            <button class="icon-btn" onclick={() => nostrPlaylistsCollapsed = !nostrPlaylistsCollapsed} title={nostrPlaylistsCollapsed ? 'Expand' : 'Collapse'}>
+              {#if nostrPlaylistsCollapsed}
+                <ChevronDown size={14} />
+              {:else}
+                <ChevronUp size={14} />
+              {/if}
+            </button>
           </div>
-
-          <!-- Sort submenu (positioned outside trigger for better hover handling) -->
-          {#if sortSubmenuOpen}
-            <div
-              class="submenu"
-              bind:this={submenuEl}
-              style={submenuStyle}
-              onmouseenter={openSubmenu}
-              onmouseleave={closeSubmenuDelayed}
-            >
-              <button class="menu-item" class:selected={sortOption === 'name'} onclick={() => handleSortChange('name')}>
-                {$t('sort.nameAZ')}
-              </button>
-              <button class="menu-item" class:selected={sortOption === 'recent'} onclick={() => handleSortChange('recent')}>
-                {$t('sort.recent')}
-              </button>
-              <button class="menu-item" class:selected={sortOption === 'tracks'} onclick={() => handleSortChange('tracks')}>
-                {$t('sort.trackCount')}
-              </button>
-              <button class="menu-item" class:selected={sortOption === 'playcount'} onclick={() => handleSortChange('playcount')}>
-                {$t('sort.playCount')}
-              </button>
-              <button class="menu-item" class:selected={sortOption === 'custom'} onclick={() => handleSortChange('custom')}>
-                {$t('sort.custom')}
-              </button>
-            </div>
-          {/if}
-
-          <button class="menu-item" onclick={() => handleMenuAction(loadUserPlaylists)}>
-            <RefreshCw size={14} />
-            <span>{$t('actions.refresh')}</span>
-          </button>
-
-          <button
-            class="menu-item"
-            class:disabled={offlineStatus.isOffline}
-            onclick={() => !offlineStatus.isOffline && handleMenuAction(onImportPlaylist ?? (() => {}))}
-            title={offlineStatus.isOffline ? $t('offline.featureDisabled') : undefined}
-          >
-            <Import size={14} />
-            <span>{$t('playlist.import')}</span>
-          </button>
-
-          <div class="menu-divider"></div>
-
-          <button class="menu-item" onclick={() => handleMenuAction(onPlaylistManagerClick ?? (() => {}))}>
-            <Settings size={14} />
-            <span>{$t('playlist.manage')}</span>
-          </button>
         </div>
-      {/if}
 
-      {#if !playlistsCollapsed}
-        <div class="playlists-scroll">
-          {#if playlistsLoading}
-            <div class="playlists-loading">{$t('actions.loading')}</div>
-          {:else if visiblePlaylists.length > 0}
-            <nav class="playlists-nav">
-              {#each visiblePlaylists as playlist (playlist.id)}
-                <NavigationItem
-                  label={playlist.name}
-                  tooltip={getPlaylistTooltip(playlist)}
-                  active={activeView === 'playlist' && selectedPlaylistId === playlist.id}
-                  onclick={() => handlePlaylistClick(playlist)}
-                  onHover={() => loadPlaylistTooltip(playlist)}
-                >
-                  {#snippet icon()}<ListMusic size={14} />{/snippet}
-                </NavigationItem>
-              {/each}
-            </nav>
-          {:else if userPlaylists.length > 0}
-            <div class="no-playlists">{$t('playlist.allHidden')}</div>
-          {:else}
-            <div class="no-playlists">{$t('empty.noPlaylists')}</div>
-          {/if}
-        </div>
-      {/if}
-    </div>
+        {#if !nostrPlaylistsCollapsed}
+          <div class="playlists-scroll nostr-playlists-scroll">
+            {#if nostrPlaylistsLoading}
+              <div class="playlists-loading">Loading...</div>
+            {:else if nostrPlaylists.length > 0}
+              <nav class="playlists-nav">
+                {#each nostrPlaylists as playlist (playlist.id)}
+                  <NavigationItem
+                    label={playlist.title}
+                    tooltip="{playlist.trackRefs.length} tracks"
+                    active={activeView === 'nostr-playlist' && selectedNostrPlaylist?.pubkey === playlist.pubkey && selectedNostrPlaylist?.dTag === playlist.d}
+                    onclick={() => handleNostrPlaylistClick(playlist)}
+                    class="playlist-item"
+                  >
+                    {#snippet icon()}
+                      {#if playlist.image}
+                        <img src={playlist.image} alt="" class="playlist-cover-thumb" />
+                      {:else}
+                        <ListMusic size={14} />
+                      {/if}
+                    {/snippet}
+                  </NavigationItem>
+                {/each}
+              </nav>
+            {:else}
+              <div class="no-playlists">No playlists yet</div>
+            {/if}
+          </div>
+        {/if}
+      </div>
 
     <!-- Local Library Section -->
     <div class="section local-library-section">
@@ -739,6 +716,29 @@
 
   .local-library-section {
     flex-shrink: 0;
+  }
+
+  .nostr-playlists-section {
+    flex-shrink: 0;
+    max-height: 200px;
+  }
+
+  .nostr-playlists-scroll {
+    max-height: 150px;
+    overflow-y: auto;
+  }
+
+  /* Playlist items - uniform icon container size */
+  :global(.playlist-item .icon-container) {
+    width: 24px;
+    height: 24px;
+  }
+
+  :global(.playlist-cover-thumb) {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    object-fit: cover;
   }
 
   .section-header {

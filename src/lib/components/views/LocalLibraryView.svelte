@@ -1509,8 +1509,7 @@
               menuActions={{
                 onPlayNow: () => handleTrackPlay(track),
                 onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(track) : undefined,
-                onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(track) : undefined,
-                onAddToPlaylist: onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined
+                onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(track) : undefined
               }}
             />
           {/each}
@@ -2148,8 +2147,7 @@
                             menuActions={{
                               onPlayNow: () => handleTrackPlay(track),
                               onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(track) : undefined,
-                              onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(track) : undefined,
-                              onAddToPlaylist: onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined
+                              onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(track) : undefined
                             }}
                           />
                         {/each}
@@ -2171,8 +2169,7 @@
                           menuActions={{
                             onPlayNow: () => handleTrackPlay(track),
                             onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(track) : undefined,
-                            onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(track) : undefined,
-                            onAddToPlaylist: onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined
+                            onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(track) : undefined
                           }}
                         />
                       {/each}

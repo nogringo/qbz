@@ -18,9 +18,11 @@
   interface Props {
     userName?: string;
     onArtistClick?: (pubkey: string) => void;
+    onPlaylistClick?: (pubkey: string, dTag: string) => void;
+    onAddToNostrPlaylist?: (track: NostrMusicTrack) => void;
   }
 
-  let { userName = 'Nostr User', onArtistClick }: Props = $props();
+  let { userName = 'Nostr User', onArtistClick, onPlaylistClick, onAddToNostrPlaylist }: Props = $props();
 
   // Data
   let tracks = $state<NostrMusicTrack[]>([]);
@@ -217,6 +219,7 @@
             <TrackMenu
               onPlayNext={() => playNostrTrackNext(track)}
               onPlayLater={() => playNostrTrackLater(track)}
+              onAddToNostrPlaylist={() => onAddToNostrPlaylist?.(track)}
               onCopyBlossomUrl={() => copyBlossomUrl(track)}
               onCopyNaddr={() => copyNaddr(track)}
               onCopyZaptraxLink={() => copyZaptraxLink(track)}
@@ -236,7 +239,10 @@
       </div>
       <div class="playlist-grid">
         {#each playlists as playlist}
-          <div class="playlist-card">
+          <button
+            class="playlist-card"
+            onclick={() => onPlaylistClick?.(playlist.pubkey, playlist.d)}
+          >
             {#if playlist.image}
               <img src={playlist.image} alt="" class="playlist-art" />
             {:else}
@@ -246,7 +252,7 @@
               <span class="playlist-title">{playlist.title}</span>
               <span class="playlist-count">{playlist.trackRefs.length} tracks</span>
             </div>
-          </div>
+          </button>
         {/each}
       </div>
     </section>
@@ -527,6 +533,10 @@
     border-radius: 8px;
     padding: 12px;
     cursor: pointer;
+    border: none;
+    text-align: left;
+    width: 100%;
+    transition: background 0.2s;
   }
 
   .playlist-card:hover {

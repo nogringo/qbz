@@ -772,10 +772,6 @@
                         onPlayNext={onTrackPlayNext ? () => onTrackPlayNext(track) : undefined}
                         onPlayLater={onTrackPlayLater ? () => onTrackPlayLater(track) : undefined}
                         onAddFavorite={onTrackAddFavorite ? () => onTrackAddFavorite(track.id) : undefined}
-                        onAddToPlaylist={onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined}
-                        onShareQobuz={onTrackShareQobuz ? () => onTrackShareQobuz(track.id) : undefined}
-                        onShareSonglink={onTrackShareSonglink ? () => onTrackShareSonglink(track) : undefined}
-                        onGoToAlbum={track.album?.id && onTrackGoToAlbum ? (() => { const albumId = track.album!.id!; return () => onTrackGoToAlbum(albumId); })() : undefined}
                         onGoToArtist={track.performer?.id && onTrackGoToArtist ? (() => { const artistId = track.performer!.id!; return () => onTrackGoToArtist(artistId); })() : undefined}
                       />
                     </div>
@@ -866,10 +862,6 @@
                   onPlayNext={onTrackPlayNext ? () => onTrackPlayNext(track) : undefined}
                   onPlayLater={onTrackPlayLater ? () => onTrackPlayLater(track) : undefined}
                   onAddFavorite={onTrackAddFavorite ? () => onTrackAddFavorite(track.id) : undefined}
-                  onAddToPlaylist={onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined}
-                  onShareQobuz={onTrackShareQobuz ? () => onTrackShareQobuz(track.id) : undefined}
-                  onShareSonglink={onTrackShareSonglink ? () => onTrackShareSonglink(track) : undefined}
-                  onGoToAlbum={track.album?.id && onTrackGoToAlbum ? (() => { const albumId = track.album!.id!; return () => onTrackGoToAlbum(albumId); })() : undefined}
                   onGoToArtist={track.performer?.id && onTrackGoToArtist ? (() => { const artistId = track.performer!.id!; return () => onTrackGoToArtist(artistId); })() : undefined}
                 />
               </div>

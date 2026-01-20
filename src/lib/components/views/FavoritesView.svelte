@@ -958,10 +958,6 @@
                         onPlayNow: () => handleTrackClick(track, globalIndex),
                         onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(displayTrack) : undefined,
                         onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(displayTrack) : undefined,
-                        onAddToPlaylist: onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined,
-                        onShareQobuz: onTrackShareQobuz ? () => onTrackShareQobuz(track.id) : undefined,
-                        onShareSonglink: onTrackShareSonglink ? () => onTrackShareSonglink(displayTrack) : undefined,
-                        onGoToAlbum: track.album?.id && onTrackGoToAlbum ? () => onTrackGoToAlbum(track.album!.id) : undefined,
                         onGoToArtist: track.performer?.id && onTrackGoToArtist ? () => onTrackGoToArtist(track.performer!.id!) : undefined
                       }}
                     />
@@ -1007,10 +1003,6 @@
                 onPlayNow: () => handleTrackClick(track, index),
                 onPlayNext: onTrackPlayNext ? () => onTrackPlayNext(displayTrack) : undefined,
                 onPlayLater: onTrackPlayLater ? () => onTrackPlayLater(displayTrack) : undefined,
-                onAddToPlaylist: onTrackAddToPlaylist ? () => onTrackAddToPlaylist(track.id) : undefined,
-                onShareQobuz: onTrackShareQobuz ? () => onTrackShareQobuz(track.id) : undefined,
-                onShareSonglink: onTrackShareSonglink ? () => onTrackShareSonglink(displayTrack) : undefined,
-                onGoToAlbum: track.album?.id && onTrackGoToAlbum ? () => onTrackGoToAlbum(track.album!.id) : undefined,
                 onGoToArtist: track.performer?.id && onTrackGoToArtist ? () => onTrackGoToArtist(track.performer!.id!) : undefined
               }}
             />

@@ -39,11 +39,8 @@
     onPlayNow?: () => void;
     onPlayNext?: () => void;
     onPlayLater?: () => void;
-    onAddToPlaylist?: () => void;
+    onAddToNostrPlaylist?: () => void;
     onRemoveFromPlaylist?: () => void;
-    onShareQobuz?: () => void;
-    onShareSonglink?: () => void;
-    onGoToAlbum?: () => void;
     onGoToArtist?: () => void;
   }
 
@@ -78,7 +75,7 @@
   const isFavorite = $derived(isFavoriteOverride ?? favoriteFromStore);
   const playNowAction = $derived(menuActions?.onPlayNow ?? onPlay);
   const artistClickAction = $derived(onArtistClick ?? menuActions?.onGoToArtist);
-  const albumClickAction = $derived(onAlbumClick ?? menuActions?.onGoToAlbum);
+  const albumClickAction = $derived(onAlbumClick);
 
   // Subscribe to favorites store (only if trackId is provided)
   onMount(() => {
@@ -220,11 +217,8 @@
       onPlayNext={menuActions?.onPlayNext}
       onPlayLater={menuActions?.onPlayLater}
       onAddFavorite={trackId !== undefined ? () => toggleTrackFavorite(trackId) : undefined}
-      onAddToPlaylist={menuActions?.onAddToPlaylist}
+      onAddToNostrPlaylist={menuActions?.onAddToNostrPlaylist}
       onRemoveFromPlaylist={menuActions?.onRemoveFromPlaylist}
-      onShareQobuz={menuActions?.onShareQobuz}
-      onShareSonglink={menuActions?.onShareSonglink}
-      onGoToAlbum={menuActions?.onGoToAlbum}
       onGoToArtist={menuActions?.onGoToArtist}
     />
   </div>

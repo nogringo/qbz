@@ -9,6 +9,7 @@
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { npubEncode, decode } from 'nostr-tools/nip19';
 import { BunkerSigner, parseBunkerInput } from 'nostr-tools/nip46';
+import * as nip44 from 'nostr-tools/nip44';
 import type { EventTemplate, VerifiedEvent } from 'nostr-tools/pure';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -27,11 +28,11 @@ interface Signer {
 
 // Simple signer for nsec
 class NsecSigner implements Signer {
-  private secretKey: Uint8Array;
+  private _secretKey: Uint8Array;
   private pubkey: string;
 
   constructor(secretKey: Uint8Array) {
-    this.secretKey = secretKey;
+    this._secretKey = secretKey;
     this.pubkey = getPublicKey(secretKey);
   }
 
@@ -41,7 +42,11 @@ class NsecSigner implements Signer {
 
   async signEvent(event: EventTemplate): Promise<VerifiedEvent> {
     const { finalizeEvent } = await import('nostr-tools/pure');
-    return finalizeEvent(event, this.secretKey);
+    return finalizeEvent(event, this._secretKey);
+  }
+
+  getSecretKey(): Uint8Array {
+    return this._secretKey;
   }
 }
 
@@ -277,4 +282,72 @@ function hexToBytes(hex: string): Uint8Array {
     bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
   }
   return bytes;
+}
+
+// ============ NIP-44 Encryption (for private playlists) ============
+
+/**
+ * Get the secret key (only available for nsec login)
+ * Returns null for bunker login
+ */
+export function getSecretKey(): Uint8Array | null {
+  if (!currentSigner) {
+    return null;
+  }
+  if (currentSigner instanceof NsecSigner) {
+    return currentSigner.getSecretKey();
+  }
+  return null;
+}
+
+/**
+ * NIP-44 encrypt plaintext (self-encryption for private content)
+ * Encrypts to own pubkey so only the owner can decrypt
+ */
+export async function nip44Encrypt(plaintext: string): Promise<string> {
+  if (!currentUser || !currentSigner) {
+    throw new Error('Not logged in');
+  }
+
+  const myPubkey = currentUser.pubkey;
+
+  // For nsec: use nip44 directly with self-encryption
+  if (currentSigner instanceof NsecSigner) {
+    const secretKey = currentSigner.getSecretKey();
+    const conversationKey = nip44.v2.utils.getConversationKey(secretKey, myPubkey);
+    return nip44.v2.encrypt(plaintext, conversationKey);
+  }
+
+  // For bunker: use NIP-46 nip44_encrypt method
+  if (bunkerInstance) {
+    return await bunkerInstance.nip44Encrypt(myPubkey, plaintext);
+  }
+
+  throw new Error('No valid signer available for NIP-44 encryption');
+}
+
+/**
+ * NIP-44 decrypt ciphertext (self-decryption for private content)
+ * Decrypts content that was encrypted to own pubkey
+ */
+export async function nip44Decrypt(ciphertext: string): Promise<string> {
+  if (!currentUser || !currentSigner) {
+    throw new Error('Not logged in');
+  }
+
+  const myPubkey = currentUser.pubkey;
+
+  // For nsec: use nip44 directly with self-decryption
+  if (currentSigner instanceof NsecSigner) {
+    const secretKey = currentSigner.getSecretKey();
+    const conversationKey = nip44.v2.utils.getConversationKey(secretKey, myPubkey);
+    return nip44.v2.decrypt(ciphertext, conversationKey);
+  }
+
+  // For bunker: use NIP-46 nip44_decrypt method
+  if (bunkerInstance) {
+    return await bunkerInstance.nip44Decrypt(myPubkey, ciphertext);
+  }
+
+  throw new Error('No valid signer available for NIP-44 decryption');
 }
