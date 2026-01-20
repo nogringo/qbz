@@ -1,12 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { ArrowLeft, Loader2, Play, Music, List, Pencil, Trash2, Copy, Check } from 'lucide-svelte';
-  import {
-    fetchPlaylistWithTracks,
-    fetchProfile,
-    deletePlaylist,
-    type NostrProfile
-  } from '$lib/nostr/client';
+  import { deletePlaylist, type NostrProfile } from '$lib/nostr/client';
+  import { fetchPlaylistWithTracksCached, fetchProfileCached, peekCachedPlaylist } from '$lib/nostr/cache';
   import type { NostrMusicTrack, NostrPlaylist } from '$lib/nostr/types';
   import { formatDuration } from '$lib/nostr/adapters';
   import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds, playNostrTrackNext, playNostrTrackLater, copyBlossomUrl, copyNaddr, copyZaptraxLink } from '$lib/nostr/trackUtils';
@@ -37,7 +33,7 @@
   let playlist = $state<NostrPlaylist | null>(null);
   let tracks = $state<NostrMusicTrack[]>([]);
   let ownerProfile = $state<NostrProfile | null>(null);
-  let isLoading = $state(true);
+  let isLoading = $state(false);
   let error = $state<string | null>(null);
 
   // UI state
@@ -80,11 +76,29 @@
   });
 
   async function loadPlaylist() {
-    isLoading = true;
     error = null;
 
+    // Step 1: Instantly show cached data if available (no loading state)
+    const cached = await peekCachedPlaylist(pubkey, dTag);
+    if (cached) {
+      playlist = cached.playlist;
+      // Note: tracks might be empty from peek, will be filled by SWR
+    }
+
+    // Step 2: Only show loading if we don't have cached data
+    if (!cached) {
+      isLoading = true;
+    }
+
     try {
-      const result = await fetchPlaylistWithTracks(pubkey, dTag);
+      // Step 3: Run full SWR fetch (updates in background if we had cache)
+      const result = await fetchPlaylistWithTracksCached(pubkey, dTag, (freshResult) => {
+        // Background update - UI refreshes silently
+        playlist = freshResult.playlist;
+        tracks = freshResult.tracks;
+        console.log('[NostrPlaylist] Playlist updated from background revalidation');
+      });
+
       if (!result) {
         error = 'Playlist not found';
         return;
@@ -93,8 +107,14 @@
       playlist = result.playlist;
       tracks = result.tracks;
 
-      // Fetch owner profile
-      ownerProfile = await fetchProfile(pubkey);
+      // Fetch owner profile with caching (don't block on this)
+      fetchProfileCached(pubkey, (freshProfile) => {
+        if (freshProfile) {
+          ownerProfile = freshProfile;
+        }
+      }).then(profile => {
+        if (profile) ownerProfile = profile;
+      });
     } catch (err) {
       console.error('Failed to load playlist:', err);
       error = 'Failed to load playlist';
@@ -201,15 +221,15 @@
     {/if}
   </div>
 
-  {#if isLoading}
-    <div class="loading">
-      <Loader2 size={32} class="spinner" />
-      <span>Loading playlist...</span>
-    </div>
-  {:else if error}
+  {#if error}
     <div class="error">
       <p>{error}</p>
       <button onclick={loadPlaylist}>Retry</button>
+    </div>
+  {:else if isLoading}
+    <div class="loading">
+      <Loader2 size={32} class="spinner" />
+      <span>Loading playlist...</span>
     </div>
   {:else if playlist}
     <!-- Playlist Header -->

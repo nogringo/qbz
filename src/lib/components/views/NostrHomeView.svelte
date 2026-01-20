@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Loader2, Play, Music, List, Upload } from 'lucide-svelte';
-  import { fetchRecentTracks, fetchPlaylistsByOwner } from '$lib/nostr/client';
+  import { fetchRecentTracksCached, fetchPlaylistsByOwnerCached, peekCachedRecentTracks, peekCachedPlaylists } from '$lib/nostr/cache';
   import type { NostrMusicTrack, NostrPlaylist } from '$lib/nostr/types';
   import { formatDuration } from '$lib/nostr/adapters';
   import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds, playNostrTrackNext, playNostrTrackLater, copyBlossomUrl, copyNaddr, copyZaptraxLink } from '$lib/nostr/trackUtils';
@@ -29,8 +29,9 @@
   let playlists = $state<NostrPlaylist[]>([]);
 
   // Loading states
-  let isLoadingTracks = $state(true);
-  let isLoadingPlaylists = $state(true);
+  let isLoadingTracks = $state(false);
+  let isLoadingPlaylists = $state(false);
+  let hasInitializedTracks = $state(false);
   let error = $state<string | null>(null);
 
   // Player state - needs $state for Svelte 5 reactivity
@@ -63,10 +64,22 @@
   async function loadData() {
     const authState = getAuthState();
 
-    // Load recent tracks
-    try {
+    // Step 1: Instantly show cached tracks if available
+    const cachedTracks = await peekCachedRecentTracks(30);
+    if (cachedTracks) {
+      tracks = cachedTracks;
+    }
+    hasInitializedTracks = true;
+    if (!cachedTracks) {
       isLoadingTracks = true;
-      tracks = await fetchRecentTracks(30);
+    }
+
+    // Step 2: Run full SWR fetch for tracks
+    try {
+      tracks = await fetchRecentTracksCached(30, (freshTracks) => {
+        tracks = freshTracks;
+        console.log('[NostrHome] Tracks updated from background revalidation');
+      });
     } catch (err) {
       console.error('Failed to load tracks:', err);
       error = 'Failed to load tracks';
@@ -74,11 +87,20 @@
       isLoadingTracks = false;
     }
 
-    // Load user's playlists
+    // Step 3: Load user's playlists with same pattern
     if (authState.userInfo?.pubkey) {
-      try {
+      const cachedPlaylists = await peekCachedPlaylists(authState.userInfo.pubkey);
+      if (cachedPlaylists) {
+        playlists = cachedPlaylists;
+      } else {
         isLoadingPlaylists = true;
-        playlists = await fetchPlaylistsByOwner(authState.userInfo.pubkey, 20);
+      }
+
+      try {
+        playlists = await fetchPlaylistsByOwnerCached(authState.userInfo.pubkey, 20, (freshPlaylists) => {
+          playlists = freshPlaylists;
+          console.log('[NostrHome] Playlists updated from background revalidation');
+        });
       } catch (err) {
         console.error('Failed to load playlists:', err);
       } finally {
@@ -157,18 +179,7 @@
       {/if}
     </div>
 
-    {#if isLoadingTracks}
-      <div class="loading">
-        <Loader2 size={24} class="spinner" />
-        <span>Loading tracks from Nostr...</span>
-      </div>
-    {:else if tracks.length === 0}
-      <div class="empty">
-        <Music size={48} />
-        <p>No tracks found on Nostr relays</p>
-        <p class="hint">Tracks need to be published as kind 36787 events</p>
-      </div>
-    {:else}
+    {#if tracks.length > 0}
       <div class="track-list">
         {#each tracks as track, index}
           <button
@@ -227,6 +238,17 @@
             />
           </button>
         {/each}
+      </div>
+    {:else if isLoadingTracks}
+      <div class="loading">
+        <Loader2 size={24} class="spinner" />
+        <span>Loading tracks from Nostr...</span>
+      </div>
+    {:else if hasInitializedTracks}
+      <div class="empty">
+        <Music size={48} />
+        <p>No tracks found on Nostr relays</p>
+        <p class="hint">Tracks need to be published as kind 36787 events</p>
       </div>
     {/if}
   </section>

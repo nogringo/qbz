@@ -2,8 +2,8 @@
   import { onMount } from 'svelte';
   import { ArrowLeft, Loader2, Play, Music, UserPlus, UserCheck, Copy, Check } from 'lucide-svelte';
   import { nprofileEncode } from 'nostr-tools/nip19';
-  import { getRelays } from '$lib/nostr/client';
-  import { fetchArtistWithGossip, isFollowing, followPubkey, unfollowPubkey, type NostrArtist } from '$lib/nostr/client';
+  import { getRelays, isFollowing, followPubkey, unfollowPubkey, type NostrArtist } from '$lib/nostr/client';
+  import { fetchArtistCached, peekCachedArtist } from '$lib/nostr/cache';
   import type { NostrMusicTrack } from '$lib/nostr/types';
   import { formatDuration } from '$lib/nostr/adapters';
   import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds, playNostrTrackNext, playNostrTrackLater, copyBlossomUrl, copyNaddr, copyZaptraxLink } from '$lib/nostr/trackUtils';
@@ -25,7 +25,7 @@
 
   // Data
   let artist = $state<NostrArtist | null>(null);
-  let isLoading = $state(true);
+  let isLoading = $state(false);
   let error = $state<string | null>(null);
 
   // Follow state
@@ -50,11 +50,26 @@
   });
 
   async function loadArtist() {
-    isLoading = true;
     error = null;
 
+    // Step 1: Instantly show cached data if available (no loading state)
+    const cached = await peekCachedArtist(pubkey);
+    if (cached) {
+      artist = cached;
+    }
+
+    // Step 2: Only show loading if we don't have cached data
+    if (!cached) {
+      isLoading = true;
+    }
+
     try {
-      artist = await fetchArtistWithGossip(pubkey);
+      // Step 3: Run full SWR fetch (updates in background if we had cache)
+      artist = await fetchArtistCached(pubkey, (freshArtist) => {
+        // Background update - UI refreshes silently
+        artist = freshArtist;
+        console.log('[NostrArtist] Artist updated from background revalidation');
+      });
     } catch (err) {
       console.error('Failed to load artist:', err);
       error = 'Failed to load artist';
@@ -171,16 +186,16 @@
     {/if}
   </div>
 
-  {#if isLoading}
+  {#if error}
+    <div class="error">
+      <p>{error}</p>
+      <button onclick={loadArtist}>Retry</button>
+    </div>
+  {:else if isLoading}
     <div class="loading">
       <Loader2 size={32} class="spinner" />
       <span>Loading artist with gossip model...</span>
       <span class="hint">Fetching from NIP-65 relays</span>
-    </div>
-  {:else if error}
-    <div class="error">
-      <p>{error}</p>
-      <button onclick={loadArtist}>Retry</button>
     </div>
   {:else if artist}
     <!-- Artist Header -->

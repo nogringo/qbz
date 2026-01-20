@@ -5,9 +5,9 @@
   import {
     publishPlaylist,
     updatePlaylist,
-    fetchPlaylistsByOwner,
     fetchPlaylist
   } from '$lib/nostr/client';
+  import { fetchPlaylistsByOwnerCached, peekCachedPlaylists } from '$lib/nostr/cache';
   import type { NostrPlaylist, NostrMusicTrack, TrackReference } from '$lib/nostr/types';
   import { MUSIC_TRACK_KIND } from '$lib/nostr/types';
   import { getAuthState } from '$lib/stores/authStore';
@@ -83,9 +83,23 @@
     const authState = getAuthState();
     if (!authState.userInfo?.pubkey) return;
 
-    isLoadingPlaylists = true;
+    // Step 1: Instantly show cached playlists if available
+    const cached = await peekCachedPlaylists(authState.userInfo.pubkey);
+    if (cached) {
+      userPlaylists = cached;
+    } else {
+      isLoadingPlaylists = true;
+    }
+
+    // Step 2: Run full SWR fetch
     try {
-      userPlaylists = await fetchPlaylistsByOwner(authState.userInfo.pubkey);
+      userPlaylists = await fetchPlaylistsByOwnerCached(
+        authState.userInfo.pubkey,
+        50,
+        (freshPlaylists) => {
+          userPlaylists = freshPlaylists;
+        }
+      );
     } catch (err) {
       console.error('Failed to load playlists:', err);
       error = 'Failed to load playlists';

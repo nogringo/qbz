@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Heart, Play, Music, Search, X } from 'lucide-svelte';
-  import { fetchLikedTracks, unlikeTrack, type NostrMusicTrack } from '$lib/nostr/client';
+  import { unlikeTrack, type NostrMusicTrack } from '$lib/nostr/client';
+  import { fetchLikedTracksCached, peekCachedLikedTracks } from '$lib/nostr/cache';
   import { formatDuration } from '$lib/nostr/adapters';
   import { nostrToBackendTrack, nostrToPlayingTrack, getNostrTrackIds, playNostrTrackNext, playNostrTrackLater, copyBlossomUrl, copyNaddr, copyZaptraxLink } from '$lib/nostr/trackUtils';
   import { getAuthState } from '$lib/stores/authStore';
@@ -24,6 +25,7 @@
 
   let likedTracks = $state<NostrMusicTrack[]>([]);
   let loading = $state(false);
+  let hasInitialized = $state(false);
   let error = $state<string | null>(null);
   let searchQuery = $state('');
 
@@ -78,11 +80,24 @@
       return;
     }
 
-    loading = true;
     error = null;
 
+    // Step 1: Instantly show cached data if available (no loading state)
+    const cached = await peekCachedLikedTracks(authState.userInfo.pubkey);
+    if (cached) {
+      likedTracks = cached;
+    }
+    hasInitialized = true;
+    if (!cached) {
+      loading = true;
+    }
+
+    // Step 2: Run full SWR fetch
     try {
-      likedTracks = await fetchLikedTracks(authState.userInfo.pubkey);
+      likedTracks = await fetchLikedTracksCached(authState.userInfo.pubkey, (freshTracks) => {
+        likedTracks = freshTracks;
+        console.log('[NostrFavorites] Liked tracks updated from background revalidation');
+      });
     } catch (err) {
       console.error('[NostrFavorites] Failed to load liked tracks:', err);
       error = String(err);
@@ -217,18 +232,7 @@
         <p class="error-detail">{error}</p>
         <button class="retry-btn" onclick={loadLikedTracks}>Retry</button>
       </div>
-    {:else if likedTracks.length === 0}
-      <div class="empty">
-        <Heart size={48} />
-        <p>No liked tracks yet</p>
-        <p class="empty-hint">Like tracks to see them here</p>
-      </div>
-    {:else if filteredTracks.length === 0}
-      <div class="empty">
-        <Search size={48} />
-        <p>No tracks match "{searchQuery}"</p>
-      </div>
-    {:else}
+    {:else if filteredTracks.length > 0}
       <div class="track-list">
         {#each filteredTracks as track, index (track.id)}
           {@const playing = isTrackPlaying(track)}
@@ -310,6 +314,17 @@
             />
           </div>
         {/each}
+      </div>
+    {:else if hasInitialized && likedTracks.length > 0 && filteredTracks.length === 0}
+      <div class="empty">
+        <Search size={48} />
+        <p>No tracks match "{searchQuery}"</p>
+      </div>
+    {:else if hasInitialized && likedTracks.length === 0}
+      <div class="empty">
+        <Heart size={48} />
+        <p>No liked tracks yet</p>
+        <p class="empty-hint">Like tracks to see them here</p>
       </div>
     {/if}
   </div>

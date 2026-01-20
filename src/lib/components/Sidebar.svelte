@@ -13,7 +13,8 @@
     type OfflineStatus,
     type OfflineSettings
   } from '$lib/stores/offlineStore';
-  import { fetchPlaylistsByOwner, type NostrPlaylist } from '$lib/nostr/client';
+  import type { NostrPlaylist } from '$lib/nostr/client';
+  import { fetchPlaylistsByOwnerCached, peekCachedPlaylists } from '$lib/nostr/cache';
   import { getAuthState } from '$lib/stores/authStore';
 
   interface Playlist {
@@ -494,9 +495,24 @@
 
     if (!authState.userInfo?.pubkey) return;
 
-    nostrPlaylistsLoading = true;
+    // Step 1: Instantly show cached playlists if available
+    const cached = await peekCachedPlaylists(authState.userInfo.pubkey);
+    if (cached) {
+      nostrPlaylists = cached;
+    } else {
+      nostrPlaylistsLoading = true;
+    }
+
+    // Step 2: Run full SWR fetch
     try {
-      nostrPlaylists = await fetchPlaylistsByOwner(authState.userInfo.pubkey);
+      nostrPlaylists = await fetchPlaylistsByOwnerCached(
+        authState.userInfo.pubkey,
+        20,
+        (freshPlaylists) => {
+          nostrPlaylists = freshPlaylists;
+          console.log('[Sidebar] Nostr playlists updated from background revalidation');
+        }
+      );
     } catch (err) {
       console.error('Failed to load Nostr playlists:', err);
     } finally {

@@ -18,6 +18,7 @@ pub mod library;
 pub mod lyrics;
 pub mod media_controls;
 pub mod network;
+pub mod nostr_cache;
 pub mod offline;
 pub mod player;
 pub mod playlist_import;
@@ -168,6 +169,9 @@ pub fn run() {
     // Initialize offline mode state
     let offline_state = offline::OfflineState::new()
         .expect("Failed to initialize offline state");
+    // Initialize Nostr cache state
+    let nostr_cache_state = nostr_cache::NostrCacheState::new()
+        .expect("Failed to initialize Nostr cache");
 
     // Read saved audio device and settings for player initialization
     let (saved_device, audio_settings) = audio_settings_state
@@ -294,6 +298,7 @@ pub fn run() {
         .manage(audio_settings_state)
         .manage(download_settings_state)
         .manage(offline_state)
+        .manage(nostr_cache_state)
         .invoke_handler(tauri::generate_handler![
             // Auth commands
             commands::init_client,
@@ -588,6 +593,22 @@ pub fn run() {
             network::commands::get_network_mounts_cmd,
             network::commands::check_mount_accessible,
             network::commands::check_network_paths_batch,
+            // Nostr cache commands
+            nostr_cache::nostr_cache_get_profile,
+            nostr_cache::nostr_cache_set_profile,
+            nostr_cache::nostr_cache_get_track,
+            nostr_cache::nostr_cache_get_tracks_by_pubkey,
+            nostr_cache::nostr_cache_get_recent_tracks,
+            nostr_cache::nostr_cache_set_track,
+            nostr_cache::nostr_cache_set_tracks,
+            nostr_cache::nostr_cache_get_playlist,
+            nostr_cache::nostr_cache_get_playlists_by_owner,
+            nostr_cache::nostr_cache_set_playlist,
+            nostr_cache::nostr_cache_delete_playlist,
+            nostr_cache::nostr_cache_get_query,
+            nostr_cache::nostr_cache_set_query,
+            nostr_cache::nostr_cache_get_stats,
+            nostr_cache::nostr_cache_clear,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
