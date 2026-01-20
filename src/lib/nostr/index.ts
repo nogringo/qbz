@@ -29,7 +29,8 @@ export {
   type NostrMusicTrack,
   type NostrPlaylist,
   type TrackReference,
-  type ZapSplit
+  type ZapSplit,
+  type CreateMusicTrackInput
 } from './types';
 
 // Client
@@ -49,8 +50,28 @@ export {
   fetchRecentTracks,
   fetchTracksByGenre,
   subscribeToTracks,
-  subscribeToPlaylists
+  subscribeToPlaylists,
+  publishMusicTrack,
+  fetchBlossomServers
 } from './client';
+
+// Blossom (file uploads)
+export {
+  uploadToBlossom,
+  uploadAudioToBlossom,
+  uploadImageToBlossom,
+  uploadVideoToBlossom,
+  getMimeType,
+  getAudioFormat,
+  isSupportedAudio,
+  isSupportedImage,
+  isSupportedVideo,
+  DEFAULT_BLOSSOM_SERVERS,
+  SUPPORTED_AUDIO_FORMATS,
+  SUPPORTED_IMAGE_FORMATS,
+  SUPPORTED_VIDEO_FORMATS,
+  type BlossomUploadResult
+} from './blossom';
 
 // Player
 export {

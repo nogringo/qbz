@@ -83,6 +83,9 @@ keyring = "3"
 # Clipboard
 tauri-plugin-clipboard-manager = "2"
 
+# File system access
+tauri-plugin-fs = "2"
+
 # Casting (Chromecast, AirPlay, DLNA)
 rust_cast = "0.18.1"
 mdns-sd = "0.11"

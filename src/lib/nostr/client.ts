@@ -13,7 +13,8 @@ import {
   parsePlaylistEvent,
   type NostrMusicTrack,
   type NostrPlaylist,
-  type TrackReference
+  type TrackReference,
+  type CreateMusicTrackInput
 } from './types';
 
 // Re-export types for convenience
@@ -25,6 +26,7 @@ const CONTACT_LIST_KIND = 3;
 const DELETION_KIND = 5; // NIP-09
 const REACTION_KIND = 7;
 const RELAY_LIST_KIND = 10002; // NIP-65
+const BLOSSOM_SERVER_LIST_KIND = 10063; // NIP-96 User Server List
 
 // Default relays for music content
 const DEFAULT_RELAYS = [
@@ -168,6 +170,39 @@ export async function fetchNip65Relays(pubkey: string): Promise<Nip65Relay[]> {
   }
 
   return relays;
+}
+
+/**
+ * Fetch user's Blossom server list (kind 10063)
+ * Returns array of server URLs the user has configured for file uploads
+ */
+export async function fetchBlossomServers(pubkey: string): Promise<string[]> {
+  const p = getPool();
+  const filter: Filter = {
+    kinds: [BLOSSOM_SERVER_LIST_KIND],
+    authors: [pubkey],
+    limit: 1
+  };
+
+  const events = await p.querySync(connectedRelays, filter);
+  if (events.length === 0) {
+    return [];
+  }
+
+  // Parse server URLs from 'server' tags
+  // Format: ["server", "https://blossom.example.com"]
+  const servers: string[] = [];
+  for (const tag of events[0].tags) {
+    if (tag[0] === 'server' && tag[1]) {
+      const url = tag[1];
+      // Validate it's a valid URL
+      if (url.startsWith('https://') || url.startsWith('http://')) {
+        servers.push(url);
+      }
+    }
+  }
+
+  return servers;
 }
 
 /**
@@ -982,4 +1017,131 @@ export function subscribeToPlaylists(
   });
 
   return () => sub.close();
+}
+
+// ============ Publishing Functions ============
+
+/**
+ * Generate a unique d-tag for a music track
+ * Format: title-timestamp (slugified)
+ */
+function generateTrackDTag(title: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50);
+  const timestamp = Date.now().toString(36);
+  return `${slug}-${timestamp}`;
+}
+
+/**
+ * Publish a music track event (kind 36787)
+ *
+ * @param input Track metadata
+ * @returns The published track parsed from the event
+ */
+export async function publishMusicTrack(input: CreateMusicTrackInput): Promise<NostrMusicTrack> {
+  const { signEvent } = await import('./auth');
+  const { getUserWriteRelays } = await import('$lib/stores/nostrSettingsStore');
+  const p = getPool();
+
+  // Generate unique d-tag
+  const dTag = generateTrackDTag(input.title);
+
+  // Build tags
+  const tags: string[][] = [
+    ['d', dTag],
+    ['title', input.title],
+    ['artist', input.artist],
+    ['url', input.url],
+    ['t', 'music'] // Required genre tag
+  ];
+
+  // Optional tags
+  if (input.image) {
+    tags.push(['image', input.image]);
+  }
+
+  if (input.video) {
+    tags.push(['video', input.video]);
+  }
+
+  if (input.album) {
+    tags.push(['album', input.album]);
+  }
+
+  if (input.trackNumber !== undefined) {
+    tags.push(['track_number', String(input.trackNumber)]);
+  }
+
+  if (input.released) {
+    tags.push(['released', input.released]);
+  }
+
+  if (input.genres && input.genres.length > 0) {
+    for (const genre of input.genres) {
+      tags.push(['t', genre.toLowerCase()]);
+    }
+  }
+
+  if (input.language) {
+    tags.push(['language', input.language]);
+  }
+
+  if (input.explicit !== undefined) {
+    tags.push(['explicit', String(input.explicit)]);
+  }
+
+  if (input.duration !== undefined) {
+    tags.push(['duration', String(input.duration)]);
+  }
+
+  if (input.format) {
+    tags.push(['format', input.format]);
+  }
+
+  if (input.bitrate) {
+    tags.push(['bitrate', input.bitrate]);
+  }
+
+  if (input.sampleRate !== undefined) {
+    tags.push(['sample_rate', String(input.sampleRate)]);
+  }
+
+  // Zap splits
+  if (input.zapSplits && input.zapSplits.length > 0) {
+    for (const split of input.zapSplits) {
+      if (split.weight !== undefined) {
+        tags.push(['zap', split.address, String(split.weight)]);
+      } else {
+        tags.push(['zap', split.address]);
+      }
+    }
+  }
+
+  // Alt tag for accessibility
+  tags.push(['alt', `Music track: ${input.title} by ${input.artist}`]);
+
+  // Sign the event
+  const event = await signEvent({
+    kind: MUSIC_TRACK_KIND,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: input.lyrics || ''
+  });
+
+  // Publish to user's write relays
+  const userWriteRelays = getUserWriteRelays();
+  console.log('[Nostr] Publishing music track to relays:', userWriteRelays);
+
+  await Promise.all(userWriteRelays.map(relay => p.publish([relay], event)));
+
+  // Parse and return the track
+  const track = parseMusicTrackEvent(event);
+  if (!track) {
+    throw new Error('Failed to parse published track event');
+  }
+
+  return track;
 }

@@ -293,3 +293,35 @@ function buildNaddr(kind: number, pubkey: string, dTag: string): string {
 export function createTrackReference(pubkey: string, dTag: string): string {
   return `${MUSIC_TRACK_KIND}:${pubkey}:${dTag}`;
 }
+
+// ============ Music Track Publishing ============
+
+/**
+ * Input for creating a music track event
+ */
+export interface CreateMusicTrackInput {
+  // Required fields
+  title: string;
+  artist: string;
+  url: string; // URL to audio file (from Blossom upload)
+
+  // Optional metadata
+  image?: string; // Album artwork URL
+  video?: string; // Music video URL
+  album?: string;
+  trackNumber?: number;
+  released?: string; // ISO 8601 date (YYYY-MM-DD or YYYY)
+  genres?: string[]; // Genre tags
+  language?: string; // ISO 639-1 language code
+  explicit?: boolean;
+  duration?: number; // Duration in seconds
+  format?: string; // Audio format (mp3, flac, etc.)
+  bitrate?: string; // e.g., "320kbps"
+  sampleRate?: number; // Hz
+
+  // Optional content
+  lyrics?: string; // Lyrics in content field
+
+  // Optional zap splits
+  zapSplits?: ZapSplit[];
+}

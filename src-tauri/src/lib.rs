@@ -199,6 +199,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(AppState::with_device_and_settings(saved_device, audio_settings))
         .setup(|app| {
             // Initialize system tray icon

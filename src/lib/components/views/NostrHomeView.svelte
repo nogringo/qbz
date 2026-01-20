@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Loader2, Play, Music, List } from 'lucide-svelte';
+  import { Loader2, Play, Music, List, Upload } from 'lucide-svelte';
   import { fetchRecentTracks, fetchPlaylistsByOwner } from '$lib/nostr/client';
   import type { NostrMusicTrack, NostrPlaylist } from '$lib/nostr/types';
   import { formatDuration } from '$lib/nostr/adapters';
@@ -8,6 +8,7 @@
   import { getAuthState } from '$lib/stores/authStore';
   import { setQueue as setBackendQueue, setNostrTrackIds } from '$lib/stores/queueStore';
   import TrackMenu from '$lib/components/TrackMenu.svelte';
+  import UploadMusicModal from '$lib/components/UploadMusicModal.svelte';
   import {
     subscribe as subscribePlayer,
     getPlayerState,
@@ -32,6 +33,9 @@
 
   // Player state - needs $state for Svelte 5 reactivity
   let playerState = $state(getPlayerState());
+
+  // Upload modal state
+  let showUploadModal = $state(false);
 
   // Get greeting based on time
   function getGreeting(): string {
@@ -131,6 +135,12 @@
       <h1>{greeting}, {userName}</h1>
       <p>Discover music on Nostr</p>
     </div>
+    {#if getAuthState().isLoggedIn}
+      <button class="upload-btn" onclick={() => showUploadModal = true}>
+        <Upload size={16} />
+        Upload Music
+      </button>
+    {/if}
   </div>
 
   <!-- Recent Tracks Section -->
@@ -243,6 +253,14 @@
   {/if}
 </div>
 
+<!-- Upload Modal -->
+{#if showUploadModal}
+  <UploadMusicModal
+    onClose={() => showUploadModal = false}
+    onSuccess={() => loadData()}
+  />
+{/if}
+
 <style>
   .nostr-home {
     padding: 24px 32px;
@@ -253,7 +271,28 @@
 
   /* Header */
   .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
     margin-bottom: 32px;
+  }
+
+  .upload-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent-primary, #6366f1);
+    border: none;
+    border-radius: 20px;
+    padding: 10px 18px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .upload-btn:hover {
+    background: var(--accent-hover, #5558e8);
   }
 
   .greeting h1 {
