@@ -630,6 +630,8 @@
     padding: 0;
     cursor: pointer;
     text-align: left;
+    width: fit-content;
+    max-width: 100%;
   }
 
   .track-artist:hover {

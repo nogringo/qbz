@@ -490,6 +490,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: pointer;
+    width: fit-content;
+    max-width: 100%;
   }
 
   .track-artist-link:hover {

@@ -374,6 +374,8 @@
     padding: 0;
     text-align: left;
     cursor: pointer;
+    width: fit-content;
+    max-width: 100%;
   }
 
   .track-link:hover {
